@@ -1,14 +1,11 @@
 import base64
 import requests
 import logging
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import threading
 import time
 import os
 from database import Session, ChatMessage
-from config import (
-    DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
-    MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR)
 from wxauto import WeChat
 from openai import OpenAI
 import random
@@ -16,6 +13,12 @@ from typing import Optional
 import os
 import pyautogui
 import shutil
+from config import (
+    DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
+    MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR,
+    AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS,
+    QUIET_TIME_START, QUIET_TIME_END
+    )
 
 # 获取微信窗口对象
 wx = WeChat()
@@ -47,6 +50,53 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# 存储用户的计时器和随机等待时间
+user_timers = {}
+user_wait_times = {}
+emoji_timer = None
+emoji_timer_lock = threading.Lock()
+
+def parse_time(time_str):
+    return datetime.strptime(time_str, "%H:%M").time()
+
+quiet_time_start = parse_time(QUIET_TIME_START)
+quiet_time_end = parse_time(QUIET_TIME_END)
+
+def check_user_timeouts():
+    while True:
+        current_time = time.time()
+        for user in listen_list:
+            last_active = user_timers.get(user)
+            wait_time = user_wait_times.get(user)
+            if last_active and wait_time:
+                if current_time - last_active >= wait_time:
+                    if not is_quiet_time():
+                        reply = get_deepseek_response(AUTO_MESSAGE, user)
+                        send_reply(user, user, user, AUTO_MESSAGE, reply)
+                    # 重置计时器和等待时间
+                    reset_user_timer(user)
+        time.sleep(10)  # 每分钟检查一次
+
+def reset_user_timer(user):
+    user_timers[user] = time.time()
+    user_wait_times[user] = get_random_wait_time()
+
+def get_random_wait_time():
+    return random.uniform(MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS) * 3600  # 转换为秒
+
+def is_quiet_time():
+    current_time = datetime.now().time()
+    if quiet_time_start <= quiet_time_end:
+        return quiet_time_start <= current_time <= quiet_time_end
+    else:
+        return current_time >= quiet_time_start or current_time <= quiet_time_end
+
+# 当接收到用户的新消息时，调用此函数
+def on_user_message(user):
+    if user not in listen_list:
+        listen_list.append(user)
+    reset_user_timer(user)
 
 def save_message(sender_id, sender_name, message, reply):
     # 保存聊天记录到数据库
@@ -176,7 +226,6 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
 
     save_message(username, sender_name, merged_message, reply)
 
-
 def message_listener():
     while True:
         try:
@@ -189,7 +238,10 @@ def message_listener():
                     content = msg.content
                     logger.info(f'【{who}】：{content}')
                     if msgtype == 'friend':
-                        handle_wxauto_message(msg)
+                        if '[动画表情]' in content:
+                            handle_emoji_message(msg)
+                        else:
+                            handle_wxauto_message(msg)
                     else:
                         logger.info(f"忽略非文本消息类型: {msgtype}")
         except Exception as e:
@@ -237,12 +289,29 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
         logger.error(f"调用Moonshot AI识别图片失败: {str(e)}")
         return ""
 
+def handle_emoji_message(msg):
+    global emoji_timer
+
+    def timer_callback():
+        with emoji_timer_lock:           
+            handle_wxauto_message(msg)   
+            emoji_timer = None       
+
+    with emoji_timer_lock:
+        if emoji_timer is not None:
+            emoji_timer.cancel()
+        emoji_timer = threading.Timer(3.0, timer_callback)
+        emoji_timer.start()
+
 def handle_wxauto_message(msg):
     try:
         username = msg.sender  # 获取发送者的昵称或唯一标识
         content = getattr(msg, 'content', None) or getattr(msg, 'text', None)  # 获取消息内容
         img_path = None  # 初始化图片路径
         is_emoji = False  # 初始化是否为动画表情标志
+
+        # 重置定时器
+        on_user_message(username)
 
         # 检查是否是图片消息
         if content and content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
@@ -362,26 +431,6 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
     # 保存聊天记录
     save_message(username, sender_name, merged_message, reply)
 
-def message_listener():
-    while True:
-        try:
-            msgs = wx.GetListenMessage()
-            for chat in msgs:
-                who = chat.who  # 获取聊天窗口名（人或群名）
-                one_msgs = msgs.get(chat)  # 获取消息内容
-                # 处理收到的消息
-                for msg in one_msgs:
-                    msgtype = msg.type  # 获取消息类型
-                    content = msg.content  # 获取消息内容
-                    logger.info(f'【{who}】：{content}')
-                    if msgtype == 'friend':
-                        handle_wxauto_message(msg)  # 处理并回复消息
-                    else:
-                        logger.info(f"忽略非文本消息类型: {msgtype}")
-        except Exception as e:
-            logger.error(f"消息监听出错: {str(e)}")
-        time.sleep(wait)
-
 def is_emoji_request(text: str) -> bool:
     """
     判断是否为表情包请求
@@ -434,7 +483,6 @@ def capture_and_save_screenshot(who):
     screenshot_folder = os.path.join(root_dir, 'screenshot')
     if not os.path.exists(screenshot_folder):
         os.makedirs(screenshot_folder)
-    
     screenshot_path = os.path.join(screenshot_folder, f'{who}_{datetime.now().strftime("%Y%m%d%H%M%S")}.png')
     
     try:
@@ -476,6 +524,13 @@ def clean_up_temp_files ():
     else:
         print(f"目录 wxauto文件 不存在，无需删除")
 
+def is_quiet_time():
+    current_time = datetime.now().time()
+    if quiet_time_start <= quiet_time_end:
+        return quiet_time_start <= current_time <= quiet_time_end
+    else:
+        return current_time >= quiet_time_start or current_time <= quiet_time_end
+
 def main():
     try:
         clean_up_temp_files()
@@ -490,6 +545,10 @@ def main():
         checker_thread = threading.Thread(target=check_inactive_users)
         checker_thread.daemon = True
         checker_thread.start()
+
+        
+        # 启动后台线程来检查用户超时
+        threading.Thread(target=check_user_timeouts, daemon=True).start()
 
         logger.info("开始运行BOT...")
 

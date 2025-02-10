@@ -20,3 +20,10 @@ MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 MOONSHOT_TEMPERATURE = 0.3
 #表情包存放目录
 EMOJI_DIR = 'emojis'
+# 自动消息配置
+AUTO_MESSAGE = "请你模拟系统设置的角色，在微信上找对方发消息想知道对方在做什么"
+MIN_COUNTDOWN_HOURS = 0.2  # 最小倒计时时间（小时）
+MAX_COUNTDOWN_HOURS = 0.5  # 最大倒计时时间（小时）
+# 消息发送时间限制
+QUIET_TIME_START = "22:00"  # 安静时间开始
+QUIET_TIME_END = "8:00"    # 安静时间结束
