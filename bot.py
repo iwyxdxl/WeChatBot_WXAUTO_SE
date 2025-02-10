@@ -16,7 +16,7 @@ import shutil
 from config import (
     DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
     MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR,
-    AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS,
+    AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS, MOONSHOT_MODEL,
     QUIET_TIME_START, QUIET_TIME_END
     )
 
@@ -258,7 +258,7 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
     }
     text_prompt = "请描述这个图片" if not is_emoji else "请描述这个聊天窗口的最后一张表情包"
     data = {
-        "model": "moonshot-v1-8k-vision-preview",
+        "model": MOONSHOT_MODEL,
         "messages": [
             {
                 "role": "user",

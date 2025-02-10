@@ -17,6 +17,7 @@ TEMPERATURE = 1.3
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = 'sk-'
 MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
+MOONSHOT_MODEL = "moonshot-v1-128k-vision-preview"
 MOONSHOT_TEMPERATURE = 0.3
 #表情包存放目录
 EMOJI_DIR = 'emojis'
