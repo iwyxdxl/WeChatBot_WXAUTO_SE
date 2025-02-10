@@ -17,7 +17,7 @@ v1.0
 
 # 使用前准备
 1、申请硅基流动API https://cloud.siliconflow.cn/ （免费15元额度）
-2、申请Moonshot API（用于图片和表情包识别）https://platform.moonshot.cn/（免费15元额度）
+2、申请Moonshot API（用于图片和表情包识别）https://platform.moonshot.cn/ （免费15元额度）
 3、请先安装python、pip
 
 # 使用方式：
