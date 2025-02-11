@@ -159,9 +159,6 @@ def get_deepseek_response(message, user_id):
 
         logger.info(f"API回复: {reply}")
 
-        # 清理临时文件
-        clean_up_temp_files()
-
         return reply
     except Exception as e:
         logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
@@ -221,6 +218,7 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         else:
             wx.SendMsg(reply, user_id)
             logger.info(f"回复 {sender_name}: {reply}")
+
     except Exception as e:
         logger.error(f"发送回复失败: {str(e)}")
 
@@ -330,6 +328,8 @@ def handle_wxauto_message(msg):
             logger.info(f"处理图片消息 - {username}: {img_path}")
             recognized_text = recognize_image_with_moonshot(img_path, is_emoji=is_emoji)
             content = recognized_text if content is None else f"{content} {recognized_text}"
+            # 清理临时文件
+            clean_up_temp_files()
 
         if content:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -545,7 +545,6 @@ def main():
         checker_thread = threading.Thread(target=check_inactive_users)
         checker_thread.daemon = True
         checker_thread.start()
-
         
         # 启动后台线程来检查用户超时
         threading.Thread(target=check_user_timeouts, daemon=True).start()
