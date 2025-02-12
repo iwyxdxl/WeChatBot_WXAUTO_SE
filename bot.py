@@ -10,6 +10,7 @@ from wxauto import WeChat
 from openai import OpenAI
 import random
 from typing import Optional
+import os
 import pyautogui
 import shutil
 from config import (
@@ -55,6 +56,8 @@ user_timers = {}
 user_wait_times = {}
 emoji_timer = None
 emoji_timer_lock = threading.Lock()
+# 全局变量，控制消息发送状态
+can_send_messages = True
 
 def parse_time(time_str):
     return datetime.strptime(time_str, "%H:%M").time()
@@ -75,7 +78,7 @@ def check_user_timeouts():
                         send_reply(user, user, user, AUTO_MESSAGE, reply)
                     # 重置计时器和等待时间
                     reset_user_timer(user)
-        time.sleep(10)  # 每分钟检查一次
+        time.sleep(10)  # 每10秒检查一次
 
 def reset_user_timer(user):
     user_timers[user] = time.time()
@@ -83,13 +86,6 @@ def reset_user_timer(user):
 
 def get_random_wait_time():
     return random.uniform(MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS) * 3600  # 转换为秒
-
-def is_quiet_time():
-    current_time = datetime.now().time()
-    if quiet_time_start <= quiet_time_end:
-        return quiet_time_start <= current_time <= quiet_time_end
-    else:
-        return current_time >= quiet_time_start or current_time <= quiet_time_end
 
 # 当接收到用户的新消息时，调用此函数
 def on_user_message(user):
@@ -163,66 +159,6 @@ def get_deepseek_response(message, user_id):
         logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
-def process_user_messages(user_id):
-    with queue_lock:
-        if user_id not in user_queues:
-            return
-        user_data = user_queues.pop(user_id)
-        messages = user_data['messages']
-        sender_name = user_data['sender_name']
-        username = user_data['username']
-        timer = user_data['timer']
-        if timer:
-            timer.cancel()
-
-    merged_message = ' '.join(messages)
-    logger.info(f"处理合并消息 ({sender_name}): {merged_message}")
-
-    reply = get_deepseek_response(merged_message, user_id)
-    send_reply(user_id, sender_name, username, merged_message, reply)
-
-def send_reply(user_id, sender_name, username, merged_message, reply):
-    try:
-        if '\\' in reply:
-            parts = [p.strip() for p in reply.split('\\') if p.strip()]
-            for i, part in enumerate(parts):
-                wx.SendMsg(part, user_id)
-                logger.info(f"分段回复 {sender_name}: {part}")
-
-                if i < len(parts) - 1:
-                    next_part = parts[i + 1]
-                    average_typing_speed = 0.1
-                    delay = len(next_part) * (average_typing_speed + random.uniform(0.05, 0.15))
-                    time.sleep(delay)
-
-            with queue_lock:
-                if username not in user_queues:
-                    # 初始化用户的消息队列
-                    user_queues[username] = {
-                        'messages': parts[:5],  # 只保留前5条分隔消息
-                        'sender_name': sender_name,
-                        'username': username,
-                        'last_message_time': time.time()  # 设置最后消息时间
-                    }
-                    logger.info(f"已为 {sender_name} 初始化消息队列")
-                else:
-                    # 添加新消息到消息列表
-                    user_queues[username]['messages'].extend(parts[:5])
-                    if len(user_queues[username]['messages']) > 5:
-                        # 如果消息数量超过5条，移除最早的消息
-                        user_queues[username]['messages'] = user_queues[username]['messages'][-5:]
-                    user_queues[username]['last_message_time'] = time.time()  # 更新最后消息时间
-
-                    logger.info(f"{sender_name} 的消息已加入队列并更新最后消息时间")
-        else:
-            wx.SendMsg(reply, user_id)
-            logger.info(f"回复 {sender_name}: {reply}")
-
-    except Exception as e:
-        logger.error(f"发送回复失败: {str(e)}")
-
-    save_message(username, sender_name, merged_message, reply)
-
 def message_listener():
     while True:
         try:
@@ -246,6 +182,10 @@ def message_listener():
         time.sleep(wait)
 
 def recognize_image_with_moonshot(image_path, is_emoji=False):
+    # 先暂停向DeepSeek API发送消息队列
+    global can_send_messages
+    can_send_messages = False
+
     """使用Moonshot AI识别图片内容并返回文本"""
     with open(image_path, 'rb') as img_file:
         image_content = base64.b64encode(img_file.read()).decode('utf-8')
@@ -280,14 +220,20 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
         else :
             recognized_text = "发送了图片：" + recognized_text
         logger.info(f"Moonshot AI图片识别结果: {recognized_text}")
+        # 恢复向Deepseek发送消息队列
+        can_send_messages = True
         return recognized_text
 
     except Exception as e:
         logger.error(f"调用Moonshot AI识别图片失败: {str(e)}")
+        # 恢复向Deepseek发送消息队列
+        can_send_messages = True
         return ""
 
 def handle_emoji_message(msg):
     global emoji_timer
+    global can_send_messages
+    can_send_messages = False
 
     def timer_callback():
         with emoji_timer_lock:           
@@ -306,6 +252,7 @@ def handle_wxauto_message(msg):
         content = getattr(msg, 'content', None) or getattr(msg, 'text', None)  # 获取消息内容
         img_path = None  # 初始化图片路径
         is_emoji = False  # 初始化是否为动画表情标志
+        global can_send_messages
 
         # 重置定时器
         on_user_message(username)
@@ -329,6 +276,7 @@ def handle_wxauto_message(msg):
             content = recognized_text if content is None else f"{content} {recognized_text}"
             # 清理临时文件
             clean_up_temp_files()
+            can_send_messages = True
 
         if content:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -361,22 +309,25 @@ def handle_wxauto_message(msg):
         logger.error(f"消息处理失败: {str(e)}")
 
 def check_inactive_users():
+    global can_send_messages
     while True:
         current_time = time.time()
         inactive_users = []
         with queue_lock:
             for username, user_data in user_queues.items():
                 last_time = user_data.get('last_message_time', 0)
-                if current_time - last_time > 5:
+                if current_time - last_time > 7 and can_send_messages: 
                     inactive_users.append(username)
 
-        # 处理不活跃的用户
         for username in inactive_users:
             process_user_messages(username)
 
         time.sleep(1)  # 每秒检查一次
 
 def process_user_messages(user_id):
+    # 是否可以向Deepseek发消息队列
+    global can_send_messages
+
     with queue_lock:
         if user_id not in user_queues:
             return
@@ -391,6 +342,8 @@ def process_user_messages(user_id):
 
     # 获取 API 回复
     reply = get_deepseek_response(merged_message, user_id)
+
+    # 如果使用Deepseek R1，则只保留思考结果
     if "</think>" in reply:
         reply = reply.split("</think>", 1)[1].strip()
     
