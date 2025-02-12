@@ -11,7 +11,7 @@
 <img src="Demo_Image/3.png" alt="示例图片3" width="300px">
 
 # 版本号
-- v1.0 SE
+- v1.1 SE
 
 # 目前支持的功能：
 1. 自动回复

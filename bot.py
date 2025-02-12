@@ -10,7 +10,6 @@ from wxauto import WeChat
 from openai import OpenAI
 import random
 from typing import Optional
-import os
 import pyautogui
 import shutil
 from config import (
