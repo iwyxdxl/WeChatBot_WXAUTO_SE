@@ -6,9 +6,9 @@
 - 本版本致力于实现更加拟人化聊天效果，因此不提供群聊、生成语音、生成图片等功能。
 
 # 效果图
-![效果图1](Demo_Image/1.jpg)
-![效果图3](Demo_Image/2.jpg)
-![效果图3](Demo_Image/3.png)
+<img src="Demo_Image/1.jpg" alt="示例图片1" width="300px">
+<img src="Demo_Image/2.jpg" alt="示例图片2" width="300px">
+<img src="Demo_Image/3.png" alt="示例图片3" width="300px">
 
 # 版本号
 - v1.0 SE
