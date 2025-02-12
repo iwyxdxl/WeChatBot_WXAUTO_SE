@@ -17,7 +17,7 @@ MODEL = 'Pro/deepseek-ai/DeepSeek-V3'
 # 回复最大token
 MAX_TOKEN = 2000
 # DeepSeek温度
-TEMPERATURE = 1.3
+TEMPERATURE = 1.1
 # Moonshot AI配置（用于图片和表情包识别）
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = 'sk-'
