@@ -20,7 +20,7 @@
 9. 合并处理多条消息和多个表情包
 
 # 使用前准备
-1. 申请硅基流动API https://cloud.siliconflow.cn/ （免费15元额度）
+1. 申请硅基流动API https://cloud.siliconflow.cn/ （免费15元额度） 或 deepseek官方API
 2. 申请Moonshot API（用于图片和表情包识别）https://platform.moonshot.cn/ （免费15元额度）
 3. 请先安装python、pip
 
@@ -30,7 +30,7 @@
 3. 在prompts文件夹下创建 '想要聊天的对象.md' (如 用户1.md) ，如不创建将使用目录下默认的 prompt.md
 4. 登录电脑微信，确保在后台运行
 5. 运行bot.py
-6. 如果想要自定义表情包请将表情包文件放入emojis文件夹
+6. 如果想要自定义表情包请将表情包(.gif .png .jpg .jpeg)文件放入emojis文件夹
 
 # 联系我
 1. 邮箱iwyxdxl@gmail.com
