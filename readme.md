@@ -42,5 +42,5 @@
 2. QQ 2025128651
    
 # 声明
-本项目基于 [My-Dream-Moments](https://github.com/umaru-233/My-Dream-Moments/) 修改，遵循 **GNU GPL-3.0 或更高版本** 许可证。
-原项目版权归属：umaru (2025)。
+- 本项目基于 [My-Dream-Moments](https://github.com/umaru-233/My-Dream-Moments/) 修改，遵循 **GNU GPL-3.0 或更高版本** 许可证。
+- 原项目版权归属：umaru (2025)。
