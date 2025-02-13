@@ -31,11 +31,11 @@
 
 # 使用方式：
 1. 第一次启动请先运行 Install_Requirements.bat 以安装必要的依赖文件
-2. 修改config.py，填入你的两个API和想要聊天的对象
+2. 修改config.py，填入你的两个API和想要聊天的对象的微信昵称
 3. 在prompts文件夹下创建 '想要聊天的对象的微信昵称'.md (如 用户1.md) 作为人设提示词
 4. 如不创建将使用目录下默认的 prompt.md
 5. 登录电脑微信，确保在后台运行
-6. 运行Run.bat
+6. 运行 Run.bat 启动程序
 7. 如果想要自定义表情包请将表情包(.gif .png .jpg .jpeg)文件放入emojis文件夹
 
 # 联系我
