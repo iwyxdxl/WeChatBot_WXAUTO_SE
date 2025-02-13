@@ -1,3 +1,10 @@
+# ***********************************************************************
+# Modified based on the My-Dream-Moments project
+# Copyright of the original project: Copyright (C) 2025, umaru
+# Copyright of this modification: Copyright (C) 2025, iwyxdxl
+# Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# ***********************************************************************
+
 # 用户列表(请配置要和bot说话的账号的微信昵称，不要写备注！)
 # 例如：LISTEN_LIST = ['用户1','用户2']
 LISTEN_LIST = ['用户1']
