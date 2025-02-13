@@ -64,6 +64,7 @@ emoji_timer = None
 emoji_timer_lock = threading.Lock()
 # 全局变量，控制消息发送状态
 can_send_messages = True
+is_sending_message = False
 
 def parse_time(time_str):
     return datetime.strptime(time_str, "%H:%M").time()
@@ -322,7 +323,7 @@ def check_inactive_users():
         with queue_lock:
             for username, user_data in user_queues.items():
                 last_time = user_data.get('last_message_time', 0)
-                if current_time - last_time > 7 and can_send_messages: 
+                if current_time - last_time > 7 and can_send_messages and not is_sending_message: 
                     inactive_users.append(username)
 
         for username in inactive_users:
@@ -357,7 +358,10 @@ def process_user_messages(user_id):
     send_reply(user_id, sender_name, username, merged_message, reply)
 
 def send_reply(user_id, sender_name, username, merged_message, reply):
+    global is_sending_message
     try:
+        # 发送分段消息过程中停止向deepseek发送新请求
+        is_sending_message = True
         # 首先检查是否需要发送表情包
         if is_emoji_request(merged_message) or is_emoji_request(reply):
             emoji_path = get_random_emoji()
@@ -383,8 +387,14 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         else:
             wx.SendMsg(reply, user_id)
             logger.info(f"回复 {sender_name}: {reply}")
+
+        # 解除发送限制
+        is_sending_message = False
+
     except Exception as e:
         logger.error(f"发送回复失败: {str(e)}")
+        # 解除发送限制
+        is_sending_message = False
 
     # 保存聊天记录
     save_message(username, sender_name, merged_message, reply)
