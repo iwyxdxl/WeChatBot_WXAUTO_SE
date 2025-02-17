@@ -23,7 +23,8 @@ from config import (
     DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
     MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR,
     AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS, MOONSHOT_MODEL,
-    QUIET_TIME_START, QUIET_TIME_END
+    QUIET_TIME_START, QUIET_TIME_END,
+    AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX
     )
 
 # 获取微信窗口对象
@@ -381,8 +382,7 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
                 if i < len(parts) - 1:
                     next_part = parts[i + 1]
                     # 计算延时时间，模拟打字速度
-                    average_typing_speed = 0.1  # 每个字符的打字时间（秒）
-                    delay = len(next_part) * (average_typing_speed + random.uniform(0.05, 0.15))
+                    delay = len(next_part) * (AVERAGE_TYPING_SPEED + random.uniform(RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX))
                     time.sleep(delay)
         else:
             wx.SendMsg(reply, user_id)

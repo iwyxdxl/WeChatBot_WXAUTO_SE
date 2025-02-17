@@ -25,14 +25,17 @@ MODEL = 'Pro/deepseek-ai/DeepSeek-V3'
 MAX_TOKEN = 2000
 # DeepSeek温度
 TEMPERATURE = 1.1
+
 # Moonshot AI配置（用于图片和表情包识别）
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = 'sk-'
 MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 MOONSHOT_MODEL = "moonshot-v1-128k-vision-preview"
 MOONSHOT_TEMPERATURE = 0.3
+
 #表情包存放目录
 EMOJI_DIR = 'emojis'
+
 # 自动消息配置
 AUTO_MESSAGE = "请你模拟系统设置的角色，在微信上找对方发消息想知道对方在做什么"
 MIN_COUNTDOWN_HOURS = 0.2  # 最小倒计时时间（小时）
@@ -40,3 +43,8 @@ MAX_COUNTDOWN_HOURS = 0.5  # 最大倒计时时间（小时）
 # 消息发送时间限制
 QUIET_TIME_START = "22:00"  # 安静时间开始
 QUIET_TIME_END = "8:00"    # 安静时间结束
+
+# 消息回复速度 消息间隔时间 = 字数 * (平均时间 + 随机时间)
+AVERAGE_TYPING_SPEED = 0.2 # 平均时间 （秒）
+RANDOM_TYPING_SPEED_MIN = 0.05 # 最小随机时间（秒）
+RANDOM_TYPING_SPEED_MAX = 0.15 # 最大随机时间（秒）
