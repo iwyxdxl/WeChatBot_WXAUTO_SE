@@ -8,3 +8,4 @@ requests
 wxauto~=3.9.11.17.5
 openai~=1.61.0
 pyautogui
+flask

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>配置编辑器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .entry {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .success-alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+    </style>
+    <script>
+        function addEntry() {
+            const container = document.getElementById('listen-list');
+            const div = document.createElement('div');
+            div.className = 'entry';
+            div.innerHTML = `
+                <input type="text" name="listen_list">
+                <button type="button" onclick="removeEntry(this)">删除</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function removeEntry(button) {
+            button.parentElement.remove();
+        }
+
+        function resetForm() {
+            document.querySelector('form').reset();
+            const entries = document.querySelectorAll('#listen-list .entry');
+            entries.forEach((entry, index) => {
+                if (index === 0) return;
+                entry.remove();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.querySelector('form[method="post"]');
+            const successAlert = document.getElementById('success-alert');
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault(); // 阻止默认提交
+                
+                // 处理多值字段
+                const formData = new FormData(form);
+                const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
+                    .map(input => input.value);
+                
+                // 删除旧值后重新添加
+                formData.delete('listen_list');
+                listenList.forEach(value => formData.append('listen_list', value));
+
+                try {
+                    // 使用fetch异步提交
+                    await fetch('', {  // 保持提交到当前URL
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            // 必须添加这个头部才能正确处理表单数据
+                            'X-Requested-With': 'XMLHttpRequest' 
+                        }
+                    });
+                    
+                    showSuccessAlert(); // 显示提示
+                } catch (error) {
+                    console.error('保存失败:', error);
+                }
+            });
+
+        function showSuccessAlert() {
+            successAlert.style.opacity = '1';
+            setTimeout(() => successAlert.style.opacity = '0', 5000);
+        }
+});
+</script>
+</head>
+<body>
+    <h1>配置编辑器</h1>
+
+    <div id="success-alert" class="success-alert">
+        保存配置成功，请到终端输入'Y'以启动Bot程序
+    </div>
+
+    <form method="post">
+        <div class="section">
+            <h2>用户列表</h2>
+            <div class="form-group">
+                <label>微信昵称列表（不要写备注）:</label>
+                <div id="listen-list">
+                    {% for item in config.LISTEN_LIST %}
+                    <div class="entry">
+                        <input type="text" name="listen_list" value="{{ item }}">
+                        <button type="button" onclick="removeEntry(this)">删除</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" onclick="addEntry()">添加用户</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>DeepSeek 配置</h2>
+
+            <div class="form-group">
+                <label>API 服务商: (推荐硅基流动API 注册地址 https://cloud.siliconflow.cn/ 免费15元额度)</label>
+                <select name="DEEPSEEK_BASE_URL">
+                    <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
+                    <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>官方API</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>模型选择: (推荐使用V3模型)</label>
+                <select name="MODEL">
+                    <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基V3模型 （可用免费额度）</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基V3 Pro模型 （需充值后方可使用）</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基R1 Pro模型 （需充值后方可使用）</option>
+                    <option value="deepseek-chat" {% if config.MODEL == 'deepseek-chat' %}selected{% endif %}>官方V3模型</option>
+                    <option value="deepseek-reasoner" {% if config.MODEL == 'deepseek-reasoner' %}selected{% endif %}>官方R1模型</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>API Key:</label>
+                <input type="text" name="DEEPSEEK_API_KEY" value="{{ config.DEEPSEEK_API_KEY }}">
+            </div>
+
+            <div class="form-group">
+                <label>最大Token:</label>
+                <input type="number" step="100" name="MAX_TOKEN" value="{{ config.MAX_TOKEN }}">
+            </div>
+
+            <div class="form-group">
+                <label>温度 (0-2):</label>
+                <input type="number" step="0.1" name="TEMPERATURE" value="{{ config.TEMPERATURE }}">
+            </div>
+            
+        </div>
+        
+        <div class="section">
+            <h2>图片/表情包识别配置</h2>
+            <div class="form-group">
+                <label>MOONSHOT_API_KEY: (申请网站 https://platform.moonshot.cn/ 免费15元额度)</label>
+                <input type="text" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
+            </div>
+
+            <div class="form-group">
+                <label>MOONSHOT_BASE_URL: (一般无需修改)</label>
+                <input type="text" name="MOONSHOT_BASE_URL" value="{{ config.MOONSHOT_BASE_URL }}">
+            </div>
+
+            <div class="form-group">
+                <label>识图模型选择:</label>
+                <select name="MOONSHOT_MODEL">
+                    <option value="moonshot-v1-128k-vision-preview" {% if config.MOONSHOT_MODEL == 'moonshot-v1-128k-vision-preview' %}selected{% endif %}>moonshot-v1-128k-vision-preview</option>
+                    <option value="moonshot-v1-32k-vision-preview" {% if config.MOONSHOT_MODEL == 'moonshot-v1-32k-vision-preview' %}selected{% endif %}>moonshot-v1-32k-vision-preview</option>
+                    <option value="moonshot-v1-8k-vision-preview" {% if config.MOONSHOT_MODEL == 'moonshot-v1-8k-vision-preview' %}selected{% endif %}>moonshot-v1-8k-vision-preview</option>    
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>MOONSHOT温度 (0-1):</label>
+                <input type="number" step="0.1" name="MOONSHOT_TEMPERATURE" value="{{ config.MOONSHOT_TEMPERATURE }}">
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>其他配置（一般无需更改）</h2>
+            <div class="form-group">
+                <label>自动消息内容:</label>
+                <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
+            </div>
+
+            <div class="form-group">
+                <label>安静时间段:</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" name="QUIET_TIME_START" value="{{ config.QUIET_TIME_START }}" placeholder="HH:MM">
+                    至
+                    <input type="text" name="QUIET_TIME_END" value="{{ config.QUIET_TIME_END }}" placeholder="HH:MM">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>表情包存放目录:</label>
+                <input type="text" name="EMOJI_DIR" value="{{ config.EMOJI_DIR }}">
+            </div>
+
+            <div class="form-group">
+                <label>消息间隔时间 = 字数 * (平均时间 + 随机时间)</label>
+                <label>平均打字速度（字/秒）:</label>
+                <input type="text" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
+                <label>随机打字速度（字/秒）：</label>
+                <div style="display: flex; gap: 10px;">              
+                    <input type="text" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
+                    至
+                    <input type="text" name="RANDOM_TYPING_SPEED_MAX" value="{{ config.RANDOM_TYPING_SPEED_MAX }}">
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button type="submit">保存配置</button>
+            <button type="button" onclick="resetForm()">重置表单</button>
+        </div>
+    </form>
+</body>
+</html>
