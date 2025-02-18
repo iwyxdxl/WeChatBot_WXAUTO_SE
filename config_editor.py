@@ -52,36 +52,50 @@ def update_config(new_values):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
+        try:
+            config = parse_config()
+            new_values = {}
+
+            # 处理 LISTEN_LIST
+            new_values['LISTEN_LIST'] = [
+                item.strip() for item in request.form.getlist('listen_list') 
+                if item.strip()
+            ]
+
+            # 处理其他字段
+            submitted_fields = set(request.form.keys()) - {'listen_list'}
+            for var in submitted_fields:
+                if var not in config:
+                    continue  # 忽略无效字段
+                value = request.form[var].strip()
+                if isinstance(config[var], bool):
+                    new_values[var] = value.lower() in ('on', 'true', '1', 'yes')
+                elif isinstance(config[var], int):
+                    new_values[var] = int(value) if value else 0
+                elif isinstance(config[var], float):
+                    new_values[var] = float(value) if value else 0.0
+                else:
+                    new_values[var] = value
+
+            # 明确处理布尔类型字段（如果未提交）
+            for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE']:
+                if var not in submitted_fields:
+                    new_values[var] = False
+
+            update_config(new_values)
+            return redirect(url_for('index'))
+        except Exception as e:
+            # 记录错误信息到日志或者异常捕捉信号
+            app.logger.error(f"Error saving configuration: {e}")
+            # 返回一个错误页面或提示信息
+            return "Configuration save failed. Please check your inputs."
+
+    try:
         config = parse_config()
-        new_values = {}
-
-        # 处理LISTEN_LIST
-        new_values['LISTEN_LIST'] = [
-            item.strip() for item in request.form.getlist('listen_list') 
-            if item.strip()
-        ]
-
-        # 处理其他字段：遍历所有提交的字段（排除已处理的LISTEN_LIST）
-        submitted_fields = set(request.form.keys()) - {'listen_list'}
-        for var in submitted_fields:
-            if var not in config:
-                continue  # 忽略无效字段
-            value = request.form[var].strip()
-            # 类型转换逻辑
-            if isinstance(config[var], bool):
-                new_values[var] = value.lower() in ('true', '1', 'yes')
-            elif isinstance(config[var], int):
-                new_values[var] = int(value) if value else 0
-            elif isinstance(config[var], float):
-                new_values[var] = float(value) if value else 0.0
-            else:
-                new_values[var] = value
-
-        update_config(new_values)
-        return redirect(url_for('index'))
-
-    config = parse_config()
-    return render_template('config_editor.html', config=config)
+        return render_template('config_editor.html', config=config)
+    except Exception as e:
+        app.logger.error(f"Error loading configuration: {e}")
+        return "Error loading configuration."
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

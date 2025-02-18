@@ -30,16 +30,22 @@ TEMPERATURE = 1.1
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = 'sk-'
 MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1'
-MOONSHOT_MODEL = "moonshot-v1-128k-vision-preview"
+MOONSHOT_MODEL = 'moonshot-v1-128k-vision-preview'
 MOONSHOT_TEMPERATURE = 0.8
+ENABLE_IMAGE_RECOGNITION = True
+ENABLE_EMOJI_RECOGNITION = True
+
 
 #表情包存放目录
 EMOJI_DIR = 'emojis'
+ENABLE_EMOJI_SENDING = True
 
 # 自动消息配置
 AUTO_MESSAGE = '请你模拟系统设置的角色，在微信上找对方发消息想知道对方在做什么'
-MIN_COUNTDOWN_HOURS = 0.2  # 最小倒计时时间（小时）
-MAX_COUNTDOWN_HOURS = 0.5  # 最大倒计时时间（小时）
+ENABLE_AUTO_MESSAGE = True
+# 等待时间
+MIN_COUNTDOWN_HOURS = 0.3
+MAX_COUNTDOWN_HOURS = 0.5
 # 消息发送时间限制
 QUIET_TIME_START = '22:00'
 QUIET_TIME_END = '8:00'

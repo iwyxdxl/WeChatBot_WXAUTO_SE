@@ -24,7 +24,9 @@ from config import (
     MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR,
     AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS, MOONSHOT_MODEL,
     QUIET_TIME_START, QUIET_TIME_END,
-    AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX
+    AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX,
+    ENABLE_IMAGE_RECOGNITION, ENABLE_EMOJI_RECOGNITION, 
+    ENABLE_EMOJI_SENDING, ENABLE_AUTO_MESSAGE
     )
 
 # 获取微信窗口对象
@@ -74,19 +76,20 @@ quiet_time_start = parse_time(QUIET_TIME_START)
 quiet_time_end = parse_time(QUIET_TIME_END)
 
 def check_user_timeouts():
-    while True:
-        current_time = time.time()
-        for user in listen_list:
-            last_active = user_timers.get(user)
-            wait_time = user_wait_times.get(user)
-            if last_active and wait_time:
-                if current_time - last_active >= wait_time:
-                    if not is_quiet_time():
-                        reply = get_deepseek_response(AUTO_MESSAGE, user)
-                        send_reply(user, user, user, AUTO_MESSAGE, reply)
-                    # 重置计时器和等待时间
-                    reset_user_timer(user)
-        time.sleep(10)  # 每10秒检查一次
+    if ENABLE_AUTO_MESSAGE:
+        while True:
+            current_time = time.time()
+            for user in listen_list:
+                last_active = user_timers.get(user)
+                wait_time = user_wait_times.get(user)
+                if last_active and wait_time:
+                    if current_time - last_active >= wait_time:
+                        if not is_quiet_time():
+                            reply = get_deepseek_response(AUTO_MESSAGE, user)
+                            send_reply(user, user, user, AUTO_MESSAGE, reply)
+                        # 重置计时器和等待时间
+                        reset_user_timer(user)
+            time.sleep(10)  # 每10秒检查一次
 
 def reset_user_timer(user):
     user_timers[user] = time.time()
@@ -179,7 +182,7 @@ def message_listener():
                     content = msg.content
                     logger.info(f'【{who}】：{content}')
                     if msgtype == 'friend':
-                        if '[动画表情]' in content:
+                        if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
                             handle_emoji_message(msg)
                         else:
                             handle_wxauto_message(msg)
@@ -267,16 +270,23 @@ def handle_wxauto_message(msg):
 
         # 检查是否是图片消息
         if content and content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
-            img_path = content  # 如果消息内容是图片路径，则赋值给img_path
-            is_emoji = False
-            content = None  # 将内容置为空，因为我们只处理图片
+            if ENABLE_IMAGE_RECOGNITION:
+                img_path = content  # 如果消息内容是图片路径，则赋值给img_path
+                is_emoji = False
+                content = None  # 将内容置为空，因为我们只处理图片
+            else:
+                content = "[图片]"
 
         # 检查是否是"[动画表情]"
         if content and "[动画表情]" in content:
-            # 对聊天对象的窗口进行截图，并保存到指定目录           
-            img_path = capture_and_save_screenshot(username)
-            is_emoji = True  # 设置为动画表情
-            content = None  # 将内容置为空，不再处理该消息
+            if ENABLE_EMOJI_RECOGNITION:
+                # 对聊天对象的窗口进行截图，并保存到指定目录           
+                img_path = capture_and_save_screenshot(username)
+                is_emoji = True  # 设置为动画表情
+                content = None  # 将内容置为空，不再处理该消息
+            else:
+                content = "[动画表情]"
+                clean_up_temp_files()
 
         if img_path:
             logger.info(f"处理图片消息 - {username}: {img_path}")
@@ -364,14 +374,15 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         # 发送分段消息过程中停止向deepseek发送新请求
         is_sending_message = True
         # 首先检查是否需要发送表情包
-        if is_emoji_request(merged_message) or is_emoji_request(reply):
-            emoji_path = get_random_emoji()
-            if emoji_path:
-                try:
-                    # 先发送表情包
-                    wx.SendFiles(filepath=emoji_path, who=user_id)
-                except Exception as e:
-                    logger.error(f"发送表情包失败: {str(e)}")
+        if ENABLE_EMOJI_SENDING:
+            if is_emoji_request(merged_message) or is_emoji_request(reply):
+                emoji_path = get_random_emoji()
+                if emoji_path:
+                    try:
+                        # 先发送表情包
+                        wx.SendFiles(filepath=emoji_path, who=user_id)
+                    except Exception as e:
+                        logger.error(f"发送表情包失败: {str(e)}")
 
         if '\\' in reply:
             parts = [p.strip() for p in reply.split('\\') if p.strip()]
@@ -515,7 +526,8 @@ def main():
         checker_thread.start()
         
         # 启动后台线程来检查用户超时
-        threading.Thread(target=check_user_timeouts, daemon=True).start()
+        if ENABLE_AUTO_MESSAGE:
+            threading.Thread(target=check_user_timeouts, daemon=True).start()
 
         logger.info("开始运行BOT...")
 

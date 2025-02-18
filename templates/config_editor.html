@@ -65,6 +65,128 @@
             opacity: 0;
             transition: opacity 0.3s ease;
         }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            vertical-align: middle;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 34px;
+        }
+
+        .slider::before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #4CAF50;
+        }
+
+        input:checked + .slider::before {
+            transform: translateX(26px);
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+            border-radius: 34px;
+        }
+
+        .slider.round::before {
+            border-radius: 50%;
+        }
+
+        .switch-container {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .switch-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            vertical-align: middle;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 34px;
+        }
+
+        .slider::before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #4CAF50;
+        }
+
+        input:checked + .slider::before {
+            transform: translateX(26px);
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+            border-radius: 34px;
+        }
+
+        .slider.round::before {
+            border-radius: 50%;
+        }
     </style>
     <script>
         function addEntry() {
@@ -194,8 +316,31 @@
             
         </div>
         
-        <div class="section">
+       <div class="section">
             <h2>图片/表情包识别配置</h2>
+            <div class="form-group">
+                <div class="switch-container">
+                    <div class="switch-item">
+                        <label><b>启用图片识别功能</b></label>
+                        <div class="switch">
+                            <label class="switch-label">
+                                <input type="checkbox" name="ENABLE_IMAGE_RECOGNITION" {% if config.ENABLE_IMAGE_RECOGNITION %}checked{% endif %}>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="switch-item">
+                        <label><b>启用表情包识别功能</b></label>
+                        <div class="switch">
+                            <label class="switch-label">
+                                <input type="checkbox" name="ENABLE_EMOJI_RECOGNITION" {% if config.ENABLE_EMOJI_RECOGNITION %}checked{% endif %}>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label>MOONSHOT_API_KEY: (申请网站 https://platform.moonshot.cn/ 免费15元额度)</label>
                 <input type="text" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
@@ -222,18 +367,48 @@
         </div>
 
         <div class="section">
-            <h2>其他配置（一般无需更改）</h2>
+            <h2>其他配置</h2>
+
             <div class="form-group">
-                <label>自动消息内容:</label>
-                <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
+                <label><b>启用主动消息功能</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                        <input type="checkbox" name="ENABLE_AUTO_MESSAGE" {% if config.ENABLE_AUTO_MESSAGE %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
             </div>
 
             <div class="form-group">
-                <label>安静时间段:</label>
+                <label>主动消息内容:</label>
+                <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
+            </div>
+            
+            <div class="form-group">
+                <label>主动消息触发时间(小时):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" name="MIN_COUNTDOWN_HOURS" value="{{ config.MIN_COUNTDOWN_HOURS }}">
+                    至
+                    <input type="text" name="MAX_COUNTDOWN_HOURS" value="{{ config.MAX_COUNTDOWN_HOURS }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>主动消息安静时间段:</label>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" name="QUIET_TIME_START" value="{{ config.QUIET_TIME_START }}" placeholder="HH:MM">
                     至
                     <input type="text" name="QUIET_TIME_END" value="{{ config.QUIET_TIME_END }}" placeholder="HH:MM">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><b>启用主动表情包功能</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                        <input type="checkbox" name="ENABLE_EMOJI_SENDING" {% if config.ENABLE_EMOJI_SENDING %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
                 </div>
             </div>
 
@@ -244,9 +419,9 @@
 
             <div class="form-group">
                 <label>消息间隔时间 = 字数 * (平均时间 + 随机时间)</label>
-                <label>平均打字速度（字/秒）:</label>
+                <label>平均打字速度（秒/字）:</label>
                 <input type="text" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
-                <label>随机打字速度（字/秒）：</label>
+                <label>随机打字速度（秒/字）：</label>
                 <div style="display: flex; gap: 10px;">              
                     <input type="text" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
                     至
