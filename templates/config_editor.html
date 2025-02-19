@@ -378,7 +378,7 @@
         <div class="section">
             <h2>用户列表</h2>
             <div class="form-group">
-                <label>微信昵称列表（不要写备注）:</label>
+                <label>微信昵称列表 (不要写备注):</label>
                 <div id="listen-list">
                     {% for item in config.LISTEN_LIST %}
                     <div class="entry">
@@ -419,12 +419,12 @@
             </div>
 
             <div class="form-group">
-                <label>回复最大Token:</label>
+                <label>回复最大Token: </label>
                 <input type="number" step="100" name="MAX_TOKEN" value="{{ config.MAX_TOKEN }}">
             </div>
 
             <div class="form-group">
-                <label>温度 (0-2):</label>
+                <label>温度 (0-2): </label>
                 <input type="number" step="0.1" name="TEMPERATURE" value="{{ config.TEMPERATURE }}">
             </div>
             
@@ -513,7 +513,7 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>消息队列等待时间（建议5-10秒）:</label>
+                <label>消息队列等待时间: (建议5-10秒)</label>
                 <input type="number" step="1" name="QUEUE_WAITING_TIME" value="{{ config.QUEUE_WAITING_TIME }}">
             </div>
         </div>
@@ -531,12 +531,12 @@
             </div>
 
             <div class="form-group">
-                <label>触发临时记忆总结进Prompt的阈值数量（条）:</label>
+                <label>触发临时记忆总结进Prompt的阈值数量(条):</label>
                 <input type="number" step="1" name="MAX_MESSAGE_LOG_ENTRIES" value="{{ config.MAX_MESSAGE_LOG_ENTRIES }}">
             </div>
 
             <div class="form-group">
-                <label>最大记忆数量（条）:</label>
+                <label>保存到Prompt中的最大记忆数量(条):</label>
                 <input type="number" step="1" name="MAX_MEMORY_NUMBER" value="{{ config.MAX_MEMORY_NUMBER }}">
             </div>
 
