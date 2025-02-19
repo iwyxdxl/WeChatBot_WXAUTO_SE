@@ -9,6 +9,8 @@
 <img src="Demo_Image/1.jpg" alt="示例图片1" width="300px">
 <img src="Demo_Image/2.jpg" alt="示例图片2" width="300px">
 <img src="Demo_Image/3.png" alt="示例图片3" width="300px">
+<img src="Demo_Image/5.jpeg" alt="示例图片5" width="900px">
+<img src="Demo_Image/6.jpeg" alt="示例图片6" width="900px">
 
 # 版本号
 - v3.0
