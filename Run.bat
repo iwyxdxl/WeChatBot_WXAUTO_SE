@@ -60,6 +60,8 @@ echo wxauto~=3.9.11.17.5 >> temp_requirements.txt
 echo openai~=1.61.0 >> temp_requirements.txt
 echo pyautogui >> temp_requirements.txt
 echo werkzeug >> temp_requirements.txt
+echo psutil>> temp_requirements.txt
+echo openai>> temp_requirements.txt
 
 python -m pip install -r temp_requirements.txt
 if %errorlevel% neq 0 (
