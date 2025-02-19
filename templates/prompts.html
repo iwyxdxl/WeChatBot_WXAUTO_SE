@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<!-----------------------------------------------------------------------
+- Copyright of this file: Copyright (C) 2025, iwyxdxl
+- Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+------------------------------------------------------------------------>
+    <title>Prompt管理</title>
+    <style>
+        body { 
+            max-width: 800px; 
+            margin: 20px auto; 
+            padding: 20px;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0;
+        }
+        .btn {
+            background-color: #4caf50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            text-decoration: none;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .file-list {
+            list-style: none;
+            padding: 0;
+        }
+        .file-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .file-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .actions a {
+            text-decoration: none;
+            color: #333;
+            margin-left: 40px; /* 加大间距 */
+            transition: color 0.3s;
+        }
+        .actions a:hover {
+            color: #777;
+        }
+        .delete-btn {
+            color: #f44336;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        .delete-btn:hover {
+            color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Prompt管理</h1>
+        <a href="/" class="btn">返回配置</a>
+    </div>
+    <a href="{{ url_for('create_prompt') }}" class="btn">新建Prompt</a>
+    
+    <ul class="file-list">
+        {% for file in files %}
+        <li class="file-item">
+            <span>{{ file }}</span>
+            <div class="actions">
+                <a href="{{ url_for('edit_prompt', filename=file) }}">编辑</a>
+                <span class="delete-btn" onclick="confirmDelete('{{ file }}')">删除</span>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <script>
+        function confirmDelete(filename) {
+            if (confirm('确定要删除文件 “' + filename + '” 吗？')) {
+                fetch(`/delete_prompt/${encodeURIComponent(filename)}`, { method: 'POST' })
+                    .then(response => {
+                        if (response.ok) location.reload();
+                        else alert('删除失败');
+                });
+            }
+        }
+    </script>
+</body>
+</html>

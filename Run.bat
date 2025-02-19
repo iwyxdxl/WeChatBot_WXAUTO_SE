@@ -59,6 +59,7 @@ echo requests >> temp_requirements.txt
 echo wxauto~=3.9.11.17.5 >> temp_requirements.txt
 echo openai~=1.61.0 >> temp_requirements.txt
 echo pyautogui >> temp_requirements.txt
+echo werkzeug >> temp_requirements.txt
 
 python -m pip install -r temp_requirements.txt
 if %errorlevel% neq 0 (
@@ -83,16 +84,3 @@ start python config_editor.py
 
 :: 打开浏览器访问Flask服务器
 start "" "http://localhost:5000"
-
-:: 提示用户是否继续运行Bot
-:prompt
-set /p answer=是否完成配置并继续运行Bot？(Y/N): 
-if /i "%answer%" == "Y" (
-    python bot.py
-) else (
-    echo 您选择了不运行Bot，请访问 http://localhost:5000 修改配置。
-    goto prompt
-)
-
-echo 请访问 http://localhost:5000
-pause

@@ -187,6 +187,28 @@
         .slider.round::before {
             border-radius: 50%;
         }
+
+        .nav-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-button:hover {
+            background-color: #45a049;
+            color: white;
+            text-decoration: none;
+        }
+
+        .nav-button.stop {
+            background-color: #FF0000; /* 红色 */
+        }
+
     </style>
     <script>
         function addEntry() {
@@ -214,6 +236,29 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            // 新增初始化状态检查函数
+            async function initBotStatus() {
+                const button = document.getElementById('botButton');
+                try {
+                    const statusRes = await fetch('/bot_status?_=' + Date.now());
+                    const { status } = await statusRes.json();
+                    
+                    // 根据状态更新按钮样式和文字
+                    button.className = status === 'stopped' 
+                        ? 'nav-button' 
+                        : 'nav-button stop';
+                    button.innerHTML = status === 'stopped' 
+                        ? 'Start Bot' 
+                        : 'Stop Bot';
+                } catch (error) {
+                    console.error('状态获取失败:', error);
+                    button.innerHTML = '状态获取失败';
+                }
+            }
+
+            // 页面加载完成后立即执行初始化
+            initBotStatus();
+
             const form = document.querySelector('form[method="post"]');
             const successAlert = document.getElementById('success-alert');
 
@@ -246,18 +291,83 @@
                 }
             });
 
-        function showSuccessAlert() {
-            successAlert.style.opacity = '1';
-            setTimeout(() => successAlert.style.opacity = '0', 5000);
-        }
-});
-</script>
+            const botButton = document.getElementById('botButton');
+            botButton.addEventListener('click', toggleBot);
+
+            async function toggleBot() {
+                const button = document.getElementById('botButton');
+                button.disabled = true;
+                const originalText = button.innerText;
+                button.innerHTML = 'Processing...';
+
+                try {
+                    // 获取当前状态
+                    const statusRes = await fetch('/bot_status?_=' + Date.now());
+                    const { status } = await statusRes.json();
+                    
+                    // 新增：如果是启动操作则先提交表单
+                    if (status === 'stopped') {
+                        // 手动触发表单提交逻辑
+                        const formData = new FormData(form);
+                        const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
+                            .map(input => input.value);
+                        
+                        formData.delete('listen_list');
+                        listenList.forEach(value => formData.append('listen_list', value));
+
+                        try {
+                            await fetch('', { 
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest' 
+                                }
+                            });
+                            showSuccessAlert(); 
+                        } catch (error) {
+                            console.error('保存失败:', error);
+                        }
+                    }
+
+                    // 执行机器人操作
+                    const targetAction = status === 'stopped' ? 'start_bot' : 'stop_bot';
+                    await fetch('/' + targetAction, { method: 'POST' });
+
+                    // 更新按钮状态
+                    button.className = status === 'stopped' 
+                        ? 'nav-button stop' 
+                        : 'nav-button';
+                    button.innerHTML = status === 'stopped' 
+                        ? 'Stop Bot' 
+                        : 'Start Bot';
+
+                } catch (error) {
+                    console.error('操作失败:', error);
+                    button.innerHTML = '操作失败，请重试';
+                    setTimeout(() => button.innerHTML = originalText, 2000);
+                } finally {
+                    button.disabled = false;
+                }
+            }
+                    
+            function showSuccessAlert() {
+                successAlert.style.opacity = '1';
+                setTimeout(() => successAlert.style.opacity = '0', 5000);
+            }
+        });
+    </script>
 </head>
 <body>
-    <h1>配置编辑器</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <h1>配置编辑器</h1>
+        <div>
+            <button id="botButton" class="nav-button">Start Bot</button>
+            <a href="{{ url_for('prompt_list') }}" class="nav-button">Prompt管理</a>
+        </div>
+    </div>
 
     <div id="success-alert" class="success-alert">
-        保存配置成功，请到终端输入'Y'以启动Bot程序
+        保存配置成功
     </div>
 
     <form method="post">
