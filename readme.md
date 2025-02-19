@@ -1,6 +1,6 @@
 # 说明
 - 这是一个精简优化版的聊天机器人。通过wxauto收发微信消息，deepseek生成回复消息。
-- 原项目仓库：https://github.com/umaru-233/My-Dream-Moments
+- 原项目仓库：https://github.com/KouriChat/KouriChat
 - 本项目由iwyxdxl在原项目基础上修改创建。
 - 本机器人拥有更优化的消息处理流程，更加拟人化的聊天服务。
 - 本版本致力于实现更加拟人化聊天效果，因此不提供群聊、生成语音、生成图片等功能。
@@ -11,7 +11,7 @@
 <img src="Demo_Image/3.png" alt="示例图片3" width="300px">
 
 # 版本号
-- v2.2
+- v3.0
 
 # 目前支持的功能
 1. 自动回复
@@ -20,11 +20,12 @@
 4. 多个微信用户同时聊天
 5. 给每个微信用户分配不同的提示词prompt
 6. 时间感知
-7. 发随机表情包
+7. 识别情绪回复表情包
 8. 主动发消息
 9. 合并处理多条消息和多个表情包
 10. 自行决定是否开启部分功能
 11. 使用WebUI启动程序以及修改配置文件和prompt
+12. 记忆保存到Prompt
 
 
 # 使用前准备
@@ -40,12 +41,12 @@
 5. 点击新建Prompt 文件名为'想要聊天的对象的微信昵称'.md (如 用户1.md) 作为人设提示词
 6. 如不创建将使用文件目录下的 prompt.md作为默认提示词
 7. 修改完后点击页面右上角'Start Bot'启动程序
-8. 如果想要自定义表情包请将表情包(.gif .png .jpg .jpeg)文件放入emojis文件夹
+8. 如果想要自定义表情包请将表情包(.gif .png .jpg .jpeg)文件放入emojis中对应的文件夹中
 
 # 联系我
 1. 邮箱iwyxdxl@gmail.com
 2. QQ 2025128651
    
 # 声明
-- 本项目基于 [My-Dream-Moments](https://github.com/umaru-233/My-Dream-Moments/) 修改，遵循 **GNU GPL-3.0 或更高版本** 许可证。
+- 本项目基于 [My-Dream-Moments](https://github.com/KouriChat/KouriChat) 修改，遵循 **GNU GPL-3.0 或更高版本** 许可证。
 - 原项目版权归属：umaru (2025)。

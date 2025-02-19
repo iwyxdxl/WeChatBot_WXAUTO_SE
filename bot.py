@@ -1,5 +1,5 @@
 # ***********************************************************************
-# Modified based on the My-Dream-Moments project
+# Modified based on the KouriChat
 # Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -12,21 +12,22 @@ from datetime import datetime, time as dt_time
 import threading
 import time
 import os
-from database import Session, ChatMessage
 from wxauto import WeChat
 from openai import OpenAI
 import random
 from typing import Optional
 import pyautogui
 import shutil
+import re  
 from config import (
     DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
     MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR,
     AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS, MOONSHOT_MODEL,
-    QUIET_TIME_START, QUIET_TIME_END,
+    QUIET_TIME_START, QUIET_TIME_END, QUEUE_WAITING_TIME, 
     AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX,
     ENABLE_IMAGE_RECOGNITION, ENABLE_EMOJI_RECOGNITION, 
-    ENABLE_EMOJI_SENDING, ENABLE_AUTO_MESSAGE
+    ENABLE_EMOJI_SENDING, ENABLE_AUTO_MESSAGE, ENABLE_MEMORY, 
+    MEMORY_TEMP_DIR, MAX_MESSAGE_LOG_ENTRIES, MAX_MEMORY_NUMBER
     )
 
 # 获取微信窗口对象
@@ -103,22 +104,6 @@ def on_user_message(user):
     if user not in listen_list:
         listen_list.append(user)
     reset_user_timer(user)
-
-def save_message(sender_id, sender_name, message, reply):
-    # 保存聊天记录到数据库
-    try:
-        session = Session()
-        chat_message = ChatMessage(
-            sender_id=sender_id,
-            sender_name=sender_name,
-            message=message,
-            reply=reply
-        )
-        session.add(chat_message)
-        session.commit()
-        session.close()
-    except Exception as e:
-        logger.error(f"保存消息失败: {str(e)}")
 
 def get_user_prompt(user_id):
     # 动态获取用户的Prompt，如果不存在则使用默认的prompt.md
@@ -297,10 +282,24 @@ def handle_wxauto_message(msg):
             can_send_messages = True
 
         if content:
+                
+            if ENABLE_MEMORY:
+                # 记录到用户专属日志文件（添加[User]标记）
+                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log.txt')
+                log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [User] {content}\n" 
+                
+                # 检查文件大小并轮转
+                if os.path.exists(log_file) and os.path.getsize(log_file) > 1 * 1024 * 1024:  # 1MB
+                    archive_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log_archive_{int(time.time())}.txt')
+                    shutil.move(log_file, archive_file)
+                    
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(log_entry)
+                
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             content = f"[{current_time}] {content}"
             logger.info(f"处理消息 - {username}: {content}")
-            sender_name = username  # 使用昵称作为发送者名称
+            sender_name = username  # 使用昵称作为发送者名称    
 
             with queue_lock:
                 if username not in user_queues:
@@ -334,7 +333,7 @@ def check_inactive_users():
         with queue_lock:
             for username, user_data in user_queues.items():
                 last_time = user_data.get('last_message_time', 0)
-                if current_time - last_time > 7 and can_send_messages and not is_sending_message: 
+                if current_time - last_time > QUEUE_WAITING_TIME and can_send_messages and not is_sending_message: 
                     inactive_users.append(username)
 
         for username in inactive_users:
@@ -375,8 +374,9 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         is_sending_message = True
         # 首先检查是否需要发送表情包
         if ENABLE_EMOJI_SENDING:
-            if is_emoji_request(merged_message) or is_emoji_request(reply):
-                emoji_path = get_random_emoji()
+            emotion = is_emoji_request(reply)
+            if emotion:
+                emoji_path = send_emoji(emotion)
                 if emoji_path:
                     try:
                         # 先发送表情包
@@ -390,6 +390,19 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
                 wx.SendMsg(part, user_id)
                 logger.info(f"分段回复 {sender_name}: {part}")
 
+                if ENABLE_MEMORY:
+                    # 记录到用户专属日志文件（添加[AI]标记）
+                    log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log.txt')
+                    log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [AI] {part}\n"  
+                    
+                    # 检查文件大小并轮转
+                    if os.path.exists(log_file) and os.path.getsize(log_file) > 1 * 1024 * 1024:  # 1MB
+                        archive_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log_archive_{int(time.time())}.txt')
+                        shutil.move(log_file, archive_file)
+                        
+                    with open(log_file, 'a', encoding='utf-8') as f:
+                        f.write(log_entry)
+            
                 if i < len(parts) - 1:
                     next_part = parts[i + 1]
                     # 计算延时时间，模拟打字速度
@@ -399,6 +412,19 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
             wx.SendMsg(reply, user_id)
             logger.info(f"回复 {sender_name}: {reply}")
 
+            if ENABLE_MEMORY:
+                # 记录到用户专属日志文件（添加[AI]标记）
+                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log.txt')
+                log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [AI] {reply}\n"  
+                
+                # 检查文件大小并轮转
+                if os.path.exists(log_file) and os.path.getsize(log_file) > 1 * 1024 * 1024:  # 1MB
+                    archive_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log_archive_{int(time.time())}.txt')
+                    shutil.move(log_file, archive_file)
+                    
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(log_entry)
+
         # 解除发送限制
         is_sending_message = False
 
@@ -407,56 +433,60 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         # 解除发送限制
         is_sending_message = False
 
-    # 保存聊天记录
-    save_message(username, sender_name, merged_message, reply)
-
 def is_emoji_request(text: str) -> bool:
-    """
-    判断是否为表情包请求
-    """
-    # 直接请求表情包的关键词
-    emoji_keywords = ["表情包", "表情", "斗图", "gif", "动图"]
-    
-    emotion_keywords = ["开心", "难过", "生气", "委屈", "高兴", "伤心",
-                    "哭", "笑", "怒", "喜", "悲", "乐", "泪", "哈哈",
-                    "呜呜", "嘿嘿", "嘻嘻", "哼", "啊啊", "呵呵", "可爱",
-                    "惊讶", "惊喜", "恐惧", "害怕", "紧张", "放松", "激动",
-                    "满足", "失望", "愤怒", "羞愧", "兴奋", "愉快", "心酸",
-                    "愧疚", "懊悔", "孤独", "寂寞", "安慰", "安宁", "放心",
-                    "烦恼", "忧虑", "疑惑", "困惑", "怀疑", "鄙视", "厌恶",
-                    "厌倦", "失落", "愉悦", "激动", "惊恐", "惊魂未定", "震惊"]
-    
-    # 检查直接请求
-    if any(keyword in text.lower() for keyword in emoji_keywords):
-        return True
-        
-    # 检查情感表达
-    if any(keyword in text for keyword in emotion_keywords):
-        return True
-        
-    return False
+    # 定义情绪关键词字典
+    emotion_keywords =  {
+        'angry': ['生气', '愤怒', '怒', '哼', '鄙视', '厌恶', '烦恼', '厌倦', '啊啊'],
+        'happy': ['开心', '高兴', '笑', '喜', '哈哈', '嘻嘻', '嘿嘿', '愉快', '兴奋', '满足', '乐', '激动', '惊喜'],
+        'sad': ['难过', '伤心', '委屈', '哭', '悲', '泪', '呜呜', '心酸', '愧疚', '懊悔', '失落', '孤独', '寂寞', '恐惧', '害怕', '忧虑'],
+        'neutral': ['惊讶', '紧张', '放松', '失望', '羞愧', '惊恐', '惊魂未定', '震惊', '疑惑', '困惑', '怀疑', '安慰', '安宁', '放心']
+    }
 
-def get_random_emoji() -> Optional[str]:
-    """
-    从表情包目录随机获取一个表情包
-    """
+    # 将文本转换为小写（如果需要）
+    text = text.lower()
+    
+    # 初始化情绪计数器
+    emotion_score = {'angry': 0, 'happy': 0, 'neutral': 0, 'sad': 0}
+    
+    # 遍历情绪关键词，统计匹配次数
+    for emotion, keywords in emotion_keywords.items():
+        for keyword in keywords:
+            if keyword in text:
+                emotion_score[emotion] += 1
+                
+    # 找出最高分的情绪
+    detected_emotion = max(emotion_score, key=emotion_score.get)
+    
+    # 如果所有情绪分数都为0，默认设为'neutral'
+    if emotion_score[detected_emotion] == 0:
+        detected_emotion = 'False'
+    
+    return detected_emotion
+    
+def send_emoji(emotion):
+    # 构建对应情绪的表情包路径
+    emoji_folder = os.path.join(EMOJI_DIR, emotion)
+    
+    # 获取文件夹中的所有文件名
     try:
-        emoji_dir = os.path.join(root_dir, EMOJI_DIR)
-        if not os.path.exists(emoji_dir):
-            logger.error(f"表情包目录不存在: {emoji_dir}")
-            return None
-            
-        emoji_files = [f for f in os.listdir(emoji_dir) 
-                      if f.lower().endswith(('.gif', '.jpg', '.png', '.jpeg'))]
-        
-        if not emoji_files:
-            return None
-            
-        random_emoji = random.choice(emoji_files)
-        return os.path.join(emoji_dir, random_emoji)
-    except Exception as e:
-        logger.error(f"获取表情包失败: {str(e)}")
-        return None
+        emoji_files = os.listdir(emoji_folder)
+    except FileNotFoundError:
+        print(f"表情包文件夹 {emoji_folder} 不存在。")
+        return
+    
+    # 如果文件夹为空
+    if not emoji_files:
+        print(f"表情包文件夹 {emoji_folder} 中没有表情包。")
+        return
+    
+    # 随机选择一个表情包
+    selected_emoji = random.choice(emoji_files)
+    emoji_path = os.path.join(emoji_folder, selected_emoji)
+    
+    # 发送表情包，这里以打印路径代替实际发送
+    print(f"发送表情包：{emoji_path}")
+    return emoji_path
+
 
 def capture_and_save_screenshot(who):
     screenshot_folder = os.path.join(root_dir, 'screenshot')
@@ -510,8 +540,266 @@ def is_quiet_time():
     else:
         return current_time >= quiet_time_start or current_time <= quiet_time_end
 
+# 记忆管理功能
+def append_to_memory_section(user_id, content):
+    """将内容追加到用户prompt文件的记忆部分"""
+    try:
+        prompts_dir = os.path.join(root_dir, 'prompts')
+        user_file = os.path.join(prompts_dir, f'{user_id}.md')
+        default_prompt = os.path.join(root_dir, 'prompt.md')  # 根目录模板文件
+        
+        # 确保prompts目录存在
+        os.makedirs(prompts_dir, exist_ok=True)
+
+        # 如果用户文件不存在，复制模板文件
+        if not os.path.exists(user_file):
+            try:
+                if os.path.exists(default_prompt):
+                    shutil.copy(default_prompt, user_file)
+                    logger.info(f"已从模板创建用户文件: {user_file}")
+                else:
+                    # 创建基础模板文件
+                    with open(user_file, 'w', encoding='utf-8') as f:
+                        f.write("# 用户记忆档案\n\n## 基础信息\n\n## 记忆库\n开始更新：\n")
+                    logger.warning(f"根目录模板文件不存在，已创建基础模板: {user_file}")
+            except Exception as copy_error:
+                logger.error(f"创建用户文件失败: {str(copy_error)}")
+                return
+
+        # 读取并处理文件内容
+        with open(user_file, 'r+', encoding='utf-8') as file:
+            lines = file.readlines()
+            
+            # 查找记忆插入点
+            memory_marker = "开始更新："
+            insert_index = next((i for i, line in enumerate(lines) if memory_marker in line), -1)
+
+            # 如果没有找到标记，追加到文件末尾
+            if insert_index == -1:
+                insert_index = len(lines)
+                lines.append(f"\n{memory_marker}\n")
+                logger.info(f"在用户文件 {user_id}.md 中添加记忆标记")
+
+            # 插入记忆内容
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            new_content = f"\n### {current_date}\n{content}\n"
+
+            # 写入更新内容
+            lines.insert(insert_index + 1, new_content)
+            file.seek(0)
+            file.writelines(lines)
+            file.truncate()
+
+    except PermissionError as pe:
+        logger.error(f"文件权限拒绝: {pe} (尝试访问 {user_file})")
+    except IOError as ioe:
+        logger.error(f"文件读写错误: {ioe} (路径: {os.path.abspath(user_file)})")
+    except Exception as e:
+        logger.error(f"记忆存储失败: {str(e)}", exc_info=True)
+        raise  # 重新抛出异常供上层处理
+
+def summarize_and_save(user_id):
+    """总结聊天记录并存储记忆"""
+    log_file = None
+    temp_file = None
+    backup_file = None
+    try:
+        # --- 前置检查 ---
+        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_log.txt')
+        if not os.path.exists(log_file):
+            logger.warning(f"日志文件不存在: {log_file}")
+            return
+        if os.path.getsize(log_file) == 0:
+            logger.info(f"空日志文件: {log_file}")
+            return
+
+        # --- 读取日志 ---
+        with open(log_file, 'r', encoding='utf-8') as f:
+            logs = [line.strip() for line in f if line.strip()]
+            # 修改检查条件：仅检查是否达到最小处理阈值
+            if len(logs) < MAX_MESSAGE_LOG_ENTRIES:
+                logger.info(f"日志条目不足（{len(logs)}条），无需处理")
+                return
+
+        # --- 生成总结 ---
+        # 修改为使用全部日志内容
+        full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
+        summary_prompt = f"请用中文总结以下对话，提取重要信息形成记忆片段：\n{full_logs}"
+        summary = get_deepseek_response(summary_prompt, user_id)
+        
+        # --- 评估重要性 ---
+        importance_prompt = f"为以下内容的重要性评分（1-5，直接回复数字）：\n{summary}"
+        importance_response = get_deepseek_response(importance_prompt, user_id)
+        
+        # 强化重要性提取逻辑
+        importance_match = re.search(r'[1-5]', importance_response)
+        if importance_match:
+            importance = min(max(int(importance_match.group()), 1), 5)  # 确保1-5范围
+        else:
+            importance = 3  # 默认值
+            logger.warning(f"无法解析重要性评分，使用默认值3。原始响应：{importance_response}")
+
+        # --- 存储记忆 ---
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        memory_entry = f"""## 记忆片段 [{current_time}]
+**重要度**: {importance}
+**摘要**: {summary}
+"""
+
+        user_prompt_file = os.path.join(root_dir, 'prompts', f'{user_id}.md')
+        default_prompt = os.path.join(root_dir, 'prompt.md')  # 新增默认文件路径
+        backup_file = f"{user_prompt_file}.bak"
+        temp_file = f"{user_prompt_file}.tmp"
+        
+        # 增强原子写入
+        try:
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                # 新增：当用户文件不存在时使用默认文件
+                if os.path.exists(user_prompt_file):
+                    with open(user_prompt_file, 'r', encoding='utf-8') as src:
+                        f.write(src.read())
+                else:
+                    if os.path.exists(default_prompt):
+                        logger.info(f"初始化用户提示文件: {user_prompt_file} 使用默认模板")
+                        with open(default_prompt, 'r', encoding='utf-8') as src:
+                            f.write(src.read())
+                    else:
+                        logger.error(f"默认提示文件不存在: {default_prompt}")
+                        raise FileNotFoundError(f"默认提示文件 {default_prompt} 未找到")
+
+                # 追加新的记忆条目
+                f.write('\n' + memory_entry + '\n')
+
+            # 替换原文件
+            if os.path.exists(user_prompt_file):
+                shutil.move(user_prompt_file, backup_file)
+            shutil.move(temp_file, user_prompt_file)
+            
+            # 清理备份
+            if os.path.exists(backup_file):
+                os.remove(backup_file)
+                
+        except Exception as e:
+            # 异常恢复
+            if os.path.exists(backup_file):
+                shutil.move(backup_file, user_prompt_file)
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+            raise
+
+        # --- 清理日志 ---
+        # 清空整个日志文件
+        with open(log_file, 'w', encoding='utf-8') as f:
+            f.write('')  # 直接写入空内容清空文件
+        logger.info(f"已清空处理完成的日志文件: {log_file}")
+
+    except FileNotFoundError as e:
+        logger.error(f"文件未找到: {str(e)}")
+    except PermissionError as e:
+        logger.error(f"文件权限错误: {str(e)}")
+        raise
+    except re.error as e:
+        logger.error(f"正则表达式错误: {str(e)}")
+    except ValueError as e:
+        logger.error(f"数值转换错误: {str(e)}")
+    except requests.RequestException as e:
+        logger.error(f"API请求失败: {str(e)}")
+    except Exception as e:
+        logger.error(f"未处理的异常: {str(e)}", exc_info=True)
+        if log_file and os.path.exists(log_file):
+            logger.info(f"保留异常日志文件: {log_file}")
+    finally:
+        # 清理临时文件
+        for f in [backup_file, temp_file]:
+            if 'f' in locals() and os.path.exists(f):
+                try:
+                    os.remove(f)
+                except Exception as e:
+                    logger.error(f"清理临时文件失败: {str(e)}")
+
+def memory_manager():
+    """记忆管理定时任务"""
+    while True:
+        try:
+            # 检查所有监听用户
+            for user in listen_list:
+                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user}_log.txt')
+                
+                try:
+                    user_prompt_file = os.path.join(root_dir, 'prompts', f'{user}.md')
+                    manage_memory_capacity(user_prompt_file)
+                except Exception as e:
+                    logger.error(f"内存管理失败: {str(e)}")
+
+                if os.path.exists(log_file):
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        line_count = sum(1 for _ in f)
+                        
+                    if line_count >= MAX_MESSAGE_LOG_ENTRIES:
+                        summarize_and_save(user)
+    
+                        
+        except Exception as e:
+            logger.error(f"记忆管理异常: {str(e)}")
+        finally:
+            time.sleep(60)  # 每分钟检查一次
+
+def manage_memory_capacity(user_file):
+    """内存淘汰机制"""
+    MEMORY_SEGMENT_PATTERN = r'## 记忆片段 \[(.*?)\]\n\*{2}重要度\*{2}: (\d+)\n\*{2}摘要\*{2}:(.*?)(?=\n## 记忆片段 |\Z)'
+    try:
+        with open(user_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 解析记忆片段
+        segments = re.findall(MEMORY_SEGMENT_PATTERN, content, re.DOTALL)
+        if len(segments) <= MAX_MEMORY_NUMBER:
+            return
+
+        # 构建评分体系
+        now = datetime.now()
+        memory_scores = []
+        for timestamp, importance, _ in segments:
+            try:
+                time_diff = (now - datetime.strptime(timestamp, "%Y-%m-%d %H:%M")).total_seconds()
+            except ValueError:
+                time_diff = 0
+            score = 0.6 * int(importance) - 0.4 * (time_diff / 3600)
+            memory_scores.append(score)
+
+        # 获取保留索引
+        sorted_indices = sorted(range(len(memory_scores)),
+                              key=lambda k: (-memory_scores[k], segments[k][0]))
+        keep_indices = set(sorted_indices[:MAX_MEMORY_NUMBER])
+
+        # 重建内容
+        memory_blocks = re.split(r'(?=## 记忆片段 \[)', content)
+        new_content = []
+        
+        for idx, block in enumerate(memory_blocks):
+            if idx == 0:  # 文件头
+                new_content.append(block)
+                continue
+            if (idx-1) in keep_indices:  # 对齐索引
+                new_content.append(block)
+
+        # 原子写入
+        with open(f"{user_file}.tmp", 'w', encoding='utf-8') as f:
+            f.write(''.join(new_content).strip())
+        
+        shutil.move(f"{user_file}.tmp", user_file)
+        logger.info(f"成功清理记忆")
+
+    except Exception as e:
+        logger.error(f"记忆淘汰失败: {str(e)}")
+
+
 def main():
     try:
+        # 确保临时目录存在
+        memory_temp_dir = os.path.join(root_dir, MEMORY_TEMP_DIR)
+        os.makedirs(memory_temp_dir, exist_ok=True)
+
         clean_up_temp_files()
 
         global wx
@@ -524,6 +812,12 @@ def main():
         checker_thread = threading.Thread(target=check_inactive_users)
         checker_thread.daemon = True
         checker_thread.start()
+
+        if ENABLE_MEMORY:
+            # 启动记忆管理线程
+            memory_thread = threading.Thread(target=memory_manager)
+            memory_thread.daemon = True
+            memory_thread.start()
         
         # 启动后台线程来检查用户超时
         if ENABLE_AUTO_MESSAGE:

@@ -60,7 +60,8 @@ def submit_config():
             'ENABLE_IMAGE_RECOGNITION', 
             'ENABLE_EMOJI_RECOGNITION',
             'ENABLE_EMOJI_SENDING',
-            'ENABLE_AUTO_MESSAGE'
+            'ENABLE_AUTO_MESSAGE', 
+            'ENABLE_MEMORY'
         ]
         for field in boolean_fields:
             new_values[field] = field in request.form  # ✅ 直接判断是否存在
@@ -175,7 +176,8 @@ def index():
                     new_values[var] = value
 
             # 明确处理布尔类型字段（如果未提交）
-            for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE']:
+            for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 
+                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY']:
                 if var not in submitted_fields:
                     new_values[var] = False
 

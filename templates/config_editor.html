@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+<!-----------------------------------------------------------------------
+- Copyright of this file: Copyright (C) 2025, iwyxdxl
+- Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+------------------------------------------------------------------------>
     <title>配置编辑器</title>
     <style>
         body {
@@ -391,7 +395,7 @@
             <h2>DeepSeek 配置</h2>
 
             <div class="form-group">
-                <label>API 服务商: (推荐硅基流动API 注册地址 https://cloud.siliconflow.cn/ 免费15元额度)</label>
+                <label>API 服务商: (推荐硅基流动API 注册地址 <a href="https://cloud.siliconflow.cn/" target="_blank">https://cloud.siliconflow.cn/</a> 免费15元额度)</label>
                 <select name="DEEPSEEK_BASE_URL">
                     <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                     <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>官方API</option>
@@ -415,7 +419,7 @@
             </div>
 
             <div class="form-group">
-                <label>最大Token:</label>
+                <label>回复最大Token:</label>
                 <input type="number" step="100" name="MAX_TOKEN" value="{{ config.MAX_TOKEN }}">
             </div>
 
@@ -452,7 +456,7 @@
             </div>
 
             <div class="form-group">
-                <label>MOONSHOT_API_KEY: (申请网站 https://platform.moonshot.cn/ 免费15元额度)</label>
+                <label>MOONSHOT_API_KEY: (申请网站 <a href="https://platform.moonshot.cn/" target="_blank">https://platform.moonshot.cn/</a> 免费15元额度)</label>
                 <input type="text" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
             </div>
 
@@ -477,7 +481,74 @@
         </div>
 
         <div class="section">
-            <h2>其他配置</h2>
+            <h2>主动表情包配置</h2>
+            <div class="form-group">
+                <label><b>启用主动表情包功能</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                        <input type="checkbox" name="ENABLE_EMOJI_SENDING" {% if config.ENABLE_EMOJI_SENDING %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>表情包存放目录:</label>
+                <input type="text" name="EMOJI_DIR" value="{{ config.EMOJI_DIR }}">
+            </div>
+
+        </div>
+
+        <div class="section">
+            <h2>回复间隔配置</h2>
+            <div class="form-group">
+                <label>消息间隔时间 = 字数 * (平均时间 + 随机时间)</label>
+                <label>平均打字速度（秒/字）:</label>
+                <input type="text" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
+                <label>随机打字速度（秒/字）：</label>
+                <div style="display: flex; gap: 10px;">              
+                    <input type="text" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
+                    至
+                    <input type="text" name="RANDOM_TYPING_SPEED_MAX" value="{{ config.RANDOM_TYPING_SPEED_MAX }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>消息队列等待时间（建议5-10秒）:</label>
+                <input type="number" step="1" name="QUEUE_WAITING_TIME" value="{{ config.QUEUE_WAITING_TIME }}">
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>记忆功能配置</h2>
+            <div class="form-group">
+                <label><b>启用记忆记录功能</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                        <input type="checkbox" name="ENABLE_MEMORY" {% if config.ENABLE_MEMORY %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>触发临时记忆总结进Prompt的阈值数量（条）:</label>
+                <input type="number" step="1" name="MAX_MESSAGE_LOG_ENTRIES" value="{{ config.MAX_MESSAGE_LOG_ENTRIES }}">
+            </div>
+
+            <div class="form-group">
+                <label>最大记忆数量（条）:</label>
+                <input type="number" step="1" name="MAX_MEMORY_NUMBER" value="{{ config.MAX_MEMORY_NUMBER }}">
+            </div>
+
+            <div class="form-group">
+                <label>临时记忆存放目录:</label>
+                <input type="text" name="MEMORY_TEMP_DIR" value="{{ config.MEMORY_TEMP_DIR }}">
+            </div>
+
+        </div>
+
+        <div class="section">
+            <h2>主动消息配置</h2>
 
             <div class="form-group">
                 <label><b>启用主动消息功能</b></label>
@@ -509,33 +580,6 @@
                     <input type="text" name="QUIET_TIME_START" value="{{ config.QUIET_TIME_START }}" placeholder="HH:MM">
                     至
                     <input type="text" name="QUIET_TIME_END" value="{{ config.QUIET_TIME_END }}" placeholder="HH:MM">
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label><b>启用主动表情包功能</b></label>
-                <div class="switch">
-                    <label class="switch-label">
-                        <input type="checkbox" name="ENABLE_EMOJI_SENDING" {% if config.ENABLE_EMOJI_SENDING %}checked{% endif %}>
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>表情包存放目录:</label>
-                <input type="text" name="EMOJI_DIR" value="{{ config.EMOJI_DIR }}">
-            </div>
-
-            <div class="form-group">
-                <label>消息间隔时间 = 字数 * (平均时间 + 随机时间)</label>
-                <label>平均打字速度（秒/字）:</label>
-                <input type="text" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
-                <label>随机打字速度（秒/字）：</label>
-                <div style="display: flex; gap: 10px;">              
-                    <input type="text" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
-                    至
-                    <input type="text" name="RANDOM_TYPING_SPEED_MAX" value="{{ config.RANDOM_TYPING_SPEED_MAX }}">
                 </div>
             </div>
         </div>
