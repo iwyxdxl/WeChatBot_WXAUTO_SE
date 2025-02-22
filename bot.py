@@ -173,7 +173,13 @@ def message_listener():
                     if msgtype != 'friend':
                         logger.debug(f"非好友消息，忽略! 消息类型: {msgtype}")
                         continue
-                    if who == msg.sender or Accept_All_Group_Chat_Messages == True:
+                    if who == msg.sender:
+                        if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
+                            handle_emoji_message(msg, who)
+                        else:
+                            handle_wxauto_message(msg, who)
+                    elif Accept_All_Group_Chat_Messages:
+                        msg.content = "群聊消息[" + msg.sender + "]:" + msg.content
                         if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
                             handle_emoji_message(msg, who)
                         else:
@@ -181,6 +187,7 @@ def message_listener():
                     elif ROBOT_WX_NAME != '' and (bool(re.search(f'@{ROBOT_WX_NAME}\u2005', msg.content))):  
                         # 处理群聊信息，只有@当前机器人才会处理
                         msg.content = re.sub(f'@{ROBOT_WX_NAME}\u2005', '', content).strip()
+                        msg.content = "群聊消息[" + msg.sender + "]:" + msg.content
                         handle_wxauto_message(msg, who)
                     else:
                         logger.debug(f"非需要处理消息: {content}")   
