@@ -179,7 +179,8 @@ def message_listener():
                         else:
                             handle_wxauto_message(msg, who)
                     elif Accept_All_Group_Chat_Messages:
-                        msg.content = "群聊消息[" + msg.sender + "]:" + msg.content
+                        if not msg.content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                            msg.content = "群聊消息[" + msg.sender + "]:" + msg.content
                         if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
                             handle_emoji_message(msg, who)
                         else:
