@@ -14,7 +14,7 @@ DEEPSEEK_API_KEY = 'sk-'
 # 硅基流动API注册地址，免费15元额度 https://cloud.siliconflow.cn/
 DEEPSEEK_BASE_URL = 'https://api.siliconflow.cn/v1/'
 # 硅基流动API的模型
-MODEL = 'Pro/deepseek-ai/DeepSeek-V3'
+MODEL = 'deepseek-ai/DeepSeek-V3'
 
 # 如果要使用官方的API
 # DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -67,3 +67,6 @@ ENABLE_MEMORY = True
 MEMORY_TEMP_DIR = 'Memory_Temp'
 MAX_MESSAGE_LOG_ENTRIES = 15
 MAX_MEMORY_NUMBER = 15
+
+# 是否接收全部群聊消息
+Accept_All_Group_Chat_Messages = False

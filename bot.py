@@ -1,5 +1,5 @@
 # ***********************************************************************
-# Modified based on the KouriChat
+# Modified based on the My-Dream-Moments project
 # Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -27,11 +27,13 @@ from config import (
     AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX,
     ENABLE_IMAGE_RECOGNITION, ENABLE_EMOJI_RECOGNITION, 
     ENABLE_EMOJI_SENDING, ENABLE_AUTO_MESSAGE, ENABLE_MEMORY, 
-    MEMORY_TEMP_DIR, MAX_MESSAGE_LOG_ENTRIES, MAX_MEMORY_NUMBER
+    MEMORY_TEMP_DIR, MAX_MESSAGE_LOG_ENTRIES, MAX_MEMORY_NUMBER,
+    Accept_All_Group_Chat_Messages
     )
 
 # 获取微信窗口对象
 wx = WeChat()
+ROBOT_WX_NAME = wx.A_MyIcon.Name
 # 设置监听列表（LISTEN_LIST在config.py中配置）
 listen_list = LISTEN_LIST
 # 循环添加监听对象
@@ -166,13 +168,23 @@ def message_listener():
                     msgtype = msg.type
                     content = msg.content
                     logger.info(f'【{who}】：{content}')
-                    if msgtype == 'friend':
+                    if not content:
+                        continue
+                    if msgtype != 'friend':
+                        logger.debug(f"非好友消息，忽略! 消息类型: {msgtype}")
+                        continue
+                    if who == msg.sender or Accept_All_Group_Chat_Messages == True:
                         if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
-                            handle_emoji_message(msg)
+                            handle_emoji_message(msg, who)
                         else:
-                            handle_wxauto_message(msg)
+                            handle_wxauto_message(msg, who)
+                    elif ROBOT_WX_NAME != '' and (bool(re.search(f'@{ROBOT_WX_NAME}\u2005', msg.content))):  
+                        # 处理群聊信息，只有@当前机器人才会处理
+                        msg.content = re.sub(f'@{ROBOT_WX_NAME}\u2005', '', content).strip()
+                        handle_wxauto_message(msg, who)
                     else:
-                        logger.info(f"忽略非文本消息类型: {msgtype}")
+                        logger.debug(f"非需要处理消息: {content}")   
+                        
         except Exception as e:
             logger.error(f"消息监听出错: {str(e)}")
         time.sleep(wait)
@@ -226,14 +238,14 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
         can_send_messages = True
         return ""
 
-def handle_emoji_message(msg):
+def handle_emoji_message(msg, who):
     global emoji_timer
     global can_send_messages
     can_send_messages = False
 
     def timer_callback():
         with emoji_timer_lock:           
-            handle_wxauto_message(msg)   
+            handle_wxauto_message(msg, who)   
             emoji_timer = None       
 
     with emoji_timer_lock:
@@ -242,9 +254,9 @@ def handle_emoji_message(msg):
         emoji_timer = threading.Timer(3.0, timer_callback)
         emoji_timer.start()
 
-def handle_wxauto_message(msg):
+def handle_wxauto_message(msg, who):
     try:
-        username = msg.sender  # 获取发送者的昵称或唯一标识
+        username = who  # 获取发送者
         content = getattr(msg, 'content', None) or getattr(msg, 'text', None)  # 获取消息内容
         img_path = None  # 初始化图片路径
         is_emoji = False  # 初始化是否为动画表情标志
@@ -791,8 +803,7 @@ def manage_memory_capacity(user_file):
         logger.info(f"成功清理记忆")
 
     except Exception as e:
-        logger.error(f"记忆淘汰失败: {str(e)}")
-
+        logger.error(f"记忆整理失败: {str(e)}")
 
 def main():
     try:

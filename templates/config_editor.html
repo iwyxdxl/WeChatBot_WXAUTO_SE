@@ -213,6 +213,11 @@
             background-color: #FF0000; /* 红色 */
         }
 
+        .custom-input {
+            display: none;
+            margin-top: 5px;
+        }
+
     </style>
     <script>
         function addEntry() {
@@ -358,6 +363,48 @@
                 successAlert.style.opacity = '1';
                 setTimeout(() => successAlert.style.opacity = '0', 5000);
             }
+
+            function setupSelector(selectId, customInputId, hiddenFieldId) {
+                const select = document.getElementById(selectId);
+                const customInput = document.getElementById(customInputId);
+                const hiddenField = document.getElementById(hiddenFieldId);
+
+                // 初始化显示状态
+                if (select.value === 'other') {
+                    customInput.style.display = 'block';
+                }
+
+                // 统一更新隐藏字段的值
+                function updateHiddenField() {
+                    hiddenField.value = (select.value === 'other') 
+                        ? customInput.value 
+                        : select.value;
+                }
+
+                // 初始化值
+                updateHiddenField();
+
+                // 监听选择框变化
+                select.addEventListener('change', function() {
+                    if (this.value === 'other') {
+                        customInput.style.display = 'block';
+                        customInput.value = hiddenField.value; // 保留原有值
+                    } else {
+                        customInput.style.display = 'none';
+                        customInput.value = '';
+                    }
+                    updateHiddenField();
+                });
+
+                // 监听输入框变化
+                customInput.addEventListener('input', function() {
+                    updateHiddenField();
+                });
+            }
+
+            // 初始化两个选择器
+            setupSelector('apiProvider', 'customApiUrl', 'finalApiUrl');
+            setupSelector('modelSelect', 'customModel', 'finalModel');
         });
     </script>
 </head>
@@ -378,7 +425,7 @@
         <div class="section">
             <h2>用户列表</h2>
             <div class="form-group">
-                <label>微信昵称列表 (不要写备注):</label>
+                <label>微信昵称/群聊列表（不要写备注）:</label>
                 <div id="listen-list">
                     {% for item in config.LISTEN_LIST %}
                     <div class="entry">
@@ -394,24 +441,46 @@
         <div class="section">
             <h2>DeepSeek 配置</h2>
 
+            <!-- API 服务商 -->
             <div class="form-group">
                 <label>API 服务商: (推荐硅基流动API 注册地址 <a href="https://cloud.siliconflow.cn/" target="_blank">https://cloud.siliconflow.cn/</a> 免费15元额度)</label>
-                <select name="DEEPSEEK_BASE_URL">
+                <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
                     <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                     <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>官方API</option>
+                    <option value="other" {% if config.DEEPSEEK_BASE_URL not in ['https://api.siliconflow.cn/v1/', 'https://api.deepseek.com'] %}selected{% endif %}>其它</option>
                 </select>
+                <input type="text" id="customApiUrl"
+                    placeholder="请输入自定义API地址"
+                    class="custom-input"
+                    {% if config.DEEPSEEK_BASE_URL not in ['https://api.siliconflow.cn/v1/', 'https://api.deepseek.com'] %} 
+                    value="{{ config.DEEPSEEK_BASE_URL }}"
+                    {% endif %}>
+                <input type="hidden" id="finalApiUrl" name="DEEPSEEK_BASE_URL" 
+                    value="{{ config.DEEPSEEK_BASE_URL }}">
             </div>
 
+            <!-- 模型选择 -->
             <div class="form-group">
                 <label>模型选择: (推荐使用V3模型)</label>
-                <select name="MODEL">
+                <select id="modelSelect" name="temp_MODEL">
                     <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基V3模型 （可用免费额度）</option>
+                    <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基R1模型 （可用免费额度）</option>
                     <option value="Pro/deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基V3 Pro模型 （需充值后方可使用）</option>
                     <option value="Pro/deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基R1 Pro模型 （需充值后方可使用）</option>
                     <option value="deepseek-chat" {% if config.MODEL == 'deepseek-chat' %}selected{% endif %}>官方V3模型</option>
                     <option value="deepseek-reasoner" {% if config.MODEL == 'deepseek-reasoner' %}selected{% endif %}>官方R1模型</option>
+                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner'] %}selected{% endif %}>其它</option>
                 </select>
+                <input type="text" id="customModel"
+                    placeholder="请输入自定义模型名称"
+                    class="custom-input"
+                    {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner'] %} 
+                    value="{{ config.MODEL }}"
+                    {% endif %}>
+                <input type="hidden" id="finalModel" name="MODEL" 
+                    value="{{ config.MODEL }}">
             </div>
+
             
             <div class="form-group">
                 <label>API Key:</label>
@@ -419,12 +488,12 @@
             </div>
 
             <div class="form-group">
-                <label>回复最大Token: </label>
+                <label>回复最大Token:</label>
                 <input type="number" step="100" name="MAX_TOKEN" value="{{ config.MAX_TOKEN }}">
             </div>
 
             <div class="form-group">
-                <label>温度 (0-2): </label>
+                <label>温度 (0-2):</label>
                 <input type="number" step="0.1" name="TEMPERATURE" value="{{ config.TEMPERATURE }}">
             </div>
             
@@ -496,7 +565,15 @@
                 <label>表情包存放目录:</label>
                 <input type="text" name="EMOJI_DIR" value="{{ config.EMOJI_DIR }}">
             </div>
+        </div>
 
+        <div class="section">
+            <h2>群聊消息接收配置</h2>
+            <label>群聊消息处理模式:</label>
+            <select name="Accept_All_Group_Chat_Messages">
+                <option value="False" {% if config.Accept_All_Group_Chat_Messages == 'False' %}selected{% endif %}>仅当消息中出现@机器人 时作出回应</option>
+                <option value="True" {% if config.Accept_All_Group_Chat_Messages == 'True' %}selected{% endif %}>接收无论任何人的任何消息</option>
+            </select>
         </div>
 
         <div class="section">
@@ -513,7 +590,7 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>消息队列等待时间: (建议5-10秒)</label>
+                <label>消息队列等待时间（建议5-10秒）:</label>
                 <input type="number" step="1" name="QUEUE_WAITING_TIME" value="{{ config.QUEUE_WAITING_TIME }}">
             </div>
         </div>
@@ -531,12 +608,12 @@
             </div>
 
             <div class="form-group">
-                <label>触发临时记忆总结进Prompt的阈值数量(条):</label>
+                <label>触发临时记忆总结进Prompt的阈值数量（条）:</label>
                 <input type="number" step="1" name="MAX_MESSAGE_LOG_ENTRIES" value="{{ config.MAX_MESSAGE_LOG_ENTRIES }}">
             </div>
 
             <div class="form-group">
-                <label>保存到Prompt中的最大记忆数量(条):</label>
+                <label>最大记忆数量（条）:</label>
                 <input type="number" step="1" name="MAX_MEMORY_NUMBER" value="{{ config.MAX_MEMORY_NUMBER }}">
             </div>
 
