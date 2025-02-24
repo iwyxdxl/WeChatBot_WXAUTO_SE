@@ -405,6 +405,46 @@
             // 初始化两个选择器
             setupSelector('apiProvider', 'customApiUrl', 'finalApiUrl');
             setupSelector('modelSelect', 'customModel', 'finalModel');
+
+            async function submitForm() {
+                const form = document.querySelector('form[method="post"]');
+                const formData = new FormData(form);
+                const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
+                    .map(input => input.value);
+                
+                formData.delete('listen_list');
+                listenList.forEach(value => formData.append('listen_list', value));
+
+                try {
+                    await fetch('', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    showSuccessAlert();
+                    return true;
+                } catch (error) {
+                    console.error('保存失败:', error);
+                    return false;
+                }
+            }
+
+            // 修改原有表单提交处理
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                await submitForm();
+            });
+
+            // 为Prompt管理添加点击处理
+            document.getElementById('promptManagement').addEventListener('click', async function(e) {
+                e.preventDefault();
+                const success = await submitForm();
+                if (success) {
+                    window.location.href = this.href;
+                }
+            });
         });
     </script>
 </head>
@@ -413,7 +453,7 @@
         <h1>配置编辑器</h1>
         <div>
             <button id="botButton" class="nav-button">Start Bot</button>
-            <a href="{{ url_for('prompt_list') }}" class="nav-button">Prompt管理</a>
+            <a href="{{ url_for('prompt_list') }}" class="nav-button" id="promptManagement">Prompt管理</a>
         </div>
     </div>
 

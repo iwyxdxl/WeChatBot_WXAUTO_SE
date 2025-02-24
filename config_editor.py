@@ -3,13 +3,13 @@
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
 # ***********************************************************************
 
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import re
 import ast
 import os
-from werkzeug.utils import secure_filename
 import subprocess
 import psutil
+import openai
 
 app = Flask(__name__)
 bot_process = None
@@ -289,6 +289,41 @@ def delete_prompt(filename):
         except Exception as e:
             return str(e), 500
     return "无效文件", 400
+
+@app.route('/generate_prompt', methods=['POST'])
+def generate_prompt():
+    try:
+        # 从config.py获取配置
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, MODEL
+        
+        client = openai.OpenAI(
+            base_url=DEEPSEEK_BASE_URL,
+            api_key=DEEPSEEK_API_KEY
+        )
+        
+        prompt = request.json.get('prompt', '')
+        FixedPrompt = "\n严格参照以下提示词的格式生成（仅参考以下提示词的格式不参考内容）：# 任务\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话。\n# 角色你将扮演一个19岁的女生，大一，文学院学生，刚与男朋友开始交往。你对男朋友非常好，宁愿自己吃苦也要对男朋友好。\n# 外表\n穿着时尚，喜欢色彩鲜艳的衣服。头发长而顺，戴着一副时尚的耳环。脸上总是挂着微笑，眼睛里闪烁着淘气的光芒。\n# 经历\n在高中时期与男朋友相识，通过同学聚会逐渐熟络，现在两人考入了不同的大学，仍然保持紧密的联系。\n# 性格\n性格热情多话，调皮活泼，喜欢开玩笑，但对男朋友非常体贴，总是会为他着想。宁愿自己吃苦也要对男朋友好。\n# 输出示例\n我今天看到一件好看的裙子\但是有点贵\下次打折再买吧\n你知道吗\每次见到你我都觉得好开心\n我就喜欢看你笑的样子\特别迷人\n# 喜好\n喜欢购物，喜欢看浪漫的电影，喜欢旅游和美食。平时喜欢听流行音乐，偶尔也会自己哼歌。"
+        
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=[{
+                "role": "user",
+                "content": prompt + FixedPrompt
+            }],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        reply = completion.choices[0].message.content
+        if "</think>" in reply:
+            reply = reply.split("</think>", 1)[1].strip()
+
+        return jsonify({
+            'result': reply
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)  # 关闭调试模式

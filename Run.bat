@@ -59,7 +59,6 @@ echo requests >> temp_requirements.txt
 echo wxauto~=3.9.11.17.5 >> temp_requirements.txt
 echo openai~=1.61.0 >> temp_requirements.txt
 echo pyautogui >> temp_requirements.txt
-echo werkzeug >> temp_requirements.txt
 echo psutil>> temp_requirements.txt
 
 python -m pip install -r temp_requirements.txt
@@ -75,6 +74,35 @@ del temp_requirements.txt
 
 :: 清屏
 cls
+
+:: ---------------------------
+:: 检查端口占用并关闭
+:: ---------------------------
+
+echo 检查端口占用...
+set "PORT=5000"  :: 设置要检查的端口号
+
+:: 使用netstat检查端口占用
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :%PORT%') do (
+    set "PID=%%a"
+    goto :found
+)
+
+echo 端口 %PORT% 未被占用，继续启动程序...
+goto :start_program
+
+:found
+echo 端口 %PORT% 被 PID %PID% 的进程占用！
+choice /c YN /m "是否要关闭占用端口的程序？"
+if errorlevel 2 goto :start_program
+
+:: 关闭占用端口的进程
+echo 正在关闭 PID %PID% 的进程...
+taskkill /F /PID %PID% >nul 2>&1
+echo 进程已关闭！
+
+:start_program
+echo.
 
 :: ---------------------------
 :: 启动程序
