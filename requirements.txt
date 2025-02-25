@@ -1,0 +1,10 @@
+wechaty==0.8.19
+wechaty-puppet-service==0.8.4
+flask
+flask-cors
+sqlalchemy~=2.0.37
+wxauto~=3.9.11.17.5
+openai~=1.61.0
+pyautogui
+werkzeug
+psutil

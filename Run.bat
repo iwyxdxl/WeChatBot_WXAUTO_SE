@@ -44,33 +44,29 @@ if %errorlevel% neq 0 (
 )
 
 :: ---------------------------
+:: 检查程序更新
+:: ---------------------------
+
+echo 检查程序更新...
+
+python updater.py
+
+echo 程序更新完成！
+
+:: ---------------------------
 :: 安装依赖
 :: ---------------------------
 
 echo 安装依赖...
-:: 手动录入依赖项
-echo wechaty==0.8.19 > temp_requirements.txt
-echo wechaty-puppet-service==0.8.4 >> temp_requirements.txt
-echo pyee==8.2.2 >> temp_requirements.txt
-echo flask >> temp_requirements.txt
-echo flask-cors >> temp_requirements.txt
-echo sqlalchemy~=2.0.37 >> temp_requirements.txt
-echo requests >> temp_requirements.txt
-echo wxauto~=3.9.11.17.5 >> temp_requirements.txt
-echo openai~=1.61.0 >> temp_requirements.txt
-echo pyautogui >> temp_requirements.txt
-echo psutil>> temp_requirements.txt
 
-python -m pip install -r temp_requirements.txt
+python -m pip install -r requirements.txt
+
 if %errorlevel% neq 0 (
     echo 安装依赖失败，请检查网络或手动安装依赖。
     pause
     exit /b 1
 )
 echo 依赖安装完成！
-
-:: 删除临时文件
-del temp_requirements.txt
 
 :: 清屏
 cls
