@@ -1,3 +1,10 @@
+# ***********************************************************************
+# Modified based on the My-Dream-Moments project
+# Copyright of the original project: Copyright (C) 2025, umaru
+# Copyright of this modification: Copyright (C) 2025, iwyxdxl
+# Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# ***********************************************************************
+
 """
 自动更新模块
 提供程序自动更新功能，包括:
@@ -41,7 +48,7 @@ class Updater:
     ]
 
     def __init__(self):
-        self.root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.root_dir = os.path.dirname(os.path.abspath(__file__))
         self.temp_dir = os.path.join(self.root_dir, 'temp_update')
         self.version_file = os.path.join(self.root_dir, 'version.json')
         self.current_proxy_index = 0  # 当前使用的代理索引
@@ -83,7 +90,6 @@ class Updater:
                 "更新内容:\n"
                 f"  {update_info.get('description', '无更新说明')}\n"
                 + "="*50 + "\n\n"
-                "是否现在更新? (y/n): "  # 添加更新提示
             )
         else:
             output += (
@@ -280,16 +286,32 @@ class Updater:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_dir)
             
-            # 复制新文件
-            for root, dirs, files in os.walk(extract_dir):
-                relative_path = os.path.relpath(root, extract_dir)
+            # 获取解压后的顶层目录（GitHub自动生成的目录）
+            extracted_dirs = [d for d in os.listdir(extract_dir) 
+                            if os.path.isdir(os.path.join(extract_dir, d))]
+            if not extracted_dirs:
+                raise Exception("无效的更新包结构")
+            
+            # 获取实际文件所在的根目录
+            source_root = os.path.join(extract_dir, extracted_dirs[0])
+            
+            # 复制新文件（修正路径处理）
+            for root, dirs, files in os.walk(source_root):
+                # 计算相对于source_root的相对路径
+                relative_path = os.path.relpath(root, source_root)
                 target_dir = os.path.join(self.root_dir, relative_path)
+                
+                # 确保目标目录存在
+                os.makedirs(target_dir, exist_ok=True)
                 
                 for file in files:
                     if not self.should_skip_file(file):
                         src_file = os.path.join(root, file)
                         dst_file = os.path.join(target_dir, file)
-                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                        
+                        # 先删除已存在的文件再复制（确保覆盖）
+                        if os.path.exists(dst_file):
+                            os.remove(dst_file)
                         shutil.copy2(src_file, dst_file)
             
             return True
@@ -300,13 +322,38 @@ class Updater:
     def cleanup(self):
         """清理临时文件"""
         try:
+            # 删除整个临时目录
             if os.path.exists(self.temp_dir):
-                shutil.rmtree(self.temp_dir)
+                logger.info(f"正在删除临时目录: {self.temp_dir}")
+                shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+            # 删除可能残留的备份目录
             backup_dir = os.path.join(self.root_dir, 'backup')
             if os.path.exists(backup_dir):
-                shutil.rmtree(backup_dir)
+                logger.info(f"正在删除备份目录: {backup_dir}")
+                shutil.rmtree(backup_dir, ignore_errors=True)
+
+            # 删除可能残留的解压目录
+            extract_dir = os.path.join(self.temp_dir, 'extracted')
+            if os.path.exists(extract_dir):
+                logger.info(f"正在删除解压目录: {extract_dir}")
+                shutil.rmtree(extract_dir, ignore_errors=True)
+
+            # 额外检查并删除可能残留的zip文件
+            temp_zip = os.path.join(self.root_dir, 'update.zip')
+            if os.path.exists(temp_zip):
+                logger.info(f"正在删除残留zip文件: {temp_zip}")
+                os.remove(temp_zip)
+
         except Exception as e:
-            logger.error(f"清理临时文件失败: {str(e)}")
+            logger.error(f"清理失败: {str(e)}")
+            # 尝试强制删除（Windows系统需要）
+            if os.name == 'nt':
+                try:
+                    os.system(f'rmdir /s /q "{self.temp_dir}" 2>nul')
+                    os.system(f'rmdir /s /q "{backup_dir}" 2>nul')
+                except:
+                    pass
 
     def prompt_update(self, update_info: dict) -> bool:
         """提示用户是否更新"""
@@ -335,26 +382,15 @@ class Updater:
             update_info = self.check_for_updates()
             if not update_info['has_update']:
                 log_progress("检查更新完成", True, "当前已是最新版本")
-                print("\n当前已是最新版本，无需更新")
-                print("按回车键继续...")
-                input()
-                return {
-                    'success': True,
-                    'output': '\n'.join(progress)
-                }
+                print("\n当前已是最新版本，无需更新")  # 移除后续的输入提示
+                return {'success': True, 'output': '\n'.join(progress)}
             
             # 提示用户是否更新
-            log_progress("提示用户是否更新...")
             if not self.prompt_update(update_info):
                 log_progress("提示用户是否更新", True, "用户取消更新")
-                print("\n已取消更新")
-                print("按回车键继续...")
-                input()
-                return {
-                    'success': True,
-                    'output': '\n'.join(progress)
-                }
-                
+                print("\n已取消更新")  # 移除后续的输入提示
+                return {'success': True, 'output': '\n'.join(progress)}
+                    
             log_progress(f"开始更新到版本: {update_info['version']}")
             
             # 下载更新
@@ -424,20 +460,13 @@ def check_and_update():
     return updater.update()
 
 if __name__ == "__main__":
-    # 设置日志格式
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
+
     try:
         result = check_and_update()
-        if result['success']:
-            input("\n按回车键退出...")  # 等待用户确认后退出
-        else:
-            input("\n更新失败，按回车键退出...")
+        if not result['success']:
+            print("\n更新失败，请查看日志")
     except KeyboardInterrupt:
         print("\n用户取消更新")
     except Exception as e:
         print(f"\n发生错误: {str(e)}")
-        input("按回车键退出...") 
+
