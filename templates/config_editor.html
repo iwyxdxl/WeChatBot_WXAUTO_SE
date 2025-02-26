@@ -49,12 +49,12 @@
         button:hover {
             background-color: #45a049;
         }
-
+/* 
         .entry {
             display: flex;
             gap: 10px;
             margin-bottom: 10px;
-        }
+        } */
 
         .success-alert {
             position: fixed;
@@ -218,6 +218,39 @@
             margin-top: 5px;
         }
 
+        .entry {
+            display: grid;
+            grid-template-columns: 2fr 3fr auto; /* 调整列宽比例 */
+            gap: 15px;  /* 增加间隙 */
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .entry input, 
+        .entry select {
+            box-sizing: border-box;  /* 确保宽度计算包含padding */
+            min-width: 120px;
+            width: 100%;
+        }
+
+        .entry select {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 600px) {
+            .entry {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            
+            .entry button {
+                width: 100%;
+                margin-top: 5px;
+            }
+        }
+
     </style>
     <script>
         function addEntry() {
@@ -225,11 +258,18 @@
             const div = document.createElement('div');
             div.className = 'entry';
             div.innerHTML = `
-                <input type="text" name="listen_list">
+                <input type="text" name="nickname" placeholder="微信昵称" required>
+                <select name="prompt_file" required>
+                    <option value="">-- 选择Prompt文件 --</option>
+                    {% for file in prompt_files %}
+                    <option value="{{ file }}">{{ file }}</option>
+                    {% endfor %}
+                </select>
                 <button type="button" onclick="removeEntry(this)">删除</button>
-            `;
+                `;
             container.appendChild(div);
         }
+
 
         function removeEntry(button) {
             button.parentElement.remove();
@@ -272,6 +312,28 @@
             const successAlert = document.getElementById('success-alert');
 
             form.addEventListener('submit', async function (e) {
+                // 检查必填项
+            let isValid = true
+            const entries = document.querySelectorAll('#listen-list .entry')
+            
+            entries.forEach(entry => {
+                const nickname = entry.querySelector('[name="nickname"]').value
+                const prompt = entry.querySelector('[name="prompt_file"]').value
+                
+                if (!nickname || !prompt) {
+                    isValid = false
+                    entry.style.outline = '2px solid red'
+                } else {
+                    entry.style.outline = ''
+                }
+            })
+
+            if (!isValid) {
+                alert('请填写所有用户的昵称并选择Prompt文件！')
+                e.preventDefault()
+                return
+            }
+
                 e.preventDefault(); // 阻止默认提交
                 
                 // 处理多值字段
@@ -445,6 +507,21 @@
                     window.location.href = this.href;
                 }
             });
+
+            // 在表单提交前添加验证
+            form.addEventListener('submit', async function (e) {
+                // 检查必填项
+                const entries = document.querySelectorAll('#listen-list .entry');
+                entries.forEach(entry => {
+                    const nickname = entry.querySelector('[name="nickname"]').value;
+                    const prompt = entry.querySelector('[name="prompt_file"]').value;
+                    if(nickname && !prompt){
+                        alert('请为每个用户选择Prompt文件！');
+                        e.preventDefault();
+                        return;
+                    }
+                });
+            });
         });
     </script>
 </head>
@@ -465,11 +542,17 @@
         <div class="section">
             <h2>用户列表</h2>
             <div class="form-group">
-                <label>微信昵称/群聊列表（不要写备注）:</label>
+                <label>微信昵称与对应Prompt配置:</label>
                 <div id="listen-list">
                     {% for item in config.LISTEN_LIST %}
                     <div class="entry">
-                        <input type="text" name="listen_list" value="{{ item }}">
+                        <input type="text" name="nickname" value="{{ item[0] }}" placeholder="微信昵称" required>
+                        <select name="prompt_file" required>
+                            <option value="">-- 选择Prompt文件 --</option>
+                            {% for file in prompt_files %}
+                            <option value="{{ file }}" {% if item[1] == file %}selected{% endif %}>{{ file }}</option>
+                            {% endfor %}
+                        </select>
                         <button type="button" onclick="removeEntry(this)">删除</button>
                     </div>
                     {% endfor %}
@@ -483,7 +566,7 @@
 
             <!-- API 服务商 -->
             <div class="form-group">
-                <label>API 服务商: (推荐硅基流动API 注册地址 <a href="https://cloud.siliconflow.cn/" target="_blank">https://cloud.siliconflow.cn/</a> 免费15元额度)</label>
+                <label>API 服务商: (推荐硅基流动API 注册地址 <a href="https://cloud.siliconflow.cn/i/cAE8wnQ6" target="_blank">https://cloud.siliconflow.cn/</a> 免费15元额度)</label>
                 <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
                     <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                     <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>官方API</option>
@@ -533,7 +616,7 @@
             </div>
 
             <div class="form-group">
-                <label>温度 (0-2):</label>
+                <label>温度 (0-2): (如果回复出现乱码请将温度调到1.1或0.7以下)</label>
                 <input type="number" step="0.1" name="TEMPERATURE" value="{{ config.TEMPERATURE }}">
             </div>
             
@@ -692,7 +775,7 @@
             </div>
 
             <div class="form-group">
-                <label>主动消息安静时间段:</label>
+                <label>主动消息安静时间段: (请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号)</label>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" name="QUIET_TIME_START" value="{{ config.QUIET_TIME_START }}" placeholder="HH:MM">
                     至

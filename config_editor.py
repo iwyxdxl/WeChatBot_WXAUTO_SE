@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # ***********************************************************************
 # Copyright of this file: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -44,15 +46,16 @@ def bot_status():
 @app.route('/submit_config', methods=['POST'])
 def submit_config():
     try:
-        # 复用首页的表单处理逻辑
         config = parse_config()
         new_values = {}
 
-        # 处理监听列表
+        # 处理二维数组
+        nicknames = request.form.getlist('nickname')
+        prompt_files = request.form.getlist('prompt_file')
         new_values['LISTEN_LIST'] = [
-            item.strip() 
-            for item in request.form.getlist('listen_list') 
-            if item.strip()
+            [nick.strip(), pf.strip()] 
+            for nick, pf in zip(nicknames, prompt_files) 
+            if nick.strip() and pf.strip()
         ]
 
         # 处理布尔字段
@@ -154,10 +157,13 @@ def index():
             config = parse_config()
             new_values = {}
 
-            # 处理 LISTEN_LIST
+             # 处理二维数组的LISTEN_LIST
+            nicknames = request.form.getlist('nickname')
+            prompt_files = request.form.getlist('prompt_file')
             new_values['LISTEN_LIST'] = [
-                item.strip() for item in request.form.getlist('listen_list') 
-                if item.strip()
+                [nick.strip(), pf.strip()] 
+                for nick, pf in zip(nicknames, prompt_files) 
+                if nick.strip() and pf.strip()
             ]
 
             # 处理其他字段
@@ -190,8 +196,12 @@ def index():
             return "Configuration save failed. Please check your inputs."
 
     try:
+        # 获取prompt文件列表
+        prompt_files = [f[:-3] for f in os.listdir('prompts') if f.endswith('.md')]
         config = parse_config()
-        return render_template('config_editor.html', config=config)
+        return render_template('config_editor.html', 
+                             config=config,
+                             prompt_files=prompt_files)
     except Exception as e:
         app.logger.error(f"Error loading configuration: {e}")
         return "Error loading configuration."
@@ -326,4 +336,6 @@ def generate_prompt():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5000)  # 关闭调试模式
+    print("\033[31m重要提示：若您的浏览器没有自动打开网页端，请手动访问http://localhost:5000/ \r\n \033[0m")
+    app.run(debug=False, port=5000)  
+    

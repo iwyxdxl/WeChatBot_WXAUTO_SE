@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # ***********************************************************************
 # Modified based on the My-Dream-Moments project
 # Copyright of the original project: Copyright (C) 2025, umaru
@@ -31,14 +33,16 @@ from config import (
     Accept_All_Group_Chat_Messages
     )
 
+# 生成用户昵称列表和prompt映射字典
+user_names = [entry[0] for entry in LISTEN_LIST]
+prompt_mapping = {entry[0]: entry[1] for entry in LISTEN_LIST}
+
 # 获取微信窗口对象
 wx = WeChat()
 ROBOT_WX_NAME = wx.A_MyIcon.Name
-# 设置监听列表（LISTEN_LIST在config.py中配置）
-listen_list = LISTEN_LIST
-# 循环添加监听对象
-for i in listen_list:
-    wx.AddListenChat(who=i, savepic=True)
+# 设置监听列表
+for user_name in user_names:
+    wx.AddListenChat(who=user_name, savepic=True)
 # 持续监听消息，并且收到消息后回复
 wait = 1  # 设置1秒查看一次是否有新消息
 
@@ -73,7 +77,12 @@ can_send_messages = True
 is_sending_message = False
 
 def parse_time(time_str):
-    return datetime.strptime(time_str, "%H:%M").time()
+    try:
+        TimeResult = datetime.strptime(time_str, "%H:%M").time()
+        return TimeResult
+    except Exception as e:
+        logger.error("主动消息安静时间设置有误！请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号！")
+        print("\033[31m错误：主动消息安静时间设置有误！请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号！\033[0m")
 
 quiet_time_start = parse_time(QUIET_TIME_START)
 quiet_time_end = parse_time(QUIET_TIME_END)
@@ -82,7 +91,7 @@ def check_user_timeouts():
     if ENABLE_AUTO_MESSAGE:
         while True:
             current_time = time.time()
-            for user in listen_list:
+            for user in user_names:
                 last_active = user_timers.get(user)
                 wait_time = user_wait_times.get(user)
                 if last_active and wait_time:
@@ -103,20 +112,23 @@ def get_random_wait_time():
 
 # 当接收到用户的新消息时，调用此函数
 def on_user_message(user):
-    if user not in listen_list:
-        listen_list.append(user)
+    if user not in user_names:
+        user_names.append(user)
     reset_user_timer(user)
 
+# 修改get_user_prompt函数
 def get_user_prompt(user_id):
-    # 动态获取用户的Prompt，如果不存在则使用默认的prompt.md
-    prompt_path = os.path.join(root_dir, 'prompts', f'{user_id}.md')
-    if os.path.exists(prompt_path):
-        with open(prompt_path, 'r', encoding='utf-8') as file:
-            return file.read()
-    else:
-        # 加载默认的prompt.md
-        with open(os.path.join(root_dir, 'prompt.md'), 'r', encoding='utf-8') as file:
-            return file.read()
+    # 查找映射中的文件名，若不存在则使用user_id
+    prompt_file = prompt_mapping.get(user_id, user_id)
+    prompt_path = os.path.join(root_dir, 'prompts', f'{prompt_file}.md')
+    
+    if not os.path.exists(prompt_path):
+        logger.error(f"Prompt文件不存在: {prompt_path}")
+        raise FileNotFoundError(f"Prompt文件 {prompt_file}.md 未找到于 prompts 目录")
+
+    with open(prompt_path, 'r', encoding='utf-8') as file:
+        return file.read()
+
 
 def get_deepseek_response(message, user_id):
     try:
@@ -154,12 +166,31 @@ def get_deepseek_response(message, user_id):
 
         return reply
     except Exception as e:
+        ErrorImformation = str(e)
         logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
+        if "real name verification" in ErrorImformation :
+            print("\033[31m错误：请在硅基流动网站实名后再使用！ \033[0m")
+        elif "rate" in ErrorImformation :
+            print("\033[31m错误：硅基流动速率限制，请稍后再试！ \033[0m")
+        elif "paid requires" in ErrorImformation :
+            print("\033[31m错误：您正在使用付费模型，请先充值再使用或使用免费额度模型！ \033[0m")
+        elif "Api key is invalid" in ErrorImformation :
+            print("\033[31m错误：API KEY不可用，请检查配置选项！ \033[0m")
+        else :
+            print("\033[31m错误：硅基流动服务器繁忙，请稍后再试！ \033[0m")
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
 def message_listener():
     while True:
         try:
+            if wx is None:
+                wx = WeChat()
+                for user_name in user_names:
+                    wx.AddListenChat(who=user_name, savepic=True)
+                if not wx.GetSessionList():
+                    time.sleep(5)
+                    
+
             msgs = wx.GetListenMessage()
             for chat in msgs:
                 who = chat.who
@@ -195,6 +226,8 @@ def message_listener():
                         
         except Exception as e:
             logger.error(f"消息监听出错: {str(e)}")
+            print("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若关闭之后收不到消息，请重启程序！ \033[0m")
+            wx = None
         time.sleep(wait)
 
 def recognize_image_with_moonshot(image_path, is_emoji=False):
@@ -384,8 +417,9 @@ def process_user_messages(user_id):
     if "</think>" in reply:
         reply = reply.split("</think>", 1)[1].strip()
     
-    # 发送回复
-    send_reply(user_id, sender_name, username, merged_message, reply)
+    # 发送回复，屏蔽记忆片段发送
+    if "## 记忆片段" not in reply:
+        send_reply(user_id, sender_name, username, merged_message, reply)
 
 def send_reply(user_id, sender_name, username, merged_message, reply):
     global is_sending_message
@@ -427,6 +461,8 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
                     next_part = parts[i + 1]
                     # 计算延时时间，模拟打字速度
                     delay = len(next_part) * (AVERAGE_TYPING_SPEED + random.uniform(RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX))
+                    if delay < 2:
+                        delay = 2
                     time.sleep(delay)
         else:
             wx.SendMsg(reply, user_id)
@@ -566,25 +602,10 @@ def append_to_memory_section(user_id, content):
     try:
         prompts_dir = os.path.join(root_dir, 'prompts')
         user_file = os.path.join(prompts_dir, f'{user_id}.md')
-        default_prompt = os.path.join(root_dir, 'prompt.md')  # 根目录模板文件
         
-        # 确保prompts目录存在
-        os.makedirs(prompts_dir, exist_ok=True)
-
-        # 如果用户文件不存在，复制模板文件
+        # 确保用户文件存在
         if not os.path.exists(user_file):
-            try:
-                if os.path.exists(default_prompt):
-                    shutil.copy(default_prompt, user_file)
-                    logger.info(f"已从模板创建用户文件: {user_file}")
-                else:
-                    # 创建基础模板文件
-                    with open(user_file, 'w', encoding='utf-8') as f:
-                        f.write("# 用户记忆档案\n\n## 基础信息\n\n## 记忆库\n开始更新：\n")
-                    logger.warning(f"根目录模板文件不存在，已创建基础模板: {user_file}")
-            except Exception as copy_error:
-                logger.error(f"创建用户文件失败: {str(copy_error)}")
-                return
+            raise FileNotFoundError(f"用户文件 {user_id}.md 不存在")
 
         # 读取并处理文件内容
         with open(user_file, 'r+', encoding='utf-8') as file:
@@ -617,6 +638,9 @@ def append_to_memory_section(user_id, content):
     except Exception as e:
         logger.error(f"记忆存储失败: {str(e)}", exc_info=True)
         raise  # 重新抛出异常供上层处理
+    except FileNotFoundError as e:
+        logger.error(f"文件未找到: {str(e)}")
+        raise
 
 def summarize_and_save(user_id):
     """总结聊天记录并存储记忆"""
@@ -666,72 +690,49 @@ def summarize_and_save(user_id):
 **摘要**: {summary}
 """
 
-        user_prompt_file = os.path.join(root_dir, 'prompts', f'{user_id}.md')
-        default_prompt = os.path.join(root_dir, 'prompt.md')  # 新增默认文件路径
-        backup_file = f"{user_prompt_file}.bak"
-        temp_file = f"{user_prompt_file}.tmp"
+        prompt_name = prompt_mapping.get(user_id, user_id)
+        prompts_dir = os.path.join(root_dir, 'prompts')
+        os.makedirs(prompts_dir, exist_ok=True)  # 确保目录存在
         
-        # 增强原子写入
+        user_prompt_file = os.path.join(prompts_dir, f'{prompt_name}.md')
+        temp_file = f"{user_prompt_file}.tmp"
+        backup_file = f"{user_prompt_file}.bak"
+
+        # 原子写入流程
         try:
+            # 步骤1：创建新文件
             with open(temp_file, 'w', encoding='utf-8') as f:
-                # 新增：当用户文件不存在时使用默认文件
+                # 保留原有内容
                 if os.path.exists(user_prompt_file):
                     with open(user_prompt_file, 'r', encoding='utf-8') as src:
                         f.write(src.read())
-                else:
-                    if os.path.exists(default_prompt):
-                        logger.info(f"初始化用户提示文件: {user_prompt_file} 使用默认模板")
-                        with open(default_prompt, 'r', encoding='utf-8') as src:
-                            f.write(src.read())
-                    else:
-                        logger.error(f"默认提示文件不存在: {default_prompt}")
-                        raise FileNotFoundError(f"默认提示文件 {default_prompt} 未找到")
+                # 追加新内容
+                f.write(f"\n## 记忆片段 [{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n")
+                f.write(f"**摘要**: {summary}\n\n")
 
-                # 追加新的记忆条目
-                f.write('\n' + memory_entry + '\n')
-
-            # 替换原文件
+            # 步骤2：备份原文件
             if os.path.exists(user_prompt_file):
-                shutil.move(user_prompt_file, backup_file)
+                shutil.copyfile(user_prompt_file, backup_file)
+
+            # 步骤3：替换文件
             shutil.move(temp_file, user_prompt_file)
-            
-            # 清理备份
-            if os.path.exists(backup_file):
-                os.remove(backup_file)
-                
+
         except Exception as e:
-            # 异常恢复
+            # 异常恢复流程
             if os.path.exists(backup_file):
                 shutil.move(backup_file, user_prompt_file)
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
             raise
 
         # --- 清理日志 ---
-        # 清空整个日志文件
         with open(log_file, 'w', encoding='utf-8') as f:
-            f.write('')  # 直接写入空内容清空文件
-        logger.info(f"已清空处理完成的日志文件: {log_file}")
+            f.truncate()
 
-    except FileNotFoundError as e:
-        logger.error(f"文件未找到: {str(e)}")
-    except PermissionError as e:
-        logger.error(f"文件权限错误: {str(e)}")
-        raise
-    except re.error as e:
-        logger.error(f"正则表达式错误: {str(e)}")
-    except ValueError as e:
-        logger.error(f"数值转换错误: {str(e)}")
-    except requests.RequestException as e:
-        logger.error(f"API请求失败: {str(e)}")
     except Exception as e:
-        logger.error(f"未处理的异常: {str(e)}", exc_info=True)
-        if log_file and os.path.exists(log_file):
-            logger.info(f"保留异常日志文件: {log_file}")
+        logger.error(f"记忆保存失败: {str(e)}", exc_info=True)
     finally:
         # 清理临时文件
-        for f in [backup_file, temp_file]:
-            if 'f' in locals() and os.path.exists(f):
+        for f in [temp_file, backup_file]:
+            if f and os.path.exists(f):
                 try:
                     os.remove(f)
                 except Exception as e:
@@ -742,11 +743,12 @@ def memory_manager():
     while True:
         try:
             # 检查所有监听用户
-            for user in listen_list:
+            for user in user_names:
                 log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user}_log.txt')
                 
                 try:
-                    user_prompt_file = os.path.join(root_dir, 'prompts', f'{user}.md')
+                    prompt_name = prompt_mapping.get(user, user)  # 获取配置的文件名，没有则用昵称
+                    user_prompt_file = os.path.join(root_dir, 'prompts', f'{prompt_name}.md')
                     manage_memory_capacity(user_prompt_file)
                 except Exception as e:
                     logger.error(f"内存管理失败: {str(e)}")
@@ -814,7 +816,15 @@ def manage_memory_capacity(user_file):
         logger.error(f"记忆整理失败: {str(e)}")
 
 def main():
+    
     try:
+        # 预检查所有用户prompt文件
+        for user in user_names:
+            prompt_file = prompt_mapping.get(user, user)
+            prompt_path = os.path.join(root_dir, 'prompts', f'{prompt_file}.md')
+            if not os.path.exists(prompt_path):
+                raise FileNotFoundError(f"用户 {user} 的prompt文件 {prompt_file}.md 不存在")
+            
         # 确保临时目录存在
         memory_temp_dir = os.path.join(root_dir, MEMORY_TEMP_DIR)
         os.makedirs(memory_temp_dir, exist_ok=True)
@@ -848,6 +858,10 @@ def main():
             time.sleep(wait)
     except Exception as e:
         logger.error(f"发生异常: {str(e)}")
+    except FileNotFoundError as e:
+        logger.error(f"初始化失败: {str(e)}")
+        print(f"\033[31m错误：{str(e)}\033[0m")
+        exit(1)
     finally:
         logger.info("程序退出")
 

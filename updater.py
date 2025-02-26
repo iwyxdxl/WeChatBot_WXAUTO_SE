@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # ***********************************************************************
 # Modified based on the My-Dream-Moments project
 # Copyright of the original project: Copyright (C) 2025, umaru
@@ -360,7 +362,7 @@ class Updater:
         print(self.format_version_info(self.get_current_version(), update_info))
         
         while True:
-            choice = input("\n是否现在更新? (y/n): ").lower().strip()
+            choice = input("\n是否现在更新?\n输入'y'更新 / 输入'n'取消更新并继续启动: ").lower().strip()
             if choice in ('y', 'yes'):
                 return True
             elif choice in ('n', 'no'):

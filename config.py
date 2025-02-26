@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # ***********************************************************************
 # Modified based on the KouriChat
 # Copyright of the original project: Copyright (C) 2025, umaru
@@ -6,8 +8,8 @@
 # ***********************************************************************
 
 # 用户列表(请配置要和bot说话的账号的微信昵称，不要写备注！)
-# 例如：LISTEN_LIST = ['用户1','用户2']
-LISTEN_LIST = ['用户1']
+# 例如：LISTEN_LIST = ['微信昵称1','用户2']
+LISTEN_LIST = [['微信昵称1', '用户1']]
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = 'sk-'
@@ -65,8 +67,8 @@ RANDOM_TYPING_SPEED_MAX = 0.1
 # 重要度4的新记忆（存在1小时）得分：0.64 - 0.41 = 2.4 - 0.4 = 2.0 → 保留新记忆
 ENABLE_MEMORY = True
 MEMORY_TEMP_DIR = 'Memory_Temp'
-MAX_MESSAGE_LOG_ENTRIES = 15
-MAX_MEMORY_NUMBER = 15
+MAX_MESSAGE_LOG_ENTRIES = 30
+MAX_MEMORY_NUMBER = 50
 
 # 是否接收全部群聊消息
 Accept_All_Group_Chat_Messages = False

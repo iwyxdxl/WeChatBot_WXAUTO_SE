@@ -1,5 +1,5 @@
 {
-    "version": "3.5",
-    "last_update": "2025-02-25",
-    "description": "增加自动更新功能"
+    "version": "3.6",
+    "last_update": "2025-02-27",
+    "description": "现在可以为微信用户自由分配Prompt!同时增加依赖包,完善Run.bat,修复bugs,增加错误提示！"
 } 
