@@ -9,6 +9,7 @@ setlocal enabledelayedexpansion
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo Python未安装，请先安装Python 3.8或更高的版本，但请安装3.12以下的版本。
+    echo 若您已安装Python,请检查是否已经将Python添加到系统Path。
     pause
     exit /b 1
 )
@@ -57,21 +58,60 @@ echo Python版本检查通过。
 :: 安装依赖
 :: ---------------------------
 
-echo 更新pip并安装依赖...
+echo 正在检测可用镜像源...
 
-:: 换源确保安装成功
-pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt -f ./libs
+:: 尝试清华源
+echo 正在尝试清华源...
+python -m pip install --upgrade pip --index-url https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+if !errorlevel! equ 0 (
+    set "SOURCE_URL=https://pypi.tuna.tsinghua.edu.cn/simple"
+    set "TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn"
+    echo 成功使用清华源。
+    goto :INSTALL
+)
 
-if %errorlevel% neq 0 (
-    echo 安装依赖失败，请检查网络或手动安装依赖。
+:: 尝试阿里源
+echo 正在尝试阿里源...
+python -m pip install --upgrade pip --index-url https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+if !errorlevel! equ 0 (
+    set "SOURCE_URL=https://mirrors.aliyun.com/pypi/simple/"
+    set "TRUSTED_HOST=mirrors.aliyun.com"
+    echo 成功使用阿里源。
+    goto :INSTALL
+)
+
+:: 尝试官方源
+echo 正在尝试官方源...
+python -m pip install --upgrade pip --index-url https://pypi.org/simple
+if !errorlevel! equ 0 (
+    set "SOURCE_URL=https://pypi.org/simple"
+    set "TRUSTED_HOST="
+    echo 成功使用官方源。
+    goto :INSTALL
+)
+
+:: 所有源均失败
+echo 所有镜像源均不可用，请检查网络连接。
+pause
+exit /b 1
+
+:INSTALL
+echo 正在使用源：%SOURCE_URL%
+echo 安装依赖...
+
+if "!TRUSTED_HOST!"=="" (
+    python -m pip install -r requirements.txt -f ./libs --index-url !SOURCE_URL!
+) else (
+    python -m pip install -r requirements.txt -f ./libs --index-url !SOURCE_URL! --trusted-host !TRUSTED_HOST!
+)
+
+if !errorlevel! neq 0 (
+    echo 安装依赖失败，请检查网络或手动安装。
     pause
     exit /b 1
 )
-echo 依赖安装完成！
 
-:: 清屏
+echo 依赖安装完成！
 cls
 
 :: ---------------------------
@@ -104,9 +144,7 @@ echo 端口 %PORT% 未被占用，继续启动程序...
 goto :start_program
 
 :found
-echo 端口 %PORT% 被 PID %PID% 的进程占用！
-choice /c YN /m "是否要关闭占用端口的程序？请输入'y'关闭"
-if errorlevel 2 goto :start_program
+echo 端口 %PORT% 被 PID %PID% 的进程占用！正在关闭进程...
 
 :: 关闭占用端口的进程
 echo 正在关闭 PID %PID% 的进程...

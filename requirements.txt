@@ -8,3 +8,4 @@ openai~=1.61.0
 pyautogui
 werkzeug
 psutil
+filelock

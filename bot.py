@@ -129,7 +129,6 @@ def get_user_prompt(user_id):
     with open(prompt_path, 'r', encoding='utf-8') as file:
         return file.read()
 
-
 def get_deepseek_response(message, user_id):
     try:
         logger.info(f"调用 DeepSeek API - 用户ID: {user_id}, 消息: {message}")
@@ -169,15 +168,17 @@ def get_deepseek_response(message, user_id):
         ErrorImformation = str(e)
         logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
         if "real name verification" in ErrorImformation :
-            print("\033[31m错误：请在硅基流动网站实名后再使用！ \033[0m")
+            print("\033[31m错误：API服务商反馈请完成实名认证后再使用！ \033[0m")
         elif "rate" in ErrorImformation :
-            print("\033[31m错误：硅基流动速率限制，请稍后再试！ \033[0m")
-        elif "paid requires" in ErrorImformation :
-            print("\033[31m错误：您正在使用付费模型，请先充值再使用或使用免费额度模型！ \033[0m")
+            print("\033[31m错误：API服务商反馈当前访问API服务频次达到上限，请稍后再试！ \033[0m")
+        elif "paid" in ErrorImformation :
+            print("\033[31m错误：API服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！ \033[0m")
         elif "Api key is invalid" in ErrorImformation :
-            print("\033[31m错误：API KEY不可用，请检查配置选项！ \033[0m")
+            print("\033[31m错误：API服务商反馈API KEY不可用，请检查配置选项！ \033[0m")
+        elif "busy" in ErrorImformation :    
+            print("\033[31m错误：API服务商反馈服务器繁忙，请稍后再试！ \033[0m")
         else :
-            print("\033[31m错误：硅基流动服务器繁忙，请稍后再试！ \033[0m")
+            print("\033[31m错误： " + str(e) + "\033[0m")
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
 def message_listener():
@@ -190,7 +191,6 @@ def message_listener():
                 if not wx.GetSessionList():
                     time.sleep(5)
                     
-
             msgs = wx.GetListenMessage()
             for chat in msgs:
                 who = chat.who
@@ -429,7 +429,7 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         # 首先检查是否需要发送表情包
         if ENABLE_EMOJI_SENDING:
             emotion = is_emoji_request(reply)
-            if emotion:
+            if emotion is not False:
                 emoji_path = send_emoji(emotion)
                 if emoji_path:
                     try:
@@ -437,6 +437,11 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
                         wx.SendFiles(filepath=emoji_path, who=user_id)
                     except Exception as e:
                         logger.error(f"发送表情包失败: {str(e)}")
+            else:
+                    logger.info(f"无需发送表情包")
+
+        # 如果回复包含时间则将其去除
+        reply = remove_timestamps(reply)
 
         if '\\' in reply:
             parts = [p.strip() for p in reply.split('\\') if p.strip()]
@@ -489,6 +494,35 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         # 解除发送限制
         is_sending_message = False
 
+def remove_timestamps(text):
+    """
+    移除文本中所有[YYYY-MM-DD HH:MM:SS]格式的时间戳
+    并自动清理因去除时间戳产生的多余空格
+    """
+    # 定义严格的时间戳正则模式（精确到秒级）
+    timestamp_pattern = r'''
+        \[                # 起始方括号
+        \d{4}             # 年份：4位数字
+        -(0[1-9]|1[0-2])  # 月份：01-12
+        -(0[1-9]|12\d|3[01]) # 日期：01-31
+        \s                # 日期与时间之间的空格
+        (?:2[0-3]|[01]\d) # 小时：00-23
+        :[0-5]\d          # 分钟：00-59
+        :[0-5]\d          # 秒数：00-59
+        \]                # 结束方括号
+    '''
+    
+    # 使用正则标志：
+    # 1. re.VERBOSE 允许模式中的注释和空格
+    # 2. re.MULTILINE 跨行匹配
+    # 3. 替换时自动处理前后空格
+    return re.sub(
+        pattern = timestamp_pattern,
+        repl = lambda m: ' ',  # 统一替换为单个空格
+        string = text,
+        flags = re.X | re.M
+    ).strip()  # 最后统一清理首尾空格
+
 def is_emoji_request(text: str) -> bool:
     # 定义情绪关键词字典
     emotion_keywords =  {
@@ -523,25 +557,27 @@ def send_emoji(emotion):
     # 构建对应情绪的表情包路径
     emoji_folder = os.path.join(EMOJI_DIR, emotion)
     
-    # 获取文件夹中的所有文件名
-    try:
-        emoji_files = os.listdir(emoji_folder)
-    except FileNotFoundError:
-        print(f"表情包文件夹 {emoji_folder} 不存在。")
-        return
-    
-    # 如果文件夹为空
-    if not emoji_files:
-        print(f"表情包文件夹 {emoji_folder} 中没有表情包。")
-        return
-    
-    # 随机选择一个表情包
-    selected_emoji = random.choice(emoji_files)
-    emoji_path = os.path.join(emoji_folder, selected_emoji)
-    
-    # 发送表情包，这里以打印路径代替实际发送
-    print(f"发送表情包：{emoji_path}")
-    return emoji_path
+    if emotion:
+        # 获取文件夹中的所有文件名
+        try:
+            emoji_files = os.listdir(emoji_folder)
+        except FileNotFoundError:
+            print(f"表情包文件夹 {emoji_folder} 不存在。")
+            return
+        
+        # 如果文件夹为空
+        if not emoji_files:
+            print(f"表情包文件夹 {emoji_folder} 中没有表情包。")
+            return
+        
+        # 随机选择一个表情包
+        selected_emoji = random.choice(emoji_files)
+        emoji_path = os.path.join(emoji_folder, selected_emoji)
+        
+        # 发送表情包，这里以打印路径代替实际发送
+        print(f"发送表情包：{emoji_path}")
+        return emoji_path
+    return False
 
 
 def capture_and_save_screenshot(who):
@@ -708,6 +744,7 @@ def summarize_and_save(user_id):
                         f.write(src.read())
                 # 追加新内容
                 f.write(f"\n## 记忆片段 [{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n")
+                f.write(f"**重要度**: {importance}\n")
                 f.write(f"**摘要**: {summary}\n\n")
 
             # 步骤2：备份原文件
@@ -760,15 +797,15 @@ def memory_manager():
                     if line_count >= MAX_MESSAGE_LOG_ENTRIES:
                         summarize_and_save(user)
     
-                        
         except Exception as e:
             logger.error(f"记忆管理异常: {str(e)}")
         finally:
             time.sleep(60)  # 每分钟检查一次
 
 def manage_memory_capacity(user_file):
-    """内存淘汰机制"""
-    MEMORY_SEGMENT_PATTERN = r'## 记忆片段 \[(.*?)\]\n\*{2}重要度\*{2}: (\d+)\n\*{2}摘要\*{2}:(.*?)(?=\n## 记忆片段 |\Z)'
+    """记忆淘汰机制"""
+    # 允许重要度缺失（使用可选捕获组）
+    MEMORY_SEGMENT_PATTERN = r'## 记忆片段 \[(.*?)\]\n(?:\*{2}重要度\*{2}: (\d*)\n)?\*{2}摘要\*{2}:(.*?)(?=\n## 记忆片段 |\Z)'
     try:
         with open(user_file, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -786,7 +823,9 @@ def manage_memory_capacity(user_file):
                 time_diff = (now - datetime.strptime(timestamp, "%Y-%m-%d %H:%M")).total_seconds()
             except ValueError:
                 time_diff = 0
-            score = 0.6 * int(importance) - 0.4 * (time_diff / 3600)
+            # 处理重要度缺失，默认值为3
+            importance_value = int(importance) if importance else 3
+            score = 0.6 * importance_value - 0.4 * (time_diff / 3600)
             memory_scores.append(score)
 
         # 获取保留索引
@@ -798,12 +837,19 @@ def manage_memory_capacity(user_file):
         memory_blocks = re.split(r'(?=## 记忆片段 \[)', content)
         new_content = []
         
+        # 解析时处理缺失值
         for idx, block in enumerate(memory_blocks):
-            if idx == 0:  # 文件头
+            if idx == 0:
                 new_content.append(block)
                 continue
-            if (idx-1) in keep_indices:  # 对齐索引
-                new_content.append(block)
+            try:
+                # 显式关联 memory_blocks 与 segments 的索引
+                segment_idx = idx - 1
+                if segment_idx < len(segments) and segment_idx in keep_indices:
+                    new_content.append(block)
+            except Exception as e:
+                logger.warning(f"跳过无效记忆块: {str(e)}")
+                continue
 
         # 原子写入
         with open(f"{user_file}.tmp", 'w', encoding='utf-8') as f:

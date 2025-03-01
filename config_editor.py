@@ -12,6 +12,9 @@ import os
 import subprocess
 import psutil
 import openai
+import tempfile
+import shutil
+from filelock import FileLock  # 需要安装 filelock 库（pip install filelock）
 
 app = Flask(__name__)
 bot_process = None
@@ -21,12 +24,26 @@ def start_bot():
     global bot_process
     if bot_process is None or bot_process.poll() is not None:
         bot_dir = os.path.dirname(os.path.abspath(__file__))
-        bot_path = os.path.join(bot_dir, 'bot.py')
+        
+        # 优先检查bot.py
+        bot_py = os.path.join(bot_dir, 'bot.py')
+        bot_exe = os.path.join(bot_dir, 'bot.exe')
+        
+        if os.path.exists(bot_py):
+            cmd = ['python', bot_py]
+        elif os.path.exists(bot_exe):
+            cmd = [bot_exe]
+        else:
+            return {'error': 'No bot executable found'}, 404
+
         # Windows需要CREATE_NEW_PROCESS_GROUP
+        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
         bot_process = subprocess.Popen(
-            ['python', bot_path],
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+            cmd,
+            creationflags=creation_flags
         )
+    return {'status': 'started'}, 200
+
     
 @app.route('/stop_bot', methods=['POST'])
 def stop_bot():
@@ -46,6 +63,10 @@ def bot_status():
 @app.route('/submit_config', methods=['POST'])
 def submit_config():
     try:
+        # 空表单校验
+        if not request.form:
+            return jsonify({'error': 'Empty form submission'}), 400
+        
         config = parse_config()
         new_values = {}
 
@@ -67,7 +88,7 @@ def submit_config():
             'ENABLE_MEMORY'
         ]
         for field in boolean_fields:
-            new_values[field] = field in request.form  # ✅ 直接判断是否存在
+            new_values[field] = field in request.form  # 直接判断是否存在
 
         # 处理其他字段
         for key in request.form:
@@ -107,48 +128,77 @@ def stop_bot_process():
             bot_process = None
 
 def parse_config():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, 'config.py')  # 修正路径
     config = {}
-    with open('config.py', 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('#') or not line:
-                continue
-            match = re.match(r'^(\w+)\s*=\s*(.+)$', line)
-            if match:
-                var_name = match.group(1)
-                var_value_str = match.group(2)
-                try:
-                    var_value = ast.literal_eval(var_value_str)
-                    config[var_name] = var_value
-                except:
-                    config[var_name] = var_value_str
-    return config
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('#') or not line:
+                    continue
+                match = re.match(r'^(\w+)\s*=\s*(.+)$', line)
+                if match:
+                    var_name = match.group(1)
+                    var_value_str = match.group(2)
+                    try:
+                        var_value = ast.literal_eval(var_value_str)
+                        config[var_name] = var_value
+                    except:
+                        config[var_name] = var_value_str
+        return config
+    except FileNotFoundError:
+        raise Exception(f"配置文件不存在于: {config_path}")
 
 def update_config(new_values):
-    with open('config.py', 'r', encoding='utf-8') as f:
-        lines = f.readlines()
+    """
+    更新配置文件内容，确保文件写入安全性和原子性，避免文件被清空或损坏。
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, 'config.py')
+    lock_path = config_path + '.lock'  # 文件锁路径
 
-    new_lines = []
-    for line in lines:
-        line_stripped = line.strip()
-        if line_stripped.startswith('#') or not line_stripped:
-            new_lines.append(line)
-            continue
-        # 修正正则表达式：允许行中存在其他内容（如注释）
-        match = re.match(r'^\s*(\w+)\s*=.*', line)
-        if match:
-            var_name = match.group(1)
-            if var_name in new_values:
-                value = new_values[var_name]
-                new_line = f"{var_name} = {repr(value)}\n"
-                new_lines.append(new_line)
-            else:
-                new_lines.append(line)
-        else:
-            new_lines.append(line)
+    # 使用文件锁，确保只有一个进程/线程能操作 config.py
+    with FileLock(lock_path):
+        try:
+            # 读取现有配置文件内容
+            with open(config_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
 
-    with open('config.py', 'w', encoding='utf-8') as f:
-        f.writelines(new_lines)
+            new_lines = []
+            for line in lines:
+                line_stripped = line.strip()
+                # 保留注释或空行
+                if line_stripped.startswith('#') or not line_stripped:
+                    new_lines.append(line)
+                    continue
+
+                # 匹配配置项的键值对
+                match = re.match(r'^\s*(\w+)\s*=.*', line)
+                if match:
+                    var_name = match.group(1)
+                    # 如果新配置中包含此变量，更新其值
+                    if var_name in new_values:
+                        value = new_values[var_name]
+                        new_line = f"{var_name} = {repr(value)}\n"
+                        new_lines.append(new_line)
+                    else:
+                        # 保留未修改的变量
+                        new_lines.append(line)
+                else:
+                    # 如果行不符合格式，则直接保留
+                    new_lines.append(line)
+
+            # 写入临时文件，确保写入成功后再替换原文件
+            with tempfile.NamedTemporaryFile('w', delete=False, dir=script_dir, encoding='utf-8') as temp_file:
+                temp_file_name = temp_file.name
+                temp_file.writelines(new_lines)
+
+            # 替换原配置文件
+            shutil.move(temp_file_name, config_path)
+        except Exception as e:
+            # 捕获并记录异常，以便排查问题
+            raise Exception(f"更新配置文件失败: {e}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -336,6 +386,12 @@ def generate_prompt():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # 新增配置文件存在检查
+    config_path = os.path.join(os.path.dirname(__file__), 'config.py')
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"核心配置文件缺失: {config_path}")
+    
     print("\033[31m重要提示：若您的浏览器没有自动打开网页端，请手动访问http://localhost:5000/ \r\n \033[0m")
-    app.run(debug=False, port=5000)  
+    # 原有启动逻辑...
+    app.run(debug=False, port=5000)
     

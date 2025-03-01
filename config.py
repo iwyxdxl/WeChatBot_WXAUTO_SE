@@ -9,7 +9,7 @@
 
 # 用户列表(请配置要和bot说话的账号的微信昵称，不要写备注！)
 # 例如：LISTEN_LIST = ['微信昵称1','用户2']
-LISTEN_LIST = [['微信昵称1', '用户1']]
+LISTEN_LIST = [['微信昵称1', '提示词1']]
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = 'sk-'
@@ -48,8 +48,8 @@ ENABLE_EMOJI_SENDING = True
 AUTO_MESSAGE = '请你模拟系统设置的角色，在微信上找对方发消息想知道对方在做什么'
 ENABLE_AUTO_MESSAGE = True
 # 等待时间
-MIN_COUNTDOWN_HOURS = 0.3
-MAX_COUNTDOWN_HOURS = 0.5
+MIN_COUNTDOWN_HOURS = 1
+MAX_COUNTDOWN_HOURS = 2
 # 消息发送时间限制
 QUIET_TIME_START = '22:00'
 QUIET_TIME_END = '8:00'

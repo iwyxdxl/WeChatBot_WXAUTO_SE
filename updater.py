@@ -360,6 +360,7 @@ class Updater:
     def prompt_update(self, update_info: dict) -> bool:
         """提示用户是否更新"""
         print(self.format_version_info(self.get_current_version(), update_info))
+        print("\033[31m重要提醒:更新前请务必备份自己的prompt和emojis!!! \033[0m")
         
         while True:
             choice = input("\n是否现在更新?\n输入'y'更新 / 输入'n'取消更新并继续启动: ").lower().strip()

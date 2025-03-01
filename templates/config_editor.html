@@ -49,12 +49,6 @@
         button:hover {
             background-color: #45a049;
         }
-/* 
-        .entry {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        } */
 
         .success-alert {
             position: fixed;
@@ -250,6 +244,26 @@
                 margin-top: 5px;
             }
         }
+        .backend-closed-alert {
+            position: fixed;
+            top: 70px;  /* 位于成功提示下方 */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ff4444;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1000;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            25% { transform: translateX(-50%) translateY(-5px); }
+            75% { transform: translateX(-50%) translateY(5px); }
+        }
 
     </style>
     <script>
@@ -367,6 +381,10 @@
 
             async function toggleBot() {
                 const button = document.getElementById('botButton');
+                if (!(await checkBotStatus())) {
+                    alert('后台服务不可用，请检查服务状态');
+                    return;
+                }
                 button.disabled = true;
                 const originalText = button.innerText;
                 button.innerHTML = 'Processing...';
@@ -376,28 +394,38 @@
                     const statusRes = await fetch('/bot_status?_=' + Date.now());
                     const { status } = await statusRes.json();
                     
-                    // 新增：如果是启动操作则先提交表单
+                    // 如果是启动操作则先提交表单
                     if (status === 'stopped') {
-                        // 手动触发表单提交逻辑
-                        const formData = new FormData(form);
-                        const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
-                            .map(input => input.value);
+                        // 创建新的FormData对象
+                        const formData = new FormData();
                         
-                        formData.delete('listen_list');
-                        listenList.forEach(value => formData.append('listen_list', value));
+                        // 正确收集用户列表数据
+                        const nicknames = Array.from(document.querySelectorAll('[name="nickname"]')).map(i => i.value);
+                        const promptFiles = Array.from(document.querySelectorAll('[name="prompt_file"]')).map(i => i.value);
+                        
+                        // 添加用户列表数据
+                        nicknames.forEach(v => formData.append('nickname', v));
+                        promptFiles.forEach(v => formData.append('prompt_file', v));
 
-                        try {
-                            await fetch('', { 
-                                method: 'POST',
-                                body: formData,
-                                headers: {
-                                    'X-Requested-With': 'XMLHttpRequest' 
+                        // 收集其他表单字段
+                        document.querySelectorAll('input[name], select[name]').forEach(element => {
+                            if (element.name !== 'nickname' && element.name !== 'prompt_file') {
+                                if (element.type === 'checkbox') {
+                                    formData.append(element.name, element.checked); // 处理复选框状态
+                                } else {
+                                    formData.append(element.name, element.value);
                                 }
-                            });
-                            showSuccessAlert(); 
-                        } catch (error) {
-                            console.error('保存失败:', error);
-                        }
+                            }
+                        });
+
+                        // 提交表单数据
+                        await fetch('/submit_config', {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        });
                     }
 
                     // 执行机器人操作
@@ -522,10 +550,54 @@
                     }
                 });
             });
+
+            // 在DOMContentLoaded事件内部修改状态检查部分
+            async function checkBotStatus() {
+                const button = document.getElementById('botButton');
+                const alertDiv = document.getElementById('backend-closed-alert');
+                
+                try {
+                    const statusRes = await fetch('/bot_status?_=' + Date.now());
+                    if (!statusRes.ok) throw new Error('请求失败');
+                    
+                    const { status } = await statusRes.json();
+                    button.className = status === 'stopped' ? 'nav-button' : 'nav-button stop';
+                    button.innerHTML = status === 'stopped' ? 'Start Bot' : 'Stop Bot';
+                    alertDiv.style.display = 'none';
+                    return true;
+                } catch (error) {
+                    console.error('状态检查失败:', error);
+                    button.className = 'nav-button';
+                    button.innerHTML = 'Start Bot';
+                    alertDiv.style.display = 'block';
+                    return false;
+                }
+            }
+
+            // 初始化定时检查
+            let statusCheckInterval = setInterval(checkBotStatus, 5000);
+
+            // 页面不可见时暂停检查
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    clearInterval(statusCheckInterval);
+                } else {
+                    checkBotStatus();
+                    statusCheckInterval = setInterval(checkBotStatus, 5000);
+                }
+            });
+
+            // 初始化执行
+            checkBotStatus();
+
         });
     </script>
 </head>
 <body>
+    <div id="backend-closed-alert" class="backend-closed-alert">
+        后台已关闭，请重新启动
+    </div>
+    
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h1>配置编辑器</h1>
         <div>
