@@ -557,7 +557,7 @@ def send_emoji(emotion):
     # 构建对应情绪的表情包路径
     emoji_folder = os.path.join(EMOJI_DIR, emotion)
     
-    if emotion:
+    if emotion is not False:
         # 获取文件夹中的所有文件名
         try:
             emoji_files = os.listdir(emoji_folder)
