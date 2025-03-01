@@ -1,5 +1,5 @@
 {
     "version": "3.7",
     "last_update": "2025-03-01",
-    "description": "\r\n【建议更新】\r\n修复config.py可能被清空的问题;\r\n修复emojis/False不存在;\r\n修复输出可能带时间的问题;\r\n优化文本;\r\n\r\n重要警告:更新前请务必备份自己的config.py、emojis和prompt文件;\r\n本次更新会清空config.py请注意保存自己的API KEY!"
+    "description": "\r\n【建议更新】\r\n修复config.py可能被清空的问题;\r\n修复emojis/False不存在;\r\n修复输出可能带时间的问题;\r\n修复了记忆重要度功能和淘汰功能\r\n优化文本;\r\n\r\n重要警告:更新前请务必备份自己的config.py、emojis和prompt文件;\r\n本次更新会清空config.py请注意保存自己的API KEY!"
 } 
