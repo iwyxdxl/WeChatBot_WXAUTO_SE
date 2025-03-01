@@ -337,8 +337,9 @@ def handle_wxauto_message(msg, who):
         if content:
                 
             if ENABLE_MEMORY:
-                # 记录到用户专属日志文件（添加[User]标记）
-                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log.txt')
+                # 记录到用户专属日志文件（添加[User][prompt]标记）
+                prompt_name = prompt_mapping.get(username, username)  # 获取配置的prompt名
+                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
                 log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [User] {content}\n" 
                 
                 # 检查文件大小并轮转
@@ -451,7 +452,8 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
 
                 if ENABLE_MEMORY:
                     # 记录到用户专属日志文件（添加[AI]标记）
-                    log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log.txt')
+                    prompt_name = prompt_mapping.get(username, username)  # 获取配置的prompt名
+                    log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
                     log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [AI] {part}\n"  
                     
                     # 检查文件大小并轮转
@@ -475,7 +477,8 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
 
             if ENABLE_MEMORY:
                 # 记录到用户专属日志文件（添加[AI]标记）
-                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_log.txt')
+                prompt_name = prompt_mapping.get(username, username)  # 获取配置的prompt名
+                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
                 log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [AI] {reply}\n"  
                 
                 # 检查文件大小并轮转
@@ -549,15 +552,15 @@ def is_emoji_request(text: str) -> bool:
     
     # 如果所有情绪分数都为0，默认设为'neutral'
     if emotion_score[detected_emotion] == 0:
-        detected_emotion = 'False'
+        detected_emotion = False
     
     return detected_emotion
     
 def send_emoji(emotion):
-    # 构建对应情绪的表情包路径
-    emoji_folder = os.path.join(EMOJI_DIR, emotion)
-    
+
     if emotion is not False:
+        # 构建对应情绪的表情包路径
+        emoji_folder = os.path.join(EMOJI_DIR, emotion)
         # 获取文件夹中的所有文件名
         try:
             emoji_files = os.listdir(emoji_folder)
@@ -685,7 +688,8 @@ def summarize_and_save(user_id):
     backup_file = None
     try:
         # --- 前置检查 ---
-        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_log.txt')
+        prompt_name = prompt_mapping.get(user_id, user_id)  # 获取配置的prompt名
+        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_{prompt_name}_log.txt')
         if not os.path.exists(log_file):
             logger.warning(f"日志文件不存在: {log_file}")
             return
@@ -706,6 +710,13 @@ def summarize_and_save(user_id):
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
         summary_prompt = f"请用中文总结以下对话，提取重要信息形成记忆片段：\n{full_logs}"
         summary = get_deepseek_response(summary_prompt, user_id)
+        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段
+        summary = re.sub(
+            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*', 
+            '', 
+            summary, 
+            flags=re.MULTILINE
+        ).strip()
         
         # --- 评估重要性 ---
         importance_prompt = f"为以下内容的重要性评分（1-5，直接回复数字）：\n{summary}"
@@ -721,31 +732,30 @@ def summarize_and_save(user_id):
 
         # --- 存储记忆 ---
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        # 修正1：增加末尾换行
         memory_entry = f"""## 记忆片段 [{current_time}]
 **重要度**: {importance}
 **摘要**: {summary}
-"""
+
+"""  # 注意这里有两个换行
 
         prompt_name = prompt_mapping.get(user_id, user_id)
         prompts_dir = os.path.join(root_dir, 'prompts')
-        os.makedirs(prompts_dir, exist_ok=True)  # 确保目录存在
-        
+        os.makedirs(prompts_dir, exist_ok=True)
+
         user_prompt_file = os.path.join(prompts_dir, f'{prompt_name}.md')
         temp_file = f"{user_prompt_file}.tmp"
         backup_file = f"{user_prompt_file}.bak"
 
-        # 原子写入流程
         try:
-            # 步骤1：创建新文件
             with open(temp_file, 'w', encoding='utf-8') as f:
-                # 保留原有内容
                 if os.path.exists(user_prompt_file):
                     with open(user_prompt_file, 'r', encoding='utf-8') as src:
-                        f.write(src.read())
-                # 追加新内容
-                f.write(f"\n## 记忆片段 [{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n")
-                f.write(f"**重要度**: {importance}\n")
-                f.write(f"**摘要**: {summary}\n\n")
+                        f.write(src.read().rstrip() + '\n\n')  # 修正2：规范化原有内容结尾
+            
+                # 写入预格式化的内容
+                f.write(memory_entry)  # 不再重复生成字段
 
             # 步骤2：备份原文件
             if os.path.exists(user_prompt_file):
@@ -781,7 +791,8 @@ def memory_manager():
         try:
             # 检查所有监听用户
             for user in user_names:
-                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user}_log.txt')
+                prompt_name = prompt_mapping.get(user, user)  # 获取配置的prompt名
+                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user}_{prompt_name}_log.txt')
                 
                 try:
                     prompt_name = prompt_mapping.get(user, user)  # 获取配置的文件名，没有则用昵称
