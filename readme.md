@@ -4,17 +4,16 @@
 - 本项目由iwyxdxl在原项目基础上修改创建。
 - 本机器人拥有更优化的消息处理流程，更加拟人化的聊天服务。
 - 本版本致力于实现更加拟人化聊天效果，因此不提供生成语音、生成图片等功能。
-- 欢迎加入QQ交流群 一群 617379532（已满） 二群 964162330
+- 欢迎加入QQ交流群 一群 617379532 二群 964162330
 
 # 效果图
 <img src="Demo_Image/1.jpg" alt="示例图片1" width="300px">
 <img src="Demo_Image/2.jpg" alt="示例图片2" width="300px">
-<img src="Demo_Image/3.png" alt="示例图片3" width="300px">
-<img src="Demo_Image/5.jpeg" alt="示例图片5" width="900px">
-<img src="Demo_Image/6.jpeg" alt="示例图片6" width="900px">
+<img src="Demo_Image/3.jpeg" alt="示例图片3" width="900px">
+<img src="Demo_Image/4.jpeg" alt="示例图片4" width="900px">
 
 # 版本号
-- v3.7
+- v3.8
 
 # 目前支持的功能
 1. 自动回复

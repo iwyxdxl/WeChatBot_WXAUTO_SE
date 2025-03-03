@@ -62,6 +62,11 @@ def bot_status():
 
 @app.route('/submit_config', methods=['POST'])
 def submit_config():
+    global bot_process
+    # 如果 bot 正在运行，则不允许保存配置
+    if bot_process and bot_process.poll() is None:
+        return jsonify({'error': '程序正在运行，请先停止再保存配置'}), 400
+
     try:
         # 空表单校验
         if not request.form:
@@ -70,7 +75,7 @@ def submit_config():
         config = parse_config()
         new_values = {}
 
-        # 处理二维数组
+        # 处理二维数组：微信昵称与对应Prompt配置
         nicknames = request.form.getlist('nickname')
         prompt_files = request.form.getlist('prompt_file')
         new_values['LISTEN_LIST'] = [
@@ -90,12 +95,11 @@ def submit_config():
         for field in boolean_fields:
             new_values[field] = field in request.form  # 直接判断是否存在
 
-        # 处理其他字段
+        # 处理其他字段，并根据原有配置进行类型转换
         for key in request.form:
             if key in ['listen_list', *boolean_fields]:
                 continue
             value = request.form[key].strip()
-            # 类型转换逻辑
             if key in config:
                 if isinstance(config[key], bool):
                     new_values[key] = value.lower() in ('on', 'true', '1', 'yes')
@@ -113,6 +117,7 @@ def submit_config():
     except Exception as e:
         app.logger.error(f"配置保存失败: {str(e)}")
         return str(e), 500
+
 
 def stop_bot_process():
     global bot_process

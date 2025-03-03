@@ -55,12 +55,11 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: #4CAF50;
             color: white;
             padding: 15px;
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-            opacity: 0;
+            opacity: 1;
             transition: opacity 0.3s ease;
         }
 
@@ -129,61 +128,6 @@
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
-            vertical-align: middle;
-        }
-
-        .switch input { 
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: 0.4s;
-            border-radius: 34px;
-        }
-
-        .slider::before {
-            position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: 0.4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: #4CAF50;
-        }
-
-        input:checked + .slider::before {
-            transform: translateX(26px);
-        }
-
-        /* Rounded sliders */
-        .slider.round {
-            border-radius: 34px;
-        }
-
-        .slider.round::before {
-            border-radius: 50%;
         }
 
         .nav-button {
@@ -267,46 +211,104 @@
 
     </style>
     <script>
-        function addEntry() {
-            const container = document.getElementById('listen-list');
-            const div = document.createElement('div');
-            div.className = 'entry';
-            div.innerHTML = `
-                <input type="text" name="nickname" placeholder="微信昵称" required>
-                <select name="prompt_file" required>
-                    <option value="">-- 选择Prompt文件 --</option>
-                    {% for file in prompt_files %}
-                    <option value="{{ file }}">{{ file }}</option>
-                    {% endfor %}
-                </select>
-                <button type="button" onclick="removeEntry(this)">删除</button>
-                `;
-            container.appendChild(div);
-        }
-
-
-        function removeEntry(button) {
-            button.parentElement.remove();
-        }
-
-        function resetForm() {
-            document.querySelector('form').reset();
-            const entries = document.querySelectorAll('#listen-list .entry');
-            entries.forEach((entry, index) => {
-                if (index === 0) return;
-                entry.remove();
-            });
-        }
-
         document.addEventListener('DOMContentLoaded', function () {
-            // 新增初始化状态检查函数
+            // 获取 API 服务商相关的 DOM 元素
+            const apiProviderSelect = document.getElementById('apiProvider');
+            const customApiUrlInput = document.getElementById('customApiUrl');
+            const finalApiUrlInput = document.getElementById('finalApiUrl');
+
+            // 获取模型选择相关的 DOM 元素
+            const modelSelect = document.getElementById('modelSelect');
+            const customModelInput = document.getElementById('customModel');
+            const finalModelInput = document.getElementById('finalModel');
+
+            // 根据初始选择显示或隐藏自定义输入框
+            if (apiProviderSelect.value === 'other') {
+                customApiUrlInput.style.display = 'block';
+            } else {
+                customApiUrlInput.style.display = 'none';
+                finalApiUrlInput.value = apiProviderSelect.value;
+            }
+            if (modelSelect.value === 'other') {
+                customModelInput.style.display = 'block';
+            } else {
+                customModelInput.style.display = 'none';
+                finalModelInput.value = modelSelect.value;
+            }
+
+            // 监听 API 服务商下拉选择框变化
+            apiProviderSelect.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    customApiUrlInput.style.display = 'block';
+                    // 同时更新隐藏字段为自定义输入框当前值（初始可能为空）
+                    finalApiUrlInput.value = customApiUrlInput.value;
+                } else {
+                    customApiUrlInput.style.display = 'none';
+                    finalApiUrlInput.value = this.value;
+                }
+            });
+
+            // 监听自定义 API 输入框内容变化，实时更新隐藏字段
+            customApiUrlInput.addEventListener('input', function() {
+                finalApiUrlInput.value = this.value;
+            });
+
+            // 监听模型选择下拉选择框变化
+            modelSelect.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    customModelInput.style.display = 'block';
+                    finalModelInput.value = customModelInput.value;
+                } else {
+                    customModelInput.style.display = 'none';
+                    finalModelInput.value = this.value;
+                }
+            });
+
+            // 监听自定义模型输入框内容变化，实时更新隐藏字段
+            customModelInput.addEventListener('input', function() {
+                finalModelInput.value = this.value;
+            });
+            
+            function addEntry() {
+                const container = document.getElementById('listen-list');
+                const div = document.createElement('div');
+                div.className = 'entry';
+                div.innerHTML = `
+                    <input type="text" name="nickname" placeholder="微信昵称" required>
+                    <select name="prompt_file" required>
+                        <option value="">-- 选择Prompt文件 --</option>
+                        {% for file in prompt_files %}
+                        <option value="{{ file }}">{{ file }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" onclick="removeEntry(this)">删除</button>
+                `;
+                container.appendChild(div);
+            }
+
+            function removeEntry(button) {
+                button.parentElement.remove();
+            }
+
+            function resetForm() {
+                document.querySelector('form').reset();
+                const entries = document.querySelectorAll('#listen-list .entry');
+                entries.forEach((entry, index) => {
+                    if (index === 0) return;
+                    entry.remove();
+                });
+            }
+
+            // 将函数挂载到全局作用域，供内联事件处理器调用
+            window.addEntry = addEntry;
+            window.removeEntry = removeEntry;
+
             async function initBotStatus() {
                 const button = document.getElementById('botButton');
                 try {
                     const statusRes = await fetch('/bot_status?_=' + Date.now());
                     const { status } = await statusRes.json();
                     
-                    // 根据状态更新按钮样式和文字
                     button.className = status === 'stopped' 
                         ? 'nav-button' 
                         : 'nav-button stop';
@@ -319,66 +321,69 @@
                 }
             }
 
-            // 页面加载完成后立即执行初始化
             initBotStatus();
 
-            const form = document.querySelector('form[method="post"]');
-            const successAlert = document.getElementById('success-alert');
-
-            form.addEventListener('submit', async function (e) {
-                // 检查必填项
-            let isValid = true
-            const entries = document.querySelectorAll('#listen-list .entry')
-            
-            entries.forEach(entry => {
-                const nickname = entry.querySelector('[name="nickname"]').value
-                const prompt = entry.querySelector('[name="prompt_file"]').value
-                
-                if (!nickname || !prompt) {
-                    isValid = false
-                    entry.style.outline = '2px solid red'
-                } else {
-                    entry.style.outline = ''
-                }
-            })
-
-            if (!isValid) {
-                alert('请填写所有用户的昵称并选择Prompt文件！')
-                e.preventDefault()
-                return
+            // 统一显示提示信息的函数
+            function showAlert(message, isSuccess) {
+                const alertDiv = document.getElementById('config-alert');
+                alertDiv.innerText = message;
+                alertDiv.style.backgroundColor = isSuccess ? '#4CAF50' : '#ff4444';
+                alertDiv.style.display = 'block';
+                setTimeout(() => {
+                    alertDiv.style.display = 'none';
+                }, 5000);
             }
 
-                e.preventDefault(); // 阻止默认提交
-                
-                // 处理多值字段
+            // 统一提交配置函数
+            async function saveConfig() {
+                const form = document.querySelector('form[method="post"]');
                 const formData = new FormData(form);
+                // 处理多值字段，如果存在 listen_list
                 const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
                     .map(input => input.value);
-                
-                // 删除旧值后重新添加
                 formData.delete('listen_list');
                 listenList.forEach(value => formData.append('listen_list', value));
 
                 try {
-                    // 使用fetch异步提交
-                    await fetch('', {  // 保持提交到当前URL
+                    const response = await fetch('/submit_config', {
                         method: 'POST',
                         body: formData,
                         headers: {
-                            // 必须添加这个头部才能正确处理表单数据
-                            'X-Requested-With': 'XMLHttpRequest' 
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     });
-                    
-                    showSuccessAlert(); // 显示提示
+                    if (response.status === 204) {
+                        showAlert("配置保存成功！", true);
+                        return true;
+                    } else {
+                        showAlert("配置保存失败，请尝试重启程序！", false);
+                        return false;
+                    }
                 } catch (error) {
                     console.error('保存失败:', error);
+                    showAlert("配置保存失败，请尝试重启程序！", false);
+                    return false;
+                }
+            }
+
+            // 为表单添加统一提交事件
+            const form = document.querySelector('form[method="post"]');
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                // 此处可加入必填项验证逻辑
+                await saveConfig();
+            });
+
+            // 修改Prompt管理点击处理，先保存配置再跳转
+            document.getElementById('promptManagement').addEventListener('click', async function(e) {
+                e.preventDefault();
+                const success = await saveConfig();
+                if (success) {
+                    window.location.href = this.href;
                 }
             });
 
-            const botButton = document.getElementById('botButton');
-            botButton.addEventListener('click', toggleBot);
-
+            // 修改机器人启动/停止时的配置提交逻辑
             async function toggleBot() {
                 const button = document.getElementById('botButton');
                 if (!(await checkBotStatus())) {
@@ -390,55 +395,47 @@
                 button.innerHTML = 'Processing...';
 
                 try {
-                    // 获取当前状态
                     const statusRes = await fetch('/bot_status?_=' + Date.now());
                     const { status } = await statusRes.json();
                     
-                    // 如果是启动操作则先提交表单
                     if (status === 'stopped') {
-                        // 创建新的FormData对象
+                        // 提交配置
                         const formData = new FormData();
-                        
-                        // 正确收集用户列表数据
                         const nicknames = Array.from(document.querySelectorAll('[name="nickname"]')).map(i => i.value);
                         const promptFiles = Array.from(document.querySelectorAll('[name="prompt_file"]')).map(i => i.value);
-                        
-                        // 添加用户列表数据
                         nicknames.forEach(v => formData.append('nickname', v));
                         promptFiles.forEach(v => formData.append('prompt_file', v));
 
-                        // 收集其他表单字段
                         document.querySelectorAll('input[name], select[name]').forEach(element => {
                             if (element.name !== 'nickname' && element.name !== 'prompt_file') {
                                 if (element.type === 'checkbox') {
-                                    formData.append(element.name, element.checked); // 处理复选框状态
+                                    formData.append(element.name, element.checked);
                                 } else {
                                     formData.append(element.name, element.value);
                                 }
                             }
                         });
 
-                        // 提交表单数据
-                        await fetch('/submit_config', {
+                        const configResponse = await fetch('/submit_config', {
                             method: 'POST',
                             body: formData,
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest'
-                            }
+                            headers: {'X-Requested-With': 'XMLHttpRequest'}
                         });
+                        if (configResponse.status !== 204) {
+                            showAlert("配置保存失败，请先停止运行Bot！", false);
+                            button.disabled = false;
+                            button.innerHTML = originalText;
+                            return;
+                        } else {
+                            showAlert("配置保存成功！", true);
+                        }
                     }
 
-                    // 执行机器人操作
                     const targetAction = status === 'stopped' ? 'start_bot' : 'stop_bot';
                     await fetch('/' + targetAction, { method: 'POST' });
 
-                    // 更新按钮状态
-                    button.className = status === 'stopped' 
-                        ? 'nav-button stop' 
-                        : 'nav-button';
-                    button.innerHTML = status === 'stopped' 
-                        ? 'Stop Bot' 
-                        : 'Start Bot';
+                    button.className = status === 'stopped' ? 'nav-button stop' : 'nav-button';
+                    button.innerHTML = status === 'stopped' ? 'Stop Bot' : 'Start Bot';
 
                 } catch (error) {
                     console.error('操作失败:', error);
@@ -449,109 +446,6 @@
                 }
             }
                     
-            function showSuccessAlert() {
-                successAlert.style.opacity = '1';
-                setTimeout(() => successAlert.style.opacity = '0', 5000);
-            }
-
-            function setupSelector(selectId, customInputId, hiddenFieldId) {
-                const select = document.getElementById(selectId);
-                const customInput = document.getElementById(customInputId);
-                const hiddenField = document.getElementById(hiddenFieldId);
-
-                // 初始化显示状态
-                if (select.value === 'other') {
-                    customInput.style.display = 'block';
-                }
-
-                // 统一更新隐藏字段的值
-                function updateHiddenField() {
-                    hiddenField.value = (select.value === 'other') 
-                        ? customInput.value 
-                        : select.value;
-                }
-
-                // 初始化值
-                updateHiddenField();
-
-                // 监听选择框变化
-                select.addEventListener('change', function() {
-                    if (this.value === 'other') {
-                        customInput.style.display = 'block';
-                        customInput.value = hiddenField.value; // 保留原有值
-                    } else {
-                        customInput.style.display = 'none';
-                        customInput.value = '';
-                    }
-                    updateHiddenField();
-                });
-
-                // 监听输入框变化
-                customInput.addEventListener('input', function() {
-                    updateHiddenField();
-                });
-            }
-
-            // 初始化两个选择器
-            setupSelector('apiProvider', 'customApiUrl', 'finalApiUrl');
-            setupSelector('modelSelect', 'customModel', 'finalModel');
-
-            async function submitForm() {
-                const form = document.querySelector('form[method="post"]');
-                const formData = new FormData(form);
-                const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
-                    .map(input => input.value);
-                
-                formData.delete('listen_list');
-                listenList.forEach(value => formData.append('listen_list', value));
-
-                try {
-                    await fetch('', {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    });
-                    showSuccessAlert();
-                    return true;
-                } catch (error) {
-                    console.error('保存失败:', error);
-                    return false;
-                }
-            }
-
-            // 修改原有表单提交处理
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                await submitForm();
-            });
-
-            // 为Prompt管理添加点击处理
-            document.getElementById('promptManagement').addEventListener('click', async function(e) {
-                e.preventDefault();
-                const success = await submitForm();
-                if (success) {
-                    window.location.href = this.href;
-                }
-            });
-
-            // 在表单提交前添加验证
-            form.addEventListener('submit', async function (e) {
-                // 检查必填项
-                const entries = document.querySelectorAll('#listen-list .entry');
-                entries.forEach(entry => {
-                    const nickname = entry.querySelector('[name="nickname"]').value;
-                    const prompt = entry.querySelector('[name="prompt_file"]').value;
-                    if(nickname && !prompt){
-                        alert('请为每个用户选择Prompt文件！');
-                        e.preventDefault();
-                        return;
-                    }
-                });
-            });
-
-            // 在DOMContentLoaded事件内部修改状态检查部分
             async function checkBotStatus() {
                 const button = document.getElementById('botButton');
                 const alertDiv = document.getElementById('backend-closed-alert');
@@ -574,10 +468,8 @@
                 }
             }
 
-            // 初始化定时检查
             let statusCheckInterval = setInterval(checkBotStatus, 5000);
 
-            // 页面不可见时暂停检查
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
                     clearInterval(statusCheckInterval);
@@ -587,9 +479,8 @@
                 }
             });
 
-            // 初始化执行
             checkBotStatus();
-
+            document.getElementById('botButton').addEventListener('click', toggleBot);
         });
     </script>
 </head>
@@ -598,16 +489,15 @@
         后台已关闭，请重新启动
     </div>
     
+    <!-- 修改提示框：用于显示保存成功或失败信息 -->
+    <div id="config-alert" class="success-alert" style="display:none;"></div>
+    
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
         <h1>配置编辑器</h1>
         <div>
             <button id="botButton" class="nav-button">Start Bot</button>
             <a href="{{ url_for('prompt_list') }}" class="nav-button" id="promptManagement">Prompt管理</a>
         </div>
-    </div>
-
-    <div id="success-alert" class="success-alert">
-        保存配置成功
     </div>
 
     <form method="post">
@@ -766,8 +656,8 @@
             <h2>群聊消息接收配置</h2>
             <label>群聊消息处理模式:</label>
             <select name="Accept_All_Group_Chat_Messages">
-                <option value="False" {% if config.Accept_All_Group_Chat_Messages == 'False' %}selected{% endif %}>仅当消息中出现@机器人 时作出回应</option>
-                <option value="True" {% if config.Accept_All_Group_Chat_Messages == 'True' %}selected{% endif %}>接收无论任何人的任何消息</option>
+                <option value=False {% if config.Accept_All_Group_Chat_Messages == False %}selected{% endif %}>仅当消息中出现@机器人 时作出回应</option>
+                <option value=True {% if config.Accept_All_Group_Chat_Messages == True %}selected{% endif %}>接收无论任何人的任何消息</option>
             </select>
         </div>
 

@@ -11,18 +11,22 @@
 自动更新模块
 提供程序自动更新功能，包括:
 - GitHub版本检查
-- 更新包下载
+- 更新包下载（增加下载进度指示）
 - 文件更新
 - 备份和恢复
 - 更新回滚
+- 对 config.py 进行更新时合并用户原有的配置选项（保留原有注释和格式，仅追加新增项）
 """
 
 import os
+import re
+import ast
 import requests
 import zipfile
 import shutil
 import json
 import logging
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +40,8 @@ class Updater:
     
     # 需要跳过的文件和文件夹（不会被更新）
     SKIP_FILES = [
-        "prompts",  # 聊天提示词
-        "Memory_Temp", # 临时记忆文件
+        "prompts",      # 聊天提示词
+        "Memory_Temp",  # 临时记忆文件
         "__pycache__",  # Python缓存文件
     ]
 
@@ -81,7 +85,7 @@ class Updater:
     def format_version_info(self, current_version: str, update_info: dict = None) -> str:
         """格式化版本信息输出"""
         output = (
-            "\n" + "="*50 + "\n"
+            "\n" + "=" * 50 + "\n"
             f"当前版本: {current_version}\n"
         )
         
@@ -91,12 +95,12 @@ class Updater:
                 f"更新时间: {update_info.get('last_update', '未知')}\n\n"
                 "更新内容:\n"
                 f"  {update_info.get('description', '无更新说明')}\n"
-                + "="*50 + "\n\n"
+                + "=" * 50 + "\n\n"
             )
         else:
             output += (
                 "检查结果: 当前已是最新版本\n"
-                + "="*50 + "\n"
+                + "=" * 50 + "\n"
             )
             
         return output
@@ -118,7 +122,6 @@ class Updater:
         
         while True:
             try:
-                # 获取远程 version.json 文件内容
                 version_url = f"https://raw.githubusercontent.com/{self.REPO_OWNER}/{self.REPO_NAME}/{self.REPO_BRANCH}/version.json"
                 proxied_url = self.get_proxy_url(version_url)
                 
@@ -135,28 +138,20 @@ class Updater:
                 current_version = self.get_current_version()
                 latest_version = remote_version_info.get('version', '0.0.0')
                 
-                # 版本比较逻辑
                 def parse_version(version: str) -> tuple:
-                    # 移除版本号中的 'v' 前缀（如果有）
                     version = version.lower().strip('v')
                     try:
-                        # 尝试将版本号分割为数字列表
                         parts = version.split('.')
-                        # 确保至少有三个部分（主版本号.次版本号.修订号）
                         while len(parts) < 3:
                             parts.append('0')
-                        # 转换为整数元组
                         return tuple(map(int, parts[:3]))
                     except (ValueError, AttributeError):
-                        # 如果是 commit hash 或无法解析的版本号，返回 (0, 0, 0)
                         return (0, 0, 0)
 
                 current_ver_tuple = parse_version(current_version)
                 latest_ver_tuple = parse_version(latest_version)
 
-                # 只有当最新版本大于当前版本时才返回更新信息
                 if latest_ver_tuple > current_ver_tuple:
-                    # 获取最新release的下载地址
                     release_url = self.get_proxy_url(f"{self.GITHUB_API}/releases/latest")
                     response = requests.get(
                         release_url,
@@ -165,13 +160,11 @@ class Updater:
                     )
                     
                     if response.status_code == 404:
-                        # 如果没有release，使用分支的zip下载地址
                         download_url = f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}"
                     else:
                         release_info = response.json()
                         download_url = release_info['zipball_url']
                     
-                    # 确保下载URL也使用代理
                     proxied_download_url = self.get_proxy_url(download_url)
                     
                     return {
@@ -191,7 +184,7 @@ class Updater:
             except (requests.RequestException, json.JSONDecodeError) as e:
                 logger.warning(f"使用当前代理检查更新失败: {str(e)}")
                 if self.try_next_proxy():
-                    logger.info(f"正在切换到下一个代理服务器...")
+                    logger.info("正在切换到下一个代理服务器...")
                     continue
                 else:
                     logger.error("所有代理服务器均已尝试失败")
@@ -201,8 +194,8 @@ class Updater:
                         'output': "检查更新失败：无法连接到更新服务器"
                     }
 
-    def download_update(self, download_url: str) -> bool:
-        """下载更新包"""
+    def download_update(self, download_url: str, callback=None) -> bool:
+        """下载更新包，并在下载过程中通过 callback 输出进度指示"""
         headers = {
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': f'{self.REPO_NAME}-UpdateChecker'
@@ -224,10 +217,19 @@ class Updater:
                 os.makedirs(self.temp_dir, exist_ok=True)
                 zip_path = os.path.join(self.temp_dir, 'update.zip')
                 
+                total_length = response.headers.get("Content-Length")
+                if total_length is not None:
+                    total_length = int(total_length)
+                downloaded = 0
+                
                 with open(zip_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_length and callback:
+                                percent = downloaded / total_length * 100
+                                callback(f"下载进度：{percent:.2f}%")
                 return True
                 
             except requests.RequestException as e:
@@ -278,78 +280,61 @@ class Updater:
             logger.error(f"恢复失败: {str(e)}")
             return False
 
-    def apply_update(self) -> bool:
-        """应用更新"""
+    def apply_update(self) -> Tuple[bool, str]:
+        """
+        应用更新，并返回 (成功标志, 更新包顶层目录名称)
+        """
         try:
-            # 解压更新包
             zip_path = os.path.join(self.temp_dir, 'update.zip')
             extract_dir = os.path.join(self.temp_dir, 'extracted')
             
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(extract_dir)
             
-            # 获取解压后的顶层目录（GitHub自动生成的目录）
             extracted_dirs = [d for d in os.listdir(extract_dir) 
-                            if os.path.isdir(os.path.join(extract_dir, d))]
+                              if os.path.isdir(os.path.join(extract_dir, d))]
             if not extracted_dirs:
                 raise Exception("无效的更新包结构")
             
-            # 获取实际文件所在的根目录
-            source_root = os.path.join(extract_dir, extracted_dirs[0])
+            new_dir = extracted_dirs[0]
+            source_root = os.path.join(extract_dir, new_dir)
             
-            # 复制新文件（修正路径处理）
             for root, dirs, files in os.walk(source_root):
-                # 计算相对于source_root的相对路径
                 relative_path = os.path.relpath(root, source_root)
                 target_dir = os.path.join(self.root_dir, relative_path)
-                
-                # 确保目标目录存在
                 os.makedirs(target_dir, exist_ok=True)
-                
                 for file in files:
                     if not self.should_skip_file(file):
                         src_file = os.path.join(root, file)
                         dst_file = os.path.join(target_dir, file)
-                        
-                        # 先删除已存在的文件再复制（确保覆盖）
                         if os.path.exists(dst_file):
                             os.remove(dst_file)
                         shutil.copy2(src_file, dst_file)
-            
-            return True
+            return True, new_dir
         except Exception as e:
             logger.error(f"更新失败: {str(e)}")
-            return False
+            return False, ""
 
     def cleanup(self):
         """清理临时文件"""
         try:
-            # 删除整个临时目录
             if os.path.exists(self.temp_dir):
                 logger.info(f"正在删除临时目录: {self.temp_dir}")
                 shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-            # 删除可能残留的备份目录
             backup_dir = os.path.join(self.root_dir, 'backup')
             if os.path.exists(backup_dir):
                 logger.info(f"正在删除备份目录: {backup_dir}")
                 shutil.rmtree(backup_dir, ignore_errors=True)
-
-            # 删除可能残留的解压目录
             extract_dir = os.path.join(self.temp_dir, 'extracted')
             if os.path.exists(extract_dir):
                 logger.info(f"正在删除解压目录: {extract_dir}")
                 shutil.rmtree(extract_dir, ignore_errors=True)
-
-            # 额外检查并删除可能残留的zip文件
             temp_zip = os.path.join(self.root_dir, 'update.zip')
             if os.path.exists(temp_zip):
                 logger.info(f"正在删除残留zip文件: {temp_zip}")
                 os.remove(temp_zip)
-
         except Exception as e:
             logger.error(f"清理失败: {str(e)}")
-            # 尝试强制删除（Windows系统需要）
             if os.name == 'nt':
                 try:
                     os.system(f'rmdir /s /q "{self.temp_dir}" 2>nul')
@@ -360,7 +345,7 @@ class Updater:
     def prompt_update(self, update_info: dict) -> bool:
         """提示用户是否更新"""
         print(self.format_version_info(self.get_current_version(), update_info))
-        print("\033[31m重要提醒:更新前请务必备份自己的prompt和emojis!!! \033[0m")
+        print("\033[31m重要提醒:更新前请务必备份自己的config.py、prompt和emojis!!! \033[0m")
         
         while True:
             choice = input("\n是否现在更新?\n输入'y'更新 / 输入'n'取消更新并继续启动: ").lower().strip()
@@ -380,57 +365,48 @@ class Updater:
                 if callback:
                     callback(msg)
 
-            # 检查更新
             log_progress("开始检查GitHub更新...")
             update_info = self.check_for_updates()
             if not update_info['has_update']:
                 log_progress("检查更新完成", True, "当前已是最新版本")
-                print("\n当前已是最新版本，无需更新")  # 移除后续的输入提示
+                print("\n当前已是最新版本，无需更新")
                 return {'success': True, 'output': '\n'.join(progress)}
             
-            # 提示用户是否更新
             if not self.prompt_update(update_info):
                 log_progress("提示用户是否更新", True, "用户取消更新")
-                print("\n已取消更新")  # 移除后续的输入提示
+                print("\n已取消更新")
                 return {'success': True, 'output': '\n'.join(progress)}
                     
             log_progress(f"开始更新到版本: {update_info['version']}")
             
-            # 下载更新
             log_progress("开始下载更新...")
-            if not self.download_update(update_info['download_url']):
+            if not self.download_update(update_info['download_url'], callback=log_progress):
                 log_progress("下载更新", False, "下载失败")
-                return {
-                    'success': False,
-                    'output': '\n'.join(progress)
-                }
+                return {'success': False, 'output': '\n'.join(progress)}
             log_progress("下载更新", True, "下载完成")
                 
-            # 备份当前版本
             log_progress("开始备份当前版本...")
             if not self.backup_current_version():
                 log_progress("备份当前版本", False, "备份失败")
-                return {
-                    'success': False,
-                    'output': '\n'.join(progress)
-                }
+                return {'success': False, 'output': '\n'.join(progress)}
             log_progress("备份当前版本", True, "备份完成")
                 
-            # 应用更新
             log_progress("开始应用更新...")
-            if not self.apply_update():
+            success, new_dir = self.apply_update()
+            if not success:
                 log_progress("应用更新", False, "更新失败")
-                # 尝试恢复
                 log_progress("正在恢复之前的版本...")
                 if not self.restore_from_backup():
                     log_progress("恢复备份", False, "恢复失败！请手动处理")
-                return {
-                    'success': False,
-                    'output': '\n'.join(progress)
-                }
+                return {'success': False, 'output': '\n'.join(progress)}
             log_progress("应用更新", True, "更新成功")
+            
+            # 合并配置文件：保留旧config.py所有原始内容，仅追加新版本中新增的配置项
+            current_config = os.path.join(self.root_dir, "config.py")
+            new_config = os.path.join(self.temp_dir, "extracted", new_dir, "config.py")
+            Updater.merge_config(current_config, new_config, current_config)
+            log_progress("合并配置文件", True, "配置合并完成")
                 
-            # 更新版本文件
             with open(self.version_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     'version': update_info['version'],
@@ -438,23 +414,79 @@ class Updater:
                     'description': update_info.get('description', '')
                 }, f, indent=4, ensure_ascii=False)
                 
-            # 清理
             self.cleanup()
             log_progress("清理临时文件", True)
             log_progress("更新完成", True, "请重启程序以应用更新")
 
-            return {
-                'success': True,
-                'output': '\n'.join(progress)
-            }
+            return {'success': True, 'output': '\n'.join(progress)}
 
         except Exception as e:
             logger.error(f"更新失败: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'output': f"更新失败: {str(e)}"
-            }
+            return {'success': False, 'error': str(e), 'output': f"更新失败: {str(e)}"}
+
+    @staticmethod
+    def parse_config_file(path):
+        """
+        解析配置文件，返回字典和原始行列表
+        """
+        config = {}
+        with open(path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        assign_pattern = re.compile(r'^(\w+)\s*=\s*(.+)$')
+        for line in lines:
+            line_strip = line.strip()
+            if not line_strip or line_strip.startswith("#"):
+                continue
+            match = assign_pattern.match(line_strip)
+            if match:
+                key = match.group(1)
+                value_str = match.group(2)
+                try:
+                    value = ast.literal_eval(value_str)
+                except Exception:
+                    value = value_str
+                config[key] = value
+        return config, lines
+
+    @staticmethod
+    def merge_config(old_path, new_path, output_path):
+        """
+        合并 old_path 与 new_path 两个配置文件：
+        1. 保留旧文件的所有原始内容（包括注释和格式）。
+        2. 对于新文件中出现而旧文件中不存在的配置项，将其原始赋值行追加到文件末尾。
+        """
+        # 读取旧文件原始内容
+        with open(old_path, 'r', encoding='utf-8') as f:
+            old_lines = f.readlines()
+
+        # 提取旧文件中已存在的配置键
+        assign_pattern = re.compile(r'^(\w+)\s*=\s*(.+)$')
+        old_keys = set()
+        for line in old_lines:
+            m = assign_pattern.match(line.strip())
+            if m:
+                old_keys.add(m.group(1))
+
+        # 读取新文件的所有行
+        with open(new_path, 'r', encoding='utf-8') as f:
+            new_lines = f.readlines()
+
+        # 收集新文件中新增的配置项的原始行
+        added_lines = []
+        for line in new_lines:
+            m = assign_pattern.match(line.strip())
+            if m:
+                key = m.group(1)
+                if key not in old_keys:
+                    added_lines.append(line)
+
+        if added_lines:
+            old_lines.append("\n# 以下为新增配置项\n")
+            old_lines.extend(added_lines)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.writelines(old_lines)
+
 
 def check_and_update():
     """检查并执行更新"""
@@ -462,14 +494,15 @@ def check_and_update():
     updater = Updater()
     return updater.update()
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     try:
         result = check_and_update()
         if not result['success']:
             print("\n更新失败，请查看日志")
+        else:
+            print(result['output'])
     except KeyboardInterrupt:
         print("\n用户取消更新")
     except Exception as e:
         print(f"\n发生错误: {str(e)}")
-
