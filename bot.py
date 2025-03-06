@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ***********************************************************************
-# Modified based on the My-Dream-Moments project
+# Modified based on the KouriChat project
 # Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -131,7 +131,7 @@ def get_user_prompt(user_id):
 
 def get_deepseek_response(message, user_id):
     try:
-        logger.info(f"调用 DeepSeek API - 用户ID: {user_id}, 消息: {message}")
+        logger.info(f"调用 Chat API - 用户ID: {user_id}, 消息: {message}")
         user_prompt = get_user_prompt(user_id)
         with queue_lock:
             if user_id not in chat_contexts:
@@ -166,7 +166,7 @@ def get_deepseek_response(message, user_id):
         return reply
     except Exception as e:
         ErrorImformation = str(e)
-        logger.error(f"DeepSeek调用失败: {str(e)}", exc_info=True)
+        logger.error(f"Chat调用失败: {str(e)}", exc_info=True)
         if "real name verification" in ErrorImformation :
             print("\033[31m错误：API服务商反馈请完成实名认证后再使用！ \033[0m")
         elif "rate" in ErrorImformation :
@@ -225,8 +225,8 @@ def message_listener():
                         logger.debug(f"非需要处理消息: {content}")   
                         
         except Exception as e:
-            logger.error(f"消息监听出错: {str(e)}")
-            print("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若关闭之后收不到消息，请重启程序！ \033[0m")
+            logger.error(f"Message: {str(e)}")
+            print("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若命令窗口收不到消息，请将微信聊天框置于最前台！ \033[0m")
             wx = None
         time.sleep(wait)
 
@@ -655,7 +655,7 @@ def append_to_memory_section(user_id, content):
             insert_index = next((i for i, line in enumerate(lines) if memory_marker in line), -1)
 
             # 如果没有找到标记，追加到文件末尾
-            if insert_index == -1:
+            if (insert_index == -1):
                 insert_index = len(lines)
                 lines.append(f"\n{memory_marker}\n")
                 logger.info(f"在用户文件 {user_id}.md 中添加记忆标记")
@@ -710,11 +710,11 @@ def summarize_and_save(user_id):
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
         summary_prompt = f"请用中文总结以下对话，提取重要信息形成记忆片段：\n{full_logs}"
         summary = get_deepseek_response(summary_prompt, user_id)
-        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段
+        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %H:%M]
         summary = re.sub(
-            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*', 
-            '', 
-            summary, 
+            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]',
+            '',
+            summary,
             flags=re.MULTILINE
         ).strip()
         

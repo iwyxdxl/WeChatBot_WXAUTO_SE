@@ -13,7 +13,7 @@
 <img src="Demo_Image/4.jpeg" alt="示例图片4" width="900px">
 
 # 版本号
-- v3.8
+- v3.9
 
 # 目前支持的功能
 1. 自动回复

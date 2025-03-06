@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ***********************************************************************
-# Modified based on the My-Dream-Moments project
+# Modified based on the KouriChat project
 # Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class Updater:
     # GitHub仓库信息
-    REPO_OWNER = "iwyxdxl"
+    REPO_OWNER = "KouriChat"
     REPO_NAME = "WeChatBot_WXAUTO_SE"
     REPO_BRANCH = "main"
     GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"

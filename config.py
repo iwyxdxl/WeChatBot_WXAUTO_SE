@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # ***********************************************************************
-# Modified based on the KouriChat
+# Modified based on the KouriChat project
 # Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -14,9 +14,9 @@ LISTEN_LIST = [['微信昵称1', '提示词1']]
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = 'sk-'
 # 硅基流动API注册地址，免费15元额度 https://cloud.siliconflow.cn/
-DEEPSEEK_BASE_URL = 'https://api.siliconflow.cn/v1/'
+DEEPSEEK_BASE_URL = 'https://vg.v1api.cc/v1'
 # 硅基流动API的模型
-MODEL = 'deepseek-ai/DeepSeek-V3'
+MODEL = 'gpt-3.5-turbo'
 
 # 如果要使用官方的API
 # DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -48,8 +48,8 @@ ENABLE_EMOJI_SENDING = True
 AUTO_MESSAGE = '请你模拟系统设置的角色，在微信上找对方发消息想知道对方在做什么'
 ENABLE_AUTO_MESSAGE = True
 # 等待时间
-MIN_COUNTDOWN_HOURS = 1
-MAX_COUNTDOWN_HOURS = 2
+MIN_COUNTDOWN_HOURS = 1.0
+MAX_COUNTDOWN_HOURS = 2.0
 # 消息发送时间限制
 QUIET_TIME_START = '22:00'
 QUIET_TIME_END = '8:00'

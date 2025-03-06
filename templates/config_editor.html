@@ -222,6 +222,69 @@
             const customModelInput = document.getElementById('customModel');
             const finalModelInput = document.getElementById('finalModel');
 
+            function updateModelOptions() {
+                let options = [];
+                const apiUrl = apiProviderSelect.value;
+                
+                if (apiUrl === 'https://api.siliconflow.cn/v1/') {
+                    options = [
+                        { value: "deepseek-ai/DeepSeek-V3", text: "硅基DeepSeeek V3模型 （可用免费额度）" },
+                        { value: "deepseek-ai/DeepSeek-R1", text: "硅基DeepSeeek R1模型 （可用免费额度）" },
+                        { value: "Pro/deepseek-ai/DeepSeek-V3", text: "硅基DeepSeeek V3 Pro模型 （需充值后方可使用）" },
+                        { value: "Pro/deepseek-ai/DeepSeek-R1", text: "硅基DeepSeeek R1 Pro模型 （需充值后方可使用）" },
+                        { value: "other", text: "其它" }
+                    ];
+                } else if (apiUrl === 'https://api.deepseek.com') {
+                    options = [
+                        { value: "deepseek-chat", text: "DeepSeeek官方V3模型" },
+                        { value: "deepseek-reasoner", text: "DeepSeeek官方R1模型" },
+                        { value: "other", text: "其它" }
+                    ];
+                } else if (apiUrl === 'https://vg.v1api.cc/v1') {  // 新增WeAPIs模型列表
+                    options = [
+                        { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" },
+                        { value: "gpt-4o", text: "gpt-4o" },
+                        { value: "gpt-4o-mini", text: "gpt-4o-mini" },
+                        { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },
+                        { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (推荐)" },
+                        { value: "deepseek-ai/DeepSeek-R1", text: "deepseek-ai/DeepSeek-R1" },
+                        { value: "deepseek-r1-searching", text: "deepseek-r1-searching 可联网搜索" },
+                        { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
+                        { value: "chatgpt-4o-latest", text: "chatgpt-4o-latest *" },
+                        { value: "claude-3-5-sonnet-20241022", text: "claude-3-5-sonnet-20241022 *" },
+                        { value: "claude-3-7-sonnet-20250219", text: "claude-3-7-sonnet-20250219 *" },
+                        { value: "claude-3-opus-20240229", text: "claude-3-opus-20240229 *" },
+                        { value: "gpt-4", text: "gpt-4 *" },
+                        { value: "gpt-4-turbo", text: "gpt-4-turbo *" },
+                        { value: "gemini-2.0-pro-exp-02-05", text: "gemini-2.0-pro-exp-02-05 *" },
+                        { value: "grok-3", text: "grok-3 *" },
+                        { value: "other", text: "其它" }
+                    ];
+                } else {
+                    options = [
+                        { value: "other", text: "其它" }
+                    ];
+                }
+
+                // 保留当前已选的模型值
+                const currentValue = modelSelect.value;
+                // 清空原有选项并动态添加新选项
+                modelSelect.innerHTML = "";
+                options.forEach(opt => {
+                    const optionElem = document.createElement("option");
+                    optionElem.value = opt.value;
+                    optionElem.textContent = opt.text;
+                    if (opt.value === currentValue) {
+                        optionElem.selected = true;
+                    }
+                    modelSelect.appendChild(optionElem);
+                });
+                // 更新隐藏字段
+                finalModelInput.value = modelSelect.value;
+                // 触发模型选择的 change 事件以更新自定义输入框显示（解决当选"其它"时输入框缺失的问题）
+                modelSelect.dispatchEvent(new Event('change'));
+            }
+
             // 根据初始选择显示或隐藏自定义输入框
             if (apiProviderSelect.value === 'other') {
                 customApiUrlInput.style.display = 'block';
@@ -236,19 +299,19 @@
                 finalModelInput.value = modelSelect.value;
             }
 
-            // 监听 API 服务商下拉选择框变化
+            // 监听 API 服务商下拉选择框变化，并联动更新模型选项
             apiProviderSelect.addEventListener('change', function() {
                 if (this.value === 'other') {
                     customApiUrlInput.style.display = 'block';
-                    // 同时更新隐藏字段为自定义输入框当前值（初始可能为空）
                     finalApiUrlInput.value = customApiUrlInput.value;
                 } else {
                     customApiUrlInput.style.display = 'none';
                     finalApiUrlInput.value = this.value;
                 }
+                updateModelOptions();
             });
 
-            // 监听自定义 API 输入框内容变化，实时更新隐藏字段
+            // 监听自定义 API 输入框内容变化
             customApiUrlInput.addEventListener('input', function() {
                 finalApiUrlInput.value = this.value;
             });
@@ -264,11 +327,15 @@
                 }
             });
 
-            // 监听自定义模型输入框内容变化，实时更新隐藏字段
+            // 监听自定义模型输入框内容变化
             customModelInput.addEventListener('input', function() {
                 finalModelInput.value = this.value;
             });
             
+            // 初始调用，确保模型选项与当前API服务商对应
+            updateModelOptions();
+
+            // 以下代码保持原有逻辑
             function addEntry() {
                 const container = document.getElementById('listen-list');
                 const div = document.createElement('div');
@@ -299,7 +366,6 @@
                 });
             }
 
-            // 将函数挂载到全局作用域，供内联事件处理器调用
             window.addEntry = addEntry;
             window.removeEntry = removeEntry;
 
@@ -323,7 +389,6 @@
 
             initBotStatus();
 
-            // 统一显示提示信息的函数
             function showAlert(message, isSuccess) {
                 const alertDiv = document.getElementById('config-alert');
                 alertDiv.innerText = message;
@@ -334,11 +399,9 @@
                 }, 5000);
             }
 
-            // 统一提交配置函数
             async function saveConfig() {
                 const form = document.querySelector('form[method="post"]');
                 const formData = new FormData(form);
-                // 处理多值字段，如果存在 listen_list
                 const listenList = Array.from(document.querySelectorAll('[name="listen_list"]'))
                     .map(input => input.value);
                 formData.delete('listen_list');
@@ -356,25 +419,22 @@
                         showAlert("配置保存成功！", true);
                         return true;
                     } else {
-                        showAlert("配置保存失败，请尝试重启程序！", false);
+                        showAlert("配置保存失败，请先停止运行程序！", false);
                         return false;
                     }
                 } catch (error) {
                     console.error('保存失败:', error);
-                    showAlert("配置保存失败，请尝试重启程序！", false);
+                    showAlert("配置保存失败，请检测参数是否存在异常或尝试重启程序！", false);
                     return false;
                 }
             }
 
-            // 为表单添加统一提交事件
             const form = document.querySelector('form[method="post"]');
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
-                // 此处可加入必填项验证逻辑
                 await saveConfig();
             });
 
-            // 修改Prompt管理点击处理，先保存配置再跳转
             document.getElementById('promptManagement').addEventListener('click', async function(e) {
                 e.preventDefault();
                 const success = await saveConfig();
@@ -383,7 +443,6 @@
                 }
             });
 
-            // 修改机器人启动/停止时的配置提交逻辑
             async function toggleBot() {
                 const button = document.getElementById('botButton');
                 if (!(await checkBotStatus())) {
@@ -399,7 +458,6 @@
                     const { status } = await statusRes.json();
                     
                     if (status === 'stopped') {
-                        // 提交配置
                         const formData = new FormData();
                         const nicknames = Array.from(document.querySelectorAll('[name="nickname"]')).map(i => i.value);
                         const promptFiles = Array.from(document.querySelectorAll('[name="prompt_file"]')).map(i => i.value);
@@ -445,7 +503,7 @@
                     button.disabled = false;
                 }
             }
-                    
+                            
             async function checkBotStatus() {
                 const button = document.getElementById('botButton');
                 const alertDiv = document.getElementById('backend-closed-alert');
@@ -482,6 +540,8 @@
             checkBotStatus();
             document.getElementById('botButton').addEventListener('click', toggleBot);
         });
+
+
     </script>
 </head>
 <body>
@@ -524,16 +584,17 @@
         </div>
 
         <div class="section">
-            <h2>DeepSeek 配置</h2>
+            <h2>Chat 模型配置</h2>
 
             <!-- API 服务商 -->
             <div class="form-group">
-                <label>API 服务商: (推荐硅基流动API 注册地址 <a href="https://cloud.siliconflow.cn/i/cAE8wnQ6" target="_blank">https://cloud.siliconflow.cn/</a> 免费15元额度)</label>
+                <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 多达60余种模型)</label>
                 <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
                     <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                     <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>官方API</option>
-                    <option value="other" {% if config.DEEPSEEK_BASE_URL not in ['https://api.siliconflow.cn/v1/', 'https://api.deepseek.com'] %}selected{% endif %}>其它</option>
-                </select>
+                    <option value="https://vg.v1api.cc/v1" {% if config.DEEPSEEK_BASE_URL == 'https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
+                    <option value="other" {% if config.DEEPSEEK_BASE_URL not in ['https://api.siliconflow.cn/v1/', 'https://api.deepseek.com', 'https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
+                </select>            
                 <input type="text" id="customApiUrl"
                     placeholder="请输入自定义API地址"
                     class="custom-input"
@@ -546,15 +607,31 @@
 
             <!-- 模型选择 -->
             <div class="form-group">
-                <label>模型选择: (推荐使用V3模型)</label>
+                <label>模型选择: (首次使用推荐DeepSeek V3模型,带*的模型收费较高)</label>
                 <select id="modelSelect" name="temp_MODEL">
-                    <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基V3模型 （可用免费额度）</option>
-                    <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基R1模型 （可用免费额度）</option>
-                    <option value="Pro/deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基V3 Pro模型 （需充值后方可使用）</option>
-                    <option value="Pro/deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基R1 Pro模型 （需充值后方可使用）</option>
-                    <option value="deepseek-chat" {% if config.MODEL == 'deepseek-chat' %}selected{% endif %}>官方V3模型</option>
-                    <option value="deepseek-reasoner" {% if config.MODEL == 'deepseek-reasoner' %}selected{% endif %}>官方R1模型</option>
-                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner'] %}selected{% endif %}>其它</option>
+                    <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基DeepSeeek V3模型 （可用免费额度）</option>
+                    <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基DeepSeeek R1模型 （可用免费额度）</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基DeepSeeek V3 Pro模型 （需充值后方可使用）</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基DeepSeeek R1 Pro模型 （需充值后方可使用）</option>
+                    <option value="deepseek-chat" {% if config.MODEL == 'deepseek-chat' %}selected{% endif %}>DeepSeeek官方V3模型</option>
+                    <option value="deepseek-reasoner" {% if config.MODEL == 'deepseek-reasoner' %}selected{% endif %}>DeepSeeek官方R1模型</option>
+                    <option value="gpt-3.5-turbo" {% if config.MODEL == 'gpt-3.5-turbo' %}selected{% endif %}>gpt-3.5-turbo</option>
+                    <option value="gpt-4o" {% if config.MODEL == 'gpt-4o' %}selected{% endif %}>gpt-4o</option>
+                    <option value="gpt-4o-mini" {% if config.MODEL == 'gpt-4o-mini' %}selected{% endif %}>gpt-4o-mini</option>
+                    <option value="gemini-2.0-flash-exp" {% if config.MODEL == 'gemini-2.0-flash-exp' %}selected{% endif %}>gemini-2.0-flash-exp (推荐)</option>
+                    <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>deepseek-ai/DeepSeek-V3 (推荐)</option>
+                    <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>deepseek-ai/DeepSeek-R1</option>
+                    <option value="deepseek-r1-searching" {% if config.MODEL == 'deepseek-r1-searching' %}selected{% endif %}>deepseek-r1-searching 可联网搜索</option>
+                    <option value="claude-3-5-haiku-20241022" {% if config.MODEL == 'claude-3-5-haiku-20241022' %}selected{% endif %}>claude-3-5-haiku-20241022</option>
+                    <option value="chatgpt-4o-latest" {% if config.MODEL == 'chatgpt-4o-latest' %}selected{% endif %}>chatgpt-4o-latest *</option>
+                    <option value="claude-3-5-sonnet-20241022" {% if config.MODEL == 'claude-3-5-sonnet-20241022' %}selected{% endif %}>claude-3-5-sonnet-20241022 *</option>
+                    <option value="claude-3-7-sonnet-20250219" {% if config.MODEL == 'claude-3-7-sonnet-20250219' %}selected{% endif %}>claude-3-7-sonnet-20250219 *</option>
+                    <option value="claude-3-opus-20240229" {% if config.MODEL == 'claude-3-opus-20240229' %}selected{% endif %}>claude-3-opus-20240229 *</option>
+                    <option value="gpt-4" {% if config.MODEL == 'gpt-4' %}selected{% endif %}>gpt-4 *</option>
+                    <option value="gpt-4-turbo" {% if config.MODEL == 'gpt-4-turbo' %}selected{% endif %}>gpt-4-turbo *</option>
+                    <option value="gemini-2.0-pro-exp-02-05" {% if config.MODEL == 'gemini-2.0-pro-exp-02-05' %}selected{% endif %}>gemini-2.0-pro-exp-02-05 *</option>
+                    <option value="grok-3" {% if config.MODEL == 'grok-3' %}selected{% endif %}>grok-3 *</option>
+                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05','grok-3'] %}selected{% endif %}>其它</option>
                 </select>
                 <input type="text" id="customModel"
                     placeholder="请输入自定义模型名称"
@@ -666,12 +743,12 @@
             <div class="form-group">
                 <label>消息间隔时间 = 字数 * (平均时间 + 随机时间)</label>
                 <label>平均打字速度（秒/字）:</label>
-                <input type="text" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
+                <input type="number" step="0.01" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
                 <label>随机打字速度（秒/字）：</label>
                 <div style="display: flex; gap: 10px;">              
-                    <input type="text" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
+                    <input type="number" step="0.01" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
                     至
-                    <input type="text" name="RANDOM_TYPING_SPEED_MAX" value="{{ config.RANDOM_TYPING_SPEED_MAX }}">
+                    <input type="number" step="0.01" name="RANDOM_TYPING_SPEED_MAX" value="{{ config.RANDOM_TYPING_SPEED_MAX }}">
                 </div>
             </div>
             <div class="form-group">
@@ -723,16 +800,16 @@
             </div>
 
             <div class="form-group">
-                <label>主动消息内容:</label>
+                <label>主动消息内容(发送给ai获取回复):</label>
                 <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
             </div>
             
             <div class="form-group">
                 <label>主动消息触发时间(小时):</label>
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" name="MIN_COUNTDOWN_HOURS" value="{{ config.MIN_COUNTDOWN_HOURS }}">
+                    <input type="number" step="0.01" name="MIN_COUNTDOWN_HOURS" value="{{ config.MIN_COUNTDOWN_HOURS }}">
                     至
-                    <input type="text" name="MAX_COUNTDOWN_HOURS" value="{{ config.MAX_COUNTDOWN_HOURS }}">
+                    <input type="number" step="0.01" name="MAX_COUNTDOWN_HOURS" value="{{ config.MAX_COUNTDOWN_HOURS }}">
                 </div>
             </div>
 

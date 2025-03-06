@@ -14,7 +14,7 @@ import psutil
 import openai
 import tempfile
 import shutil
-from filelock import FileLock  # 需要安装 filelock 库（pip install filelock）
+from filelock import FileLock
 
 app = Flask(__name__)
 bot_process = None
@@ -103,6 +103,9 @@ def submit_config():
             if key in config:
                 if isinstance(config[key], bool):
                     new_values[key] = value.lower() in ('on', 'true', '1', 'yes')
+                # 对主动消息触发时间强制按浮点数处理，避免小数输入出错
+                elif key in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS"]:
+                    new_values[key] = float(value) if value else 0.0
                 elif isinstance(config[key], int):
                     new_values[key] = int(value) if value else 0
                 elif isinstance(config[key], float):
@@ -117,7 +120,6 @@ def submit_config():
     except Exception as e:
         app.logger.error(f"配置保存失败: {str(e)}")
         return str(e), 500
-
 
 def stop_bot_process():
     global bot_process
