@@ -1,5 +1,5 @@
 {
     "version": "3.9",
     "last_update": "2025-03-06",
-    "description": "r\n【建议更新】\r\n修复主动消息时间无法配置为小数的问题\r\n新增WeAPIs接口:支持GPT、Grok、Claude、Gemini、Deepseek R1联网版等多种全新模型;\r\n修复了一些已知的问题;\r\n\r\n重要警告:更新前请务必备份自己的config.py、emojis和prompt文件;"
+    "description": "\r\n【建议更新】\r\n修复主动消息时间无法配置为小数的问题\r\n新增WeAPIs接口:支持GPT、Grok、Claude、Gemini、Deepseek R1联网版等多种全新模型;\r\n修复了一些已知的问题;"
 } 
