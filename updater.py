@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class Updater:
     # GitHub仓库信息
-    REPO_OWNER = "KouriChat"
+    REPO_OWNER = "iwyxdxl"
     REPO_NAME = "WeChatBot_WXAUTO_SE"
     REPO_BRANCH = "main"
     GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
