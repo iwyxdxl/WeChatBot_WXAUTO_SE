@@ -33,12 +33,12 @@ if %major% lss 3 (
 
 if %major% equ 3 (
     if %minor% lss 8 (
-        echo 您的Python版本是%pyversion%，但需要至少Python 3.8，且低于Python 3.12。
+        echo 您的Python版本是%pyversion%，但需要至少Python 3.8。
         pause
         exit /b 1
     )
     if %minor% gtr 12 (
-        echo 您的Python版本是%pyversion%，但目前仅支持Python 3.12以下版本。
+        echo 您的Python版本是%pyversion%，最新支持了Python 3.12.8等版本。
         pause
         exit /b 1
     )
