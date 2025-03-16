@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>登录 - WeChatBot</title>
+    <style>
+        body { 
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            max-width: 800px; 
+            margin: 20px auto; 
+            padding: 20px;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 2.2em;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin: 0 auto;
+            width: 100%;
+            max-width: 400px;
+        }
+        .error { 
+            color: #f44336;
+            padding: 10px;
+            background: #ffe6e6;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        input[type="password"]:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+        .btn {
+            background-color: #4caf50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        /* 法律声明：仅切换文字使用绿色，其余部分保持与页面一致 */
+        .legal-notice {
+            margin-top: 40px;
+            padding: 10px 20px;
+            background-color: #f5f5f5; /* 与页面整体背景一致 */
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            font-size: 0.9em;
+            color: #6c757d;
+            line-height: 1.6;
+        }
+        .legal-notice .legal-toggle {
+            cursor: pointer;
+            color: #4caf50; /* 切换文字设为绿色 */
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .legal-notice .legal-content {
+            display: none;
+            text-align: left;
+        }
+        .legal-notice .legal-content a {
+            color: #4caf50;
+            text-decoration: none;
+        }
+        .legal-notice .legal-content a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>WeChatBot 网页编辑器登录</h1>
+    </div>
+
+    <div class="login-container">
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST">
+            <input type="password" 
+                   name="password" 
+                   placeholder="请输入访问密码"
+                   required>
+            <button type="submit" class="btn">立即登录</button>
+        </form>
+    </div>
+
+    <div class="legal-notice">
+        <div class="legal-toggle" id="toggleLegal">显示法律声明</div>
+        <div class="legal-content" id="legalContent">
+            <p>
+                Modified based on the <strong>KouriChat</strong> project.<br>
+                原项目版权: Copyright (C) 2025, umaru<br>
+                修改版本版权: Copyright (C) 2025, iwyxdxl
+            </p>
+            <p>
+                本软件是自由软件，您可以根据 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
+                GNU 通用公共许可证 第3版（或更高版本）</a> 的条款重新发布和修改本软件。
+            </p>
+            <p>
+                本软件按“现状”提供，不提供任何明示或暗示的担保（包括适销性或特定用途适用性）。<br>
+                如您未收到完整的许可证副本，请访问 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
+                GNU GPL 3.0 中文版</a> 获取。
+            </p>
+            <p>
+                源代码获取：<br>
+                原项目源代码：<a href="https://github.com/KouriChat/KouriChat" target="_blank">https://github.com/KouriChat/KouriChat</a><br>
+                本项目源代码：<a href="https://github.com/iwyxdxl/WeChatBot_WXAUTO_SE" target="_blank">https://github.com/iwyxdxl/WeChatBot_WXAUTO_SE</a>
+            </p>
+            <p>
+                本软件仅供学习和娱乐使用，请勿用于违法用途，否则产生的一切法律责任均与任何作者无关。
+            </p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('toggleLegal').addEventListener('click', function() {
+            var content = document.getElementById('legalContent');
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                this.textContent = '隐藏法律声明';
+            } else {
+                content.style.display = 'none';
+                this.textContent = '显示法律声明';
+            }
+        });
+    </script>
+</body>
+</html>

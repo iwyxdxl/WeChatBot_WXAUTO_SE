@@ -1,5 +1,3 @@
-wechaty==0.8.19
-wechaty-puppet-service==0.8.4
 flask
 flask-cors
 sqlalchemy~=2.0.37
@@ -9,3 +7,4 @@ pyautogui
 werkzeug
 psutil
 filelock
+requests

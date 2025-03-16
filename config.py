@@ -2,21 +2,24 @@
 
 # ***********************************************************************
 # Modified based on the KouriChat project
-# Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# 
+# This file is part of WeChatBot, which includes modifications to the KouriChat project.
+# The original KouriChat project's copyright and license information are preserved in the LICENSE file.
+# For any further details regarding the license, please refer to the LICENSE file.
 # ***********************************************************************
 
 # 用户列表(请配置要和bot说话的账号的微信昵称，不要写备注！)
-# 例如：LISTEN_LIST = ['微信昵称1','用户2']
-LISTEN_LIST = [['微信昵称1', '提示词1']]
+# 例如：LISTEN_LIST = ['微信昵称1','提示词示例1']
+LISTEN_LIST = [['微信昵称1', '提示词示例1']]
 
 # DeepSeek API 配置
-DEEPSEEK_API_KEY = 'sk-'
+DEEPSEEK_API_KEY = ''
 # 硅基流动API注册地址，免费15元额度 https://cloud.siliconflow.cn/
 DEEPSEEK_BASE_URL = 'https://vg.v1api.cc/v1'
 # 硅基流动API的模型
-MODEL = 'gpt-3.5-turbo'
+MODEL = 'deepseek-ai/DeepSeek-V3'
 
 # 如果要使用官方的API
 # DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -30,7 +33,7 @@ TEMPERATURE = 1.1
 
 # Moonshot AI配置（用于图片和表情包识别）
 # API申请https://platform.moonshot.cn/
-MOONSHOT_API_KEY = 'sk-'
+MOONSHOT_API_KEY = ''
 MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1'
 MOONSHOT_MODEL = 'moonshot-v1-128k-vision-preview'
 MOONSHOT_TEMPERATURE = 0.8
@@ -43,9 +46,10 @@ QUEUE_WAITING_TIME = 7
 # 表情包存放目录
 EMOJI_DIR = 'emojis'
 ENABLE_EMOJI_SENDING = True
+EMOJI_SENDING_PROBABILITY = 25
 
 # 自动消息配置
-AUTO_MESSAGE = '请你模拟系统设置的角色，在微信上找对方发消息想知道对方在做什么'
+AUTO_MESSAGE = '请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么'
 ENABLE_AUTO_MESSAGE = True
 # 等待时间
 MIN_COUNTDOWN_HOURS = 1.0
@@ -72,3 +76,8 @@ MAX_MEMORY_NUMBER = 50
 
 # 是否接收全部群聊消息
 Accept_All_Group_Chat_Messages = False
+
+# 登录配置编辑器设置
+ENABLE_LOGIN_PASSWORD = False
+LOGIN_PASSWORD = '123456'
+PORT = 5000

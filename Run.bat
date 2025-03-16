@@ -1,103 +1,104 @@
 @echo off
 setlocal enabledelayedexpansion
-
+chcp 65001 >nul  
+:: åˆ‡æ¢åˆ° UTF-8
 :: ---------------------------
-:: ¼ì²éPython»·¾³ºÍ°æ±¾
+:: æ£€æŸ¥Pythonç¯å¢ƒå’Œç‰ˆæœ¬
 :: ---------------------------
 
-:: ¼ì²éPythonÊÇ·ñ°²×°
+:: æ£€æŸ¥Pythonæ˜¯å¦å®‰è£…
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo PythonÎ´°²×°£¬ÇëÏÈ°²×°Python 3.8»ò¸ü¸ßµÄ°æ±¾£¬µ«Çë°²×°3.12ÒÔÏÂµÄ°æ±¾¡£
-    echo ÈôÄúÒÑ°²×°Python,Çë¼ì²éÊÇ·ñÒÑ¾­½«PythonÌí¼Óµ½ÏµÍ³Path¡£
+    echo Pythonæœªå®‰è£…ï¼Œè¯·å…ˆå®‰è£…Python 3.8æˆ–æ›´é«˜çš„ç‰ˆæœ¬ï¼Œä½†è¯·å®‰è£…3.12ä»¥ä¸‹çš„ç‰ˆæœ¬ã€‚
+    echo è‹¥æ‚¨å·²å®‰è£…Python,è¯·æ£€æŸ¥æ˜¯å¦å·²ç»å°†Pythonæ·»åŠ åˆ°ç³»ç»ŸPathã€‚
     pause
     exit /b 1
 )
 
-:: »ñÈ¡Python°æ±¾
-for /f "tokens=2" %%i in ('python --version 2^>^&1') do set "pyversion=%%i"
+:: è·å–Pythonç‰ˆæœ¬
+for /f "tokens=2,*" %%i in ('python --version 2^>^&1') do set "pyversion=%%i"
 
-:: ½âÎöPython°æ±¾
+:: è§£æPythonç‰ˆæœ¬
 for /f "tokens=1,2 delims=." %%a in ("%pyversion%") do (
     set major=%%a
     set minor=%%b
 )
 
-:: ¼ì²é°æ±¾ÊÇ·ñ·ûºÏÒªÇó
+:: æ£€æŸ¥ç‰ˆæœ¬æ˜¯å¦ç¬¦åˆè¦æ±‚
 if %major% lss 3 (
-    echo ÄúµÄPython°æ±¾ÊÇ%pyversion%£¬µ«ĞèÒªÖÁÉÙPython 3.8£¬ÇÒµÍÓÚPython 3.12¡£
+    echo æ‚¨çš„Pythonç‰ˆæœ¬æ˜¯%pyversion%ï¼Œä½†éœ€è¦è‡³å°‘Python 3.8ï¼Œä¸”ä½äºPython 3.12ã€‚
     pause
     exit /b 1
 )
 
 if %major% equ 3 (
     if %minor% lss 8 (
-        echo ÄúµÄPython°æ±¾ÊÇ%pyversion%£¬µ«ĞèÒªÖÁÉÙPython 3.8£¬ÇÒµÍÓÚPython 3.12¡£
+        echo æ‚¨çš„Pythonç‰ˆæœ¬æ˜¯%pyversion%ï¼Œä½†éœ€è¦è‡³å°‘Python 3.8ã€‚
         pause
         exit /b 1
     )
-    if %minor% gtr 11 (
-        echo ÄúµÄPython°æ±¾ÊÇ%pyversion%£¬µ«Ä¿Ç°½öÖ§³ÖPython 3.12ÒÔÏÂ°æ±¾¡£
+    if %minor% gtr 12 (
+        echo æ‚¨çš„Pythonç‰ˆæœ¬æ˜¯%pyversion%ï¼Œæœ€æ–°æ”¯æŒäº†Python 3.12.8ç­‰ç‰ˆæœ¬ã€‚
         pause
         exit /b 1
     )
 )
 
-:: ¼ì²épipÊÇ·ñ°²×°
+:: æ£€æŸ¥pipæ˜¯å¦å®‰è£…
 python -m pip --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo pipÎ´°²×°£¬ÇëÏÈ°²×°pip¡£
+    echo pipæœªå®‰è£…ï¼Œè¯·å…ˆå®‰è£…pipã€‚
     pause
     exit /b 1
 )
 
-echo Python°æ±¾¼ì²éÍ¨¹ı¡£
+echo Pythonç‰ˆæœ¬æ£€æŸ¥é€šè¿‡ã€‚
 
 
 :: ---------------------------
-:: °²×°ÒÀÀµ
+:: å®‰è£…ä¾èµ–
 :: ---------------------------
 
-echo ÕıÔÚ¼ì²â¿ÉÓÃ¾µÏñÔ´...
+echo æ­£åœ¨æ£€æµ‹å¯ç”¨é•œåƒæº...
 
-:: ³¢ÊÔ°¢ÀïÔ´
-echo ÕıÔÚ³¢ÊÔ°¢ÀïÔ´...
+:: å°è¯•é˜¿é‡Œæº
+echo æ­£åœ¨å°è¯•é˜¿é‡Œæº...
 python -m pip install --upgrade pip --index-url https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 if !errorlevel! equ 0 (
     set "SOURCE_URL=https://mirrors.aliyun.com/pypi/simple/"
     set "TRUSTED_HOST=mirrors.aliyun.com"
-    echo ³É¹¦Ê¹ÓÃ°¢ÀïÔ´¡£
+    echo æˆåŠŸä½¿ç”¨é˜¿é‡Œæºã€‚
     goto :INSTALL
 )
 
-:: ³¢ÊÔÇå»ªÔ´
-echo ÕıÔÚ³¢ÊÔÇå»ªÔ´...
+:: å°è¯•æ¸…åæº
+echo æ­£åœ¨å°è¯•æ¸…åæº...
 python -m pip install --upgrade pip --index-url https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 if !errorlevel! equ 0 (
     set "SOURCE_URL=https://pypi.tuna.tsinghua.edu.cn/simple"
     set "TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn"
-    echo ³É¹¦Ê¹ÓÃÇå»ªÔ´¡£
+    echo æˆåŠŸä½¿ç”¨æ¸…åæºã€‚
     goto :INSTALL
 )
 
-:: ³¢ÊÔ¹Ù·½Ô´
-echo ÕıÔÚ³¢ÊÔ¹Ù·½Ô´...
+:: å°è¯•å®˜æ–¹æº
+echo æ­£åœ¨å°è¯•å®˜æ–¹æº...
 python -m pip install --upgrade pip --index-url https://pypi.org/simple
 if !errorlevel! equ 0 (
     set "SOURCE_URL=https://pypi.org/simple"
     set "TRUSTED_HOST="
-    echo ³É¹¦Ê¹ÓÃ¹Ù·½Ô´¡£
+    echo æˆåŠŸä½¿ç”¨å®˜æ–¹æºã€‚
     goto :INSTALL
 )
 
-:: ËùÓĞÔ´¾ùÊ§°Ü
-echo ËùÓĞ¾µÏñÔ´¾ù²»¿ÉÓÃ£¬Çë¼ì²éÍøÂçÁ¬½Ó¡£
+:: æ‰€æœ‰æºå‡å¤±è´¥
+echo æ‰€æœ‰é•œåƒæºå‡ä¸å¯ç”¨ï¼Œè¯·æ£€æŸ¥ç½‘ç»œè¿æ¥ã€‚
 pause
 exit /b 1
 
 :INSTALL
-echo ÕıÔÚÊ¹ÓÃÔ´£º%SOURCE_URL%
-echo °²×°ÒÀÀµ...
+echo æ­£åœ¨ä½¿ç”¨æºï¼š%SOURCE_URL%
+echo å®‰è£…ä¾èµ–...
 
 if "!TRUSTED_HOST!"=="" (
     python -m pip install -r requirements.txt -f ./libs --index-url !SOURCE_URL!
@@ -106,60 +107,30 @@ if "!TRUSTED_HOST!"=="" (
 )
 
 if !errorlevel! neq 0 (
-    echo °²×°ÒÀÀµÊ§°Ü£¬Çë¼ì²éÍøÂç»òÊÖ¶¯°²×°¡£
+    echo å®‰è£…ä¾èµ–å¤±è´¥ï¼Œè¯·æ£€æŸ¥ç½‘ç»œæˆ–æ‰‹åŠ¨å®‰è£…ã€‚
     pause
     exit /b 1
 )
 
-echo ÒÀÀµ°²×°Íê³É£¡
+echo ä¾èµ–å®‰è£…å®Œæˆï¼
 cls
 
 :: ---------------------------
-:: ¼ì²é³ÌĞò¸üĞÂ
+:: æ£€æŸ¥ç¨‹åºæ›´æ–°
 :: ---------------------------
 
-echo ¼ì²é³ÌĞò¸üĞÂ...
+echo æ£€æŸ¥ç¨‹åºæ›´æ–°...
 
 python updater.py
 
-echo ³ÌĞò¸üĞÂÍê³É£¡
+echo ç¨‹åºæ›´æ–°å®Œæˆï¼
 
-:: ÇåÆÁ
+:: æ¸…å±
 cls
 
 :: ---------------------------
-:: ¼ì²é¶Ë¿ÚÕ¼ÓÃ²¢¹Ø±Õ
+:: å¯åŠ¨ç¨‹åº
 :: ---------------------------
 
-echo ¼ì²é¶Ë¿ÚÕ¼ÓÃ...
-set "PORT=5000"  :: ÉèÖÃÒª¼ì²éµÄ¶Ë¿ÚºÅ
-
-:: Ê¹ÓÃnetstat¼ì²é¶Ë¿ÚÕ¼ÓÃ
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :%PORT%') do (
-    set "PID=%%a"
-    goto :found
-)
-
-echo ¶Ë¿Ú %PORT% Î´±»Õ¼ÓÃ£¬¼ÌĞøÆô¶¯³ÌĞò...
-goto :start_program
-
-:found
-echo ¶Ë¿Ú %PORT% ±» PID %PID% µÄ½ø³ÌÕ¼ÓÃ£¡ÕıÔÚ¹Ø±Õ½ø³Ì...
-
-:: ¹Ø±ÕÕ¼ÓÃ¶Ë¿ÚµÄ½ø³Ì
-echo ÕıÔÚ¹Ø±Õ PID %PID% µÄ½ø³Ì...
-taskkill /F /PID %PID% >nul 2>&1
-echo ½ø³ÌÒÑ¹Ø±Õ£¡
-
-:start_program
-echo.
-
-:: ---------------------------
-:: Æô¶¯³ÌĞò
-:: ---------------------------
-
-:: Æô¶¯ÅäÖÃ±à¼­Æ÷
+:: å¯åŠ¨é…ç½®ç¼–è¾‘å™¨
 start python config_editor.py
-
-:: ´ò¿ªä¯ÀÀÆ÷·ÃÎÊFlask·şÎñÆ÷
-start "" "http://localhost:5000"

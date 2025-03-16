@@ -2,9 +2,12 @@
 
 # ***********************************************************************
 # Modified based on the KouriChat project
-# Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# 
+# This file is part of WeChatBot, which includes modifications to the KouriChat project.
+# The original KouriChat project's copyright and license information are preserved in the LICENSE file.
+# For any further details regarding the license, please refer to the LICENSE file.
 # ***********************************************************************
 
 """
@@ -47,10 +50,10 @@ class Updater:
 
     # GitHub代理列表
     PROXY_SERVERS = [
+        "",  # 空字符串表示直接使用原始GitHub地址
         "https://ghfast.top/",
         "https://github.moeyy.xyz/", 
         "https://git.886.be/",
-        ""  # 空字符串表示直接使用原始GitHub地址
     ]
 
     def __init__(self):
@@ -165,12 +168,11 @@ class Updater:
                         release_info = response.json()
                         download_url = release_info['zipball_url']
                     
-                    proxied_download_url = self.get_proxy_url(download_url)
-                    
+                    # 返回原始下载URL（关键修改点）
                     return {
                         'has_update': True,
                         'version': latest_version,
-                        'download_url': proxied_download_url,
+                        'download_url': download_url,  # 直接返回GitHub原始URL
                         'description': remote_version_info.get('description', '无更新说明'),
                         'last_update': remote_version_info.get('last_update', ''),
                         'output': self.format_version_info(current_version, remote_version_info)
@@ -193,53 +195,6 @@ class Updater:
                         'error': "检查更新失败：无法连接到更新服务器",
                         'output': "检查更新失败：无法连接到更新服务器"
                     }
-
-    def download_update(self, download_url: str, callback=None) -> bool:
-        """下载更新包，并在下载过程中通过 callback 输出进度指示"""
-        headers = {
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': f'{self.REPO_NAME}-UpdateChecker'
-        }
-        
-        while True:
-            try:
-                proxied_url = self.get_proxy_url(download_url)
-                logger.info(f"正在从 {proxied_url} 下载更新...")
-                
-                response = requests.get(
-                    proxied_url,
-                    headers=headers,
-                    timeout=30,
-                    stream=True
-                )
-                response.raise_for_status()
-                
-                os.makedirs(self.temp_dir, exist_ok=True)
-                zip_path = os.path.join(self.temp_dir, 'update.zip')
-                
-                total_length = response.headers.get("Content-Length")
-                if total_length is not None:
-                    total_length = int(total_length)
-                downloaded = 0
-                
-                with open(zip_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total_length and callback:
-                                percent = downloaded / total_length * 100
-                                callback(f"下载进度：{percent:.2f}%")
-                return True
-                
-            except requests.RequestException as e:
-                logger.warning(f"使用当前代理下载更新失败: {str(e)}")
-                if self.try_next_proxy():
-                    logger.info("正在切换到下一个代理服务器...")
-                    continue
-                else:
-                    logger.error("所有代理服务器均已尝试失败")
-                    return False
 
     def should_skip_file(self, file_path: str) -> bool:
         """检查是否应该跳过更新某个文件"""
@@ -350,6 +305,7 @@ class Updater:
         while True:
             choice = input("\n是否现在更新?\n输入'y'更新 / 输入'n'取消更新并继续启动: ").lower().strip()
             if choice in ('y', 'yes'):
+                print("\n正在更新,这可能需要一些时间,请耐心等待...")
                 return True
             elif choice in ('n', 'no'):
                 return False

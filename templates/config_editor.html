@@ -2,67 +2,97 @@
 <html>
 <head>
 <!-----------------------------------------------------------------------
-- Copyright of this file: Copyright (C) 2025, iwyxdxl
+- Copyright (C) 2025, iwyxdxl
 - Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+- 
+- This file is part of WeChatBot.
+- WeChatBot is free software: you can redistribute it and/or modify
+- it under the terms of the GNU General Public License as published by
+- the Free Software Foundation, either version 3 of the License, or
+- (at your option) any later version.
+- 
+- WeChatBot is distributed in the hope that it will be useful,
+- but WITHOUT ANY WARRANTY; without even the implied warranty of
+- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- GNU General Public License for more details.
+- 
+- You should have received a copy of the GNU General Public License
+- along with WeChatBot.  If not, see <http://www.gnu.org/licenses/>.
 ------------------------------------------------------------------------>
     <title>配置编辑器</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        /* 通用页面样式 */
+        body { 
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
             max-width: 800px;
-            margin: 0 auto;
+            margin: 20px auto;
             padding: 20px;
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
         }
-
+        h1 {
+            margin: 0;
+        }
+        
+        /* 统一按钮样式，适用于 .nav-button、button 和 a.nav-button */
+        .nav-button, button, a.nav-button {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 16px;
+            line-height: 1.2;
+            text-decoration: none;
+            border: none;
+            border-radius: 4px;
+            background-color: #4caf50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover, button:hover, a.nav-button:hover {
+            background-color: #45a049;
+        }
+        .nav-button.stop {
+            background-color: #ff4444;  
+        }
+        .nav-button.stop:hover {
+            background-color: #ff4444;  
+        }
+        
+        /* 区块样式及上浮效果 */
         .section {
-            margin-bottom: 30px;
-            border: 1px solid #ddd;
+            background: white;
             padding: 20px;
-            border-radius: 5px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-
+        .section:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        
+        /* 表单样式 */
         .form-group {
             margin-bottom: 15px;
         }
-
         label {
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
         }
-
         input, select {
             width: 100%;
             padding: 8px;
             margin-bottom: 10px;
-        }
-
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border: none;
+            border: 1px solid #ccc;
             border-radius: 4px;
-            cursor: pointer;
+            box-sizing: border-box;
         }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
-        .success-alert {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-            opacity: 1;
-            transition: opacity 0.3s ease;
-        }
-
+        
+        /* 开关样式 */
         .switch {
             position: relative;
             display: inline-block;
@@ -70,13 +100,11 @@
             height: 34px;
             vertical-align: middle;
         }
-
         .switch input { 
             opacity: 0;
             width: 0;
             height: 0;
         }
-
         .slider {
             position: absolute;
             cursor: pointer;
@@ -88,7 +116,6 @@
             transition: 0.4s;
             border-radius: 34px;
         }
-
         .slider::before {
             position: absolute;
             content: "";
@@ -100,116 +127,153 @@
             transition: 0.4s;
             border-radius: 50%;
         }
-
         input:checked + .slider {
-            background-color: #4CAF50;
+            background-color: #4caf50;
         }
-
         input:checked + .slider::before {
             transform: translateX(26px);
         }
-
-        /* Rounded sliders */
         .slider.round {
             border-radius: 34px;
         }
-
         .slider.round::before {
             border-radius: 50%;
         }
-
         .switch-container {
             display: flex;
             gap: 20px;
             align-items: center;
         }
-
         .switch-item {
             display: flex;
             align-items: center;
             gap: 10px;
         }
-
-        .nav-button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 14px;
-            transition: background-color 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .nav-button:hover {
-            background-color: #45a049;
-            color: white;
-            text-decoration: none;
-        }
-
-        .nav-button.stop {
-            background-color: #FF0000; /* 红色 */
-        }
-
+        
+        /* 自定义输入框 */
         .custom-input {
             display: none;
             margin-top: 5px;
         }
-
+        
+        /* 用户条目样式 */
         .entry {
             display: grid;
-            grid-template-columns: 2fr 3fr auto; /* 调整列宽比例 */
-            gap: 15px;  /* 增加间隙 */
+            grid-template-columns: 2fr 3fr auto;
+            gap: 15px;
             margin-bottom: 10px;
             align-items: center;
         }
-
         .entry input, 
         .entry select {
-            box-sizing: border-box;  /* 确保宽度计算包含padding */
+            box-sizing: border-box;
             min-width: 120px;
             width: 100%;
-        }
-
-        .entry select {
+            height: 36px;
+            font-size: 16px;
+            margin-bottom: 0;
             max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-
+        /* 优化删除按钮：固定高度、使用 inline-flex 居中对齐，并清除 line-height */
+        .entry button {
+            background-color: #f44336;  /* 红色 */
+            color: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            margin: 0;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            align-self: center;
+            min-width: 80px;
+        }
+        .entry button:hover {
+            background-color: #d32f2f;
+        }
+        
+        /* 响应式调整 */
         @media (max-width: 600px) {
             .entry {
                 grid-template-columns: 1fr;
                 gap: 8px;
             }
-            
             .entry button {
                 width: 100%;
                 margin-top: 5px;
             }
         }
+        
+        /* 提示信息 */
+        .success-alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
         .backend-closed-alert {
             position: fixed;
-            top: 70px;  /* 位于成功提示下方 */
+            top: 70px;
             left: 50%;
             transform: translateX(-50%);
             background-color: #ff4444;
             color: white;
             padding: 15px;
             border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             display: none;
             z-index: 1000;
             animation: shake 0.5s ease;
         }
-
         @keyframes shake {
             0%, 100% { transform: translateX(-50%) translateY(0); }
             25% { transform: translateX(-50%) translateY(-5px); }
             75% { transform: translateX(-50%) translateY(5px); }
         }
-
-    </style>
+        
+        /* 法律声明：仅切换文字使用绿色，其余部分保持与页面一致 */
+        .legal-notice {
+            margin-top: 40px;
+            padding: 10px 20px;
+            background-color: #f5f5f5; /* 与页面整体背景一致 */
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            font-size: 0.9em;
+            color: #6c757d;
+            line-height: 1.6;
+        }
+        .legal-notice .legal-toggle {
+            cursor: pointer;
+            color: #4caf50; /* 切换文字设为绿色 */
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .legal-notice .legal-content {
+            display: none;
+            text-align: left;
+        }
+        .legal-notice .legal-content a {
+            color: #4caf50;
+            text-decoration: none;
+        }
+        .legal-notice .legal-content a:hover {
+            text-decoration: underline;
+        }
+      </style>      
+      
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // 获取 API 服务商相关的 DOM 元素
@@ -467,7 +531,10 @@
                         document.querySelectorAll('input[name], select[name]').forEach(element => {
                             if (element.name !== 'nickname' && element.name !== 'prompt_file') {
                                 if (element.type === 'checkbox') {
-                                    formData.append(element.name, element.checked);
+                                    // 仅在复选框被选中时提交该字段
+                                    if (element.checked) {
+                                        formData.append(element.name, 'true');
+                                    }
                                 } else {
                                     formData.append(element.name, element.value);
                                 }
@@ -553,7 +620,7 @@
     <div id="config-alert" class="success-alert" style="display:none;"></div>
     
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-        <h1>配置编辑器</h1>
+        <h1>WeChatBot配置编辑器</h1>
         <div>
             <button id="botButton" class="nav-button">Start Bot</button>
             <a href="{{ url_for('prompt_list') }}" class="nav-button" id="promptManagement">Prompt管理</a>
@@ -646,7 +713,7 @@
             
             <div class="form-group">
                 <label>API Key:</label>
-                <input type="text" name="DEEPSEEK_API_KEY" value="{{ config.DEEPSEEK_API_KEY }}">
+                <input type="text" placeholder="sk-xxxxxxxxxx" name="DEEPSEEK_API_KEY" value="{{ config.DEEPSEEK_API_KEY }}">
             </div>
 
             <div class="form-group">
@@ -688,12 +755,12 @@
 
             <div class="form-group">
                 <label>MOONSHOT_API_KEY: (申请网站 <a href="https://platform.moonshot.cn/" target="_blank">https://platform.moonshot.cn/</a> 免费15元额度)</label>
-                <input type="text" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
+                <input type="text" placeholder="sk-xxxxxxxxxx" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
             </div>
 
             <div class="form-group">
                 <label>MOONSHOT_BASE_URL: (一般无需修改)</label>
-                <input type="text" name="MOONSHOT_BASE_URL" value="{{ config.MOONSHOT_BASE_URL }}">
+                <input type="text" placeholder="https://api.moonshot.cn/v1" name="MOONSHOT_BASE_URL" value="{{ config.MOONSHOT_BASE_URL }}">
             </div>
 
             <div class="form-group">
@@ -723,6 +790,11 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <label>主动表情包触发概率(0-100):</label>
+                <input type="number" step="1" name="EMOJI_SENDING_PROBABILITY" value="{{ config.EMOJI_SENDING_PROBABILITY }}">
+            </div>
+            
             <div class="form-group">
                 <label>表情包存放目录:</label>
                 <input type="text" name="EMOJI_DIR" value="{{ config.EMOJI_DIR }}">
@@ -823,10 +895,71 @@
             </div>
         </div>
 
+        <div class="section">
+            <h2>网页编辑器配置 (修改后下次启动生效)</h2>
+            <div class="form-group">
+                <label><b>启用密码登录 (若您希望开放端口以便其它设备远程访问配置编辑器则建议启用)</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                        <input type="checkbox" name="ENABLE_LOGIN_PASSWORD" {% if config.ENABLE_LOGIN_PASSWORD %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>登录密码:</label>
+                <input type="text" name="LOGIN_PASSWORD" value="{{ config.LOGIN_PASSWORD }}">
+            </div>
+            <div class="form-group">
+                <label>网页端口:</label>
+                <input type="number" step="1" name="PORT" value="{{ config.PORT }}">
+            </div>
+        </div>
+
         <div style="margin-top: 20px;">
             <button type="submit">保存配置</button>
             <button type="button" onclick="resetForm()">重置表单</button>
         </div>
     </form>
+    <div class="legal-notice">
+        <div class="legal-toggle" id="toggleLegal">显示法律声明</div>
+        <div class="legal-content" id="legalContent">
+            <p>
+                Modified based on the <strong>KouriChat</strong> project.<br>
+                原项目版权: Copyright (C) 2025, umaru<br>
+                修改版本版权: Copyright (C) 2025, iwyxdxl
+            </p>
+            <p>
+                本软件是自由软件，您可以根据 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
+                GNU 通用公共许可证 第3版（或更高版本）</a> 的条款重新发布和修改本软件。
+            </p>
+            <p>
+                本软件按“现状”提供，不提供任何明示或暗示的担保（包括适销性或特定用途适用性）。<br>
+                如您未收到完整的许可证副本，请访问 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
+                GNU GPL 3.0 中文版</a> 获取。
+            </p>
+            <p>
+                源代码获取：<br>
+                原项目源代码：<a href="https://github.com/KouriChat/KouriChat" target="_blank">https://github.com/KouriChat/KouriChat</a><br>
+                本项目源代码：<a href="https://github.com/iwyxdxl/WeChatBot_WXAUTO_SE" target="_blank">https://github.com/iwyxdxl/WeChatBot_WXAUTO_SE</a>
+            </p>
+            <p>
+                本软件仅供学习和娱乐使用，请勿用于违法用途，否则产生的一切法律责任均与任何作者无关。
+            </p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('toggleLegal').addEventListener('click', function() {
+            var content = document.getElementById('legalContent');
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                this.textContent = '隐藏法律声明';
+            } else {
+                content.style.display = 'none';
+                this.textContent = '显示法律声明';
+            }
+        });
+    </script>
+        
 </body>
 </html>

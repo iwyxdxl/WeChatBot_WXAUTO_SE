@@ -9,11 +9,11 @@
 # 效果图
 <img src="Demo_Image/1.jpg" alt="示例图片1" width="300px">
 <img src="Demo_Image/2.jpg" alt="示例图片2" width="300px">
-<img src="Demo_Image/3.jpeg" alt="示例图片3" width="900px">
-<img src="Demo_Image/4.jpeg" alt="示例图片4" width="900px">
+<img src="Demo_Image/3.png" alt="示例图片3" width="900px">
+<img src="Demo_Image/4.png" alt="示例图片4" width="900px">
 
 # 版本号
-- v3.9
+- v3.10
 
 # 目前支持的功能
 1. 自动回复
@@ -32,18 +32,18 @@
 
 
 # 使用前准备
-1. 申请硅基流动API https://cloud.siliconflow.cn/ （免费15元额度） 或 deepseek官方API
+1. 申请API,推荐WeAPIs https://vg.v1api.cc/register?aff=Rf3h 或 DeepSeek官方API
 2. 申请Moonshot API（用于图片和表情包识别）https://platform.moonshot.cn/ （免费15元额度）
 3. 请先安装python、pip，python版本应大于3.8
 
-# 使用方式：
+# 使用方式
 1. 登录电脑微信，确保在后台运行
 2. 运行 Run.bat 启动程序，等待自动安装依赖文件
-3. 在打开的网页中修改配置文件，填入你的API KEY
+3. 在打开的网页中修改配置文件，选择您的API服务提供商、模型，并填入您的API KEY
 4. 在页面右上角点击 'Prompt管理' 进入提示词管理页面
-5. 点击新建Prompt 文件名为'想要聊天的对象的微信昵称/群聊名称'.md (如 用户1.md) 作为人设提示词
-6. 如不创建将使用文件目录下的 prompt.md作为默认提示词
-7. 修改完后点击页面右上角'Start Bot'启动程序
+5. 在提示词管理页面您可以参考自带的提示词样式编写或者使用提示词生成器生成您需要的提示词
+6. 回到配置编辑器页面，填入微信昵称（注意不要在微信为他设置备注）或群聊名称，并选择对应提示词
+7. 修改完配置后点击页面右上角'Start Bot'启动程序
 8. 如果想要自定义表情包请将表情包(.gif .png .jpg .jpeg)文件放入emojis中对应的文件夹中
 
 # 联系我

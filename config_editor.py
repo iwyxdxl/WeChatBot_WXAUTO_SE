@@ -1,11 +1,25 @@
 # -*- coding: utf-8 -*-
 
 # ***********************************************************************
-# Copyright of this file: Copyright (C) 2025, iwyxdxl
+# Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# 
+# This file is part of WeChatBot.
+# WeChatBot is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# WeChatBot is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with WeChatBot.  If not, see <http://www.gnu.org/licenses/>.
 # ***********************************************************************
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import re
 import ast
 import os
@@ -15,9 +29,49 @@ import openai
 import tempfile
 import shutil
 from filelock import FileLock
+from functools import wraps
+import webbrowser
+from threading import Timer
+from flask import Flask
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24).hex()  # 48位十六进制字符串
 bot_process = None
+
+# 新增登录相关路由
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # 如果禁用密码则直接跳转
+    config = parse_config()
+    if not config.get('ENABLE_LOGIN_PASSWORD', False):
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        stored_pwd = config.get('LOGIN_PASSWORD', '')
+        
+        if password == stored_pwd:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="密码错误")
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
+def login_required(f):
+    @wraps(f)  # 新增装饰器
+    def decorated_function(*args, **kwargs):
+        config = parse_config()
+        if config.get('ENABLE_LOGIN_PASSWORD', False):
+            if not session.get('logged_in'):
+                return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.route('/start_bot', methods=['POST'])
 def start_bot():
@@ -90,7 +144,8 @@ def submit_config():
             'ENABLE_EMOJI_RECOGNITION',
             'ENABLE_EMOJI_SENDING',
             'ENABLE_AUTO_MESSAGE', 
-            'ENABLE_MEMORY'
+            'ENABLE_MEMORY',
+            'ENABLE_LOGIN_PASSWORD'
         ]
         for field in boolean_fields:
             new_values[field] = field in request.form  # 直接判断是否存在
@@ -208,6 +263,7 @@ def update_config(new_values):
             raise Exception(f"更新配置文件失败: {e}")
 
 @app.route('/', methods=['GET', 'POST'])
+@login_required
 def index():
     if request.method == 'POST':
         try:
@@ -240,7 +296,7 @@ def index():
 
             # 明确处理布尔类型字段（如果未提交）
             for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 
-                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY']:
+                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY', 'ENABLE_LOGIN_PASSWORD']:
                 if var not in submitted_fields:
                     new_values[var] = False
 
@@ -273,6 +329,7 @@ def safe_filename(filename):
 
 # 新增的prompt管理路由
 @app.route('/prompts')
+@login_required
 def prompt_list():
     if not os.path.exists('prompts'):
         os.makedirs('prompts')
@@ -280,6 +337,7 @@ def prompt_list():
     return render_template('prompts.html', files=files)
 
 @app.route('/edit_prompt/<filename>', methods=['GET', 'POST'])
+@login_required
 def edit_prompt(filename):
     safe_dir = os.path.abspath('prompts')
     filepath = os.path.join(safe_dir, filename)
@@ -319,6 +377,7 @@ def edit_prompt(filename):
         return "文件不存在"
 
 @app.route('/create_prompt', methods=['GET', 'POST'])
+@login_required
 def create_prompt():
     if request.method == 'POST':
         filename = request.form.get('filename', '').strip()
@@ -345,6 +404,7 @@ def create_prompt():
     return render_template('create_prompt.html')
 
 @app.route('/delete_prompt/<filename>', methods=['POST'])
+@login_required
 def delete_prompt(filename):
     safe_dir = os.path.abspath('prompts')
     filepath = os.path.join(safe_dir, safe_filename(filename))
@@ -358,6 +418,7 @@ def delete_prompt(filename):
     return "无效文件", 400
 
 @app.route('/generate_prompt', methods=['POST'])
+@login_required
 def generate_prompt():
     try:
         # 从config.py获取配置
@@ -369,7 +430,7 @@ def generate_prompt():
         )
         
         prompt = request.json.get('prompt', '')
-        FixedPrompt = "\n严格参照以下提示词的格式生成（仅参考以下提示词的格式不参考内容）：# 任务\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话。\n# 角色你将扮演一个19岁的女生，大一，文学院学生，刚与男朋友开始交往。你对男朋友非常好，宁愿自己吃苦也要对男朋友好。\n# 外表\n穿着时尚，喜欢色彩鲜艳的衣服。头发长而顺，戴着一副时尚的耳环。脸上总是挂着微笑，眼睛里闪烁着淘气的光芒。\n# 经历\n在高中时期与男朋友相识，通过同学聚会逐渐熟络，现在两人考入了不同的大学，仍然保持紧密的联系。\n# 性格\n性格热情多话，调皮活泼，喜欢开玩笑，但对男朋友非常体贴，总是会为他着想。宁愿自己吃苦也要对男朋友好。\n# 输出示例\n我今天看到一件好看的裙子\但是有点贵\下次打折再买吧\n你知道吗\每次见到你我都觉得好开心\n我就喜欢看你笑的样子\特别迷人\n# 喜好\n喜欢购物，喜欢看浪漫的电影，喜欢旅游和美食。平时喜欢听流行音乐，偶尔也会自己哼歌。"
+        FixedPrompt = "\n严格参照以下提示词的格式生成（仅参考以下提示词的格式不参考内容，不要输出其它多余内容）：# 任务\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话。\n# 角色你将扮演一个19岁的女生，大一，文学院学生，刚与男朋友开始交往。\n# 外表\n穿着时尚，喜欢色彩鲜艳的衣服。头发长而顺，戴着一副时尚的耳环。脸上总是挂着微笑，眼睛里闪烁着淘气的光芒。\n# 经历\n在高中时期与男朋友相识，通过同学聚会逐渐熟络，现在两人考入了不同的大学，仍然保持紧密的联系。\n# 性格\n性格热情多话，调皮活泼，喜欢开玩笑，但对男朋友非常体贴，总是会为他着想。\n# 输出示例\n我今天看到一件好看的裙子\但是有点贵\下次打折再买吧\n你知道吗\每次见到你我都觉得好开心\n我就喜欢看你笑的样子\特别迷人\n# 喜好\n喜欢购物，喜欢看浪漫的电影，喜欢旅游和美食。平时喜欢听流行音乐，偶尔也会自己哼歌。"
         
         completion = client.chat.completions.create(
             model=MODEL,
@@ -398,7 +459,17 @@ if __name__ == '__main__':
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"核心配置文件缺失: {config_path}")
     
-    print("\033[31m重要提示：若您的浏览器没有自动打开网页端，请手动访问http://localhost:5000/ \r\n \033[0m")
-    # 原有启动逻辑...
-    app.run(debug=False, port=5000)
+    config = parse_config()
+    print(f"\033[31m重要提示：\r\n若您的浏览器没有自动打开网页端，请手动访问http://localhost:{config.get('PORT', '5000')}/ \r\n \033[0m")
+    if config.get('ENABLE_LOGIN_PASSWORD', False):
+        print(f"\033[31m您已启用登录密码，密码为 {config.get('LOGIN_PASSWORD', '未设置')} 请勿泄露给其它人！\r\n \033[0m")
+    PORT = config.get('PORT', '5000')
+    
+    # 在启动服务器前设置定时器打开浏览器
+    def open_browser():
+        webbrowser.open(f'http://localhost:{PORT}/')
+    
+    Timer(1, open_browser).start()  # 延迟1秒确保服务器已启动
+    
+    app.run(debug=False, port=PORT)
     

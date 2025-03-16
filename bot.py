@@ -2,9 +2,12 @@
 
 # ***********************************************************************
 # Modified based on the KouriChat project
-# Copyright of the original project: Copyright (C) 2025, umaru
 # Copyright of this modification: Copyright (C) 2025, iwyxdxl
 # Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# 
+# This file is part of WeChatBot, which includes modifications to the KouriChat project.
+# The original KouriChat project's copyright and license information are preserved in the LICENSE file.
+# For any further details regarding the license, please refer to the LICENSE file.
 # ***********************************************************************
 
 import base64
@@ -23,7 +26,8 @@ import shutil
 import re  
 from config import (
     DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
-    MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, EMOJI_DIR,
+    MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, 
+    EMOJI_DIR, EMOJI_SENDING_PROBABILITY,
     AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS, MOONSHOT_MODEL,
     QUIET_TIME_START, QUIET_TIME_END, QUEUE_WAITING_TIME, 
     AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX,
@@ -97,7 +101,11 @@ def check_user_timeouts():
                 if last_active and wait_time:
                     if current_time - last_active >= wait_time:
                         if not is_quiet_time():
-                            reply = get_deepseek_response(AUTO_MESSAGE, user)
+                            # 增加时间标记
+                            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            auto_content = f"[{current_time}] {AUTO_MESSAGE}"  
+                            logger.info(f"为用户 {user} 发送自动消息:{auto_content}")
+                            reply = get_deepseek_response(auto_content, user)
                             send_reply(user, user, user, AUTO_MESSAGE, reply)
                         # 重置计时器和等待时间
                         reset_user_timer(user)
@@ -132,7 +140,13 @@ def get_user_prompt(user_id):
 def get_deepseek_response(message, user_id):
     try:
         logger.info(f"调用 Chat API - 用户ID: {user_id}, 消息: {message}")
-        user_prompt = get_user_prompt(user_id)
+        
+        # 仅当处理真实用户消息时获取用户prompt
+        if user_id in user_names:
+            user_prompt = get_user_prompt(user_id)
+        else:
+            user_prompt = "System"  # 默认系统提示
+
         with queue_lock:
             if user_id not in chat_contexts:
                 chat_contexts[user_id] = []
@@ -162,7 +176,6 @@ def get_deepseek_response(message, user_id):
             chat_contexts[user_id].append({"role": "assistant", "content": reply})
 
         logger.info(f"API回复: {reply}")
-
         return reply
     except Exception as e:
         ErrorImformation = str(e)
@@ -377,6 +390,7 @@ def handle_wxauto_message(msg, who):
         else:
             logger.warning("无法获取消息内容")
     except Exception as e:
+        can_send_messages = True
         logger.error(f"消息处理失败: {str(e)}")
 
 def check_inactive_users():
@@ -428,18 +442,21 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         # 发送分段消息过程中停止向deepseek发送新请求
         is_sending_message = True
         # 首先检查是否需要发送表情包
-        if ENABLE_EMOJI_SENDING:
+        if ENABLE_EMOJI_SENDING == True:
             emotion = is_emoji_request(reply)
-            if emotion is not False:
+            if emotion is not None:
+                logger.info(f"触发表情请求（概率{EMOJI_SENDING_PROBABILITY}%）")
                 emoji_path = send_emoji(emotion)
                 if emoji_path:
                     try:
-                        # 先发送表情包
+                        # 发送表情包
                         wx.SendFiles(filepath=emoji_path, who=user_id)
                     except Exception as e:
                         logger.error(f"发送表情包失败: {str(e)}")
             else:
-                    logger.info(f"无需发送表情包")
+                logger.info(f"无需发送表情包")
+        else:
+            logger.info(f"表情包发送功能已关闭")
 
         # 如果回复包含时间则将其去除
         reply = remove_timestamps(reply)
@@ -526,62 +543,79 @@ def remove_timestamps(text):
         flags = re.X | re.M
     ).strip()  # 最后统一清理首尾空格
 
-def is_emoji_request(text: str) -> bool:
-    # 定义情绪关键词字典
-    emotion_keywords =  {
-        'angry': ['生气', '愤怒', '怒', '哼', '鄙视', '厌恶', '烦恼', '厌倦', '啊啊'],
-        'happy': ['开心', '高兴', '笑', '喜', '哈哈', '嘻嘻', '嘿嘿', '愉快', '兴奋', '满足', '乐', '激动', '惊喜'],
-        'sad': ['难过', '伤心', '委屈', '哭', '悲', '泪', '呜呜', '心酸', '愧疚', '懊悔', '失落', '孤独', '寂寞', '恐惧', '害怕', '忧虑'],
-        'neutral': ['惊讶', '紧张', '放松', '失望', '羞愧', '惊恐', '惊魂未定', '震惊', '疑惑', '困惑', '怀疑', '安慰', '安宁', '放心']
-    }
+def is_emoji_request(text: str) -> Optional[str]:
+    """使用AI判断消息情绪并返回对应的表情文件夹名称"""
+    try:
+        # 概率判断
+        if ENABLE_EMOJI_SENDING and random.randint(0, 100) > EMOJI_SENDING_PROBABILITY:
+            logger.info(f"未触发表情请求（概率{EMOJI_SENDING_PROBABILITY}%）")
+            return None
+        
+        # 获取emojis目录下的所有情绪分类文件夹
+        emoji_categories = [d for d in os.listdir(EMOJI_DIR) 
+                            if os.path.isdir(os.path.join(EMOJI_DIR, d))]
+        
+        if not emoji_categories:
+            logger.warning("表情包目录下未找到有效情绪分类文件夹")
+            return None
 
-    # 将文本转换为小写（如果需要）
-    text = text.lower()
-    
-    # 初始化情绪计数器
-    emotion_score = {'angry': 0, 'happy': 0, 'neutral': 0, 'sad': 0}
-    
-    # 遍历情绪关键词，统计匹配次数
-    for emotion, keywords in emotion_keywords.items():
-        for keyword in keywords:
-            if keyword in text:
-                emotion_score[emotion] += 1
+        # 构造AI提示词
+        prompt = f"""请判断以下消息表达的情绪，并仅回复一个词语的情绪分类：
+{text}
+可选的分类有：{', '.join(emoji_categories)}。请直接回复分类名称，不要包含其他内容，注意大小写。若对话未包含明显情绪，请回复None。"""
+
+        # 获取AI判断结果
+        response = get_deepseek_response(prompt, "system").strip()
+        
+        # 清洗响应内容
+        response = re.sub(r"[^\w\u4e00-\u9fff]", "", response)  # 移除非文字字符
+        logger.info(f"AI情绪识别结果: {response}")
+
+        # 验证是否为有效分类
+        if response in emoji_categories:
+            return response
+            
+        # 尝试模糊匹配
+        for category in emoji_categories:
+            if category in response or response in category:
+                return category
                 
-    # 找出最高分的情绪
-    detected_emotion = max(emotion_score, key=emotion_score.get)
-    
-    # 如果所有情绪分数都为0，默认设为'neutral'
-    if emotion_score[detected_emotion] == 0:
-        detected_emotion = False
-    
-    return detected_emotion
-    
-def send_emoji(emotion):
+        logger.warning(f"未匹配到有效情绪分类，AI返回: {response}")
+        return None
 
-    if emotion is not False:
-        # 构建对应情绪的表情包路径
-        emoji_folder = os.path.join(EMOJI_DIR, emotion)
-        # 获取文件夹中的所有文件名
-        try:
-            emoji_files = os.listdir(emoji_folder)
-        except FileNotFoundError:
-            print(f"表情包文件夹 {emoji_folder} 不存在。")
-            return
+    except Exception as e:
+        logger.error(f"情绪判断失败: {str(e)}")
+        return None
+
+
+def send_emoji(emotion: str) -> Optional[str]:
+    """根据情绪类型发送对应表情包"""
+    if not emotion:
+        return None
         
-        # 如果文件夹为空
+    emoji_folder = os.path.join(EMOJI_DIR, emotion)
+    
+    try:
+        # 获取文件夹中的所有表情文件
+        emoji_files = [
+            f for f in os.listdir(emoji_folder)
+            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))
+        ]
+        
         if not emoji_files:
-            print(f"表情包文件夹 {emoji_folder} 中没有表情包。")
-            return
-        
-        # 随机选择一个表情包
-        selected_emoji = random.choice(emoji_files)
-        emoji_path = os.path.join(emoji_folder, selected_emoji)
-        
-        # 发送表情包，这里以打印路径代替实际发送
-        print(f"发送表情包：{emoji_path}")
-        return emoji_path
-    return False
+            logger.warning(f"表情文件夹 {emotion} 为空")
+            return None
 
+        # 随机选择并返回表情路径
+        selected_emoji = random.choice(emoji_files)
+        return os.path.join(emoji_folder, selected_emoji)
+
+    except FileNotFoundError:
+        logger.error(f"表情文件夹不存在: {emoji_folder}")
+    except Exception as e:
+        logger.error(f"表情发送失败: {str(e)}")
+    
+    return None
 
 def capture_and_save_screenshot(who):
     screenshot_folder = os.path.join(root_dir, 'screenshot')
@@ -708,8 +742,8 @@ def summarize_and_save(user_id):
         # --- 生成总结 ---
         # 修改为使用全部日志内容
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
-        summary_prompt = f"请用中文总结以下对话，提取重要信息形成记忆片段：\n{full_logs}"
-        summary = get_deepseek_response(summary_prompt, user_id)
+        summary_prompt = f"请用中文总结以下对话，提取重要信息形成记忆片段的摘要（仅输出摘要不要输出其它信息）：\n{full_logs}"
+        summary = get_deepseek_response(summary_prompt, "system")
         # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %H:%M]
         summary = re.sub(
             r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]',
@@ -720,7 +754,7 @@ def summarize_and_save(user_id):
         
         # --- 评估重要性 ---
         importance_prompt = f"为以下内容的重要性评分（1-5，直接回复数字）：\n{summary}"
-        importance_response = get_deepseek_response(importance_prompt, user_id)
+        importance_response = get_deepseek_response(importance_prompt, "system")
         
         # 强化重要性提取逻辑
         importance_match = re.search(r'[1-5]', importance_response)
