@@ -101,6 +101,7 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             height: 38px;
+            box-sizing: border-box; /* 确保高度包含内边距和边框 */
         }
         #generateBtn {
             background-color: #4caf50;
@@ -113,6 +114,7 @@
             transition: background-color 0.3s;
             height: 38px;
             white-space: nowrap;
+            box-sizing: border-box; /* 确保按钮与输入框对齐 */
         }
         #generateBtn:hover {
             background-color: #45a049;
@@ -149,7 +151,34 @@
         .legal-notice .legal-content a:hover {
             text-decoration: underline;
         }
+        /* 统一所有输入控件的盒模型 */
+        .form-group input,
+        .form-group textarea,
+        #promptInput {
+            box-sizing: border-box; /* 确保宽度包含padding和border */
+        }
 
+        /* 统一padding */
+        .form-group input,
+        .form-group textarea,
+        #promptInput {
+            padding: 12px 15px; /* 统一垂直/水平间距 */
+        }
+
+        .textarea-container {
+            position: relative;
+            width: 100%;
+        }
+        .word-counter {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 12px;
+            color: #777;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <script>
@@ -191,7 +220,7 @@
     <form method="post">
         <div class="form-group">
             <label>文件名 (.md):</label>
-            <input type="text" name="filename" required>
+            <input type="text" name="filename" placeholder="建议以角色名命名，文件名将同时作为记忆中ai扮演的角色的名字。" required>
         </div>
         <div class="form-group">
             <label>提示词生成器:</label>
@@ -202,7 +231,10 @@
         </div>        
         <div class="form-group">
             <label>内容:</label>
-            <textarea name="content"></textarea>
+            <div class="textarea-container">
+                <textarea name="content" id="contentTextarea"></textarea>
+                <div class="word-counter" id="wordCounter">0 字</div>
+            </div>
         </div>
         <div>
             <button type="submit">创建</button>
@@ -245,6 +277,21 @@
             } else {
                 content.style.display = 'none';
                 this.textContent = '显示法律声明';
+            }
+        });
+        document.addEventListener('DOMContentLoaded', function() {
+            const textarea = document.getElementById('contentTextarea');
+            const counter = document.getElementById('wordCounter');
+            
+            // 初始计数
+            updateCounter();
+            
+            // 输入时更新计数
+            textarea.addEventListener('input', updateCounter);
+            
+            function updateCounter() {
+                const count = textarea.value.length;
+                counter.textContent = count + ' 字';
             }
         });
     </script>

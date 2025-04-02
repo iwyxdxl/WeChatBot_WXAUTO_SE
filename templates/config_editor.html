@@ -310,7 +310,9 @@
                         { value: "gpt-4o", text: "gpt-4o" },
                         { value: "gpt-4o-mini", text: "gpt-4o-mini" },
                         { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },
+                        { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219 (推荐)" },
                         { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (推荐)" },
+                        { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
                         { value: "deepseek-ai/DeepSeek-R1", text: "deepseek-ai/DeepSeek-R1" },
                         { value: "deepseek-r1-searching", text: "deepseek-r1-searching 可联网搜索" },
                         { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
@@ -631,7 +633,7 @@
         <div class="section">
             <h2>用户列表</h2>
             <div class="form-group">
-                <label>微信昵称与对应Prompt配置:</label>
+                <label>微信昵称/备注与对应Prompt配置:</label>
                 <div id="listen-list">
                     {% for item in config.LISTEN_LIST %}
                     <div class="entry">
@@ -652,10 +654,10 @@
 
         <div class="section">
             <h2>Chat 模型配置</h2>
-
+            
             <!-- API 服务商 -->
             <div class="form-group">
-                <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 多达60余种模型)</label>
+                <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1vuQeYxEnj/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=108" target="_blank">[查看使用教程]</a> )</label>
                 <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
                     <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                     <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>官方API</option>
@@ -686,7 +688,9 @@
                     <option value="gpt-4o" {% if config.MODEL == 'gpt-4o' %}selected{% endif %}>gpt-4o</option>
                     <option value="gpt-4o-mini" {% if config.MODEL == 'gpt-4o-mini' %}selected{% endif %}>gpt-4o-mini</option>
                     <option value="gemini-2.0-flash-exp" {% if config.MODEL == 'gemini-2.0-flash-exp' %}selected{% endif %}>gemini-2.0-flash-exp (推荐)</option>
+                    <option value="gemini-2.0-flash-thinking-exp-1219" {% if config.MODEL == 'gemini-2.0-flash-thinking-exp-1219' %}selected{% endif %}>gemini-2.0-flash-thinking-exp-1219 (推荐)</option>  
                     <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>deepseek-ai/DeepSeek-V3 (推荐)</option>
+                    <option value="deepseek-v3-0324" {% if config.MODEL == 'deepseek-v3-0324' %}selected{% endif %}>deepseek-v3-0324 (推荐)</option>
                     <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>deepseek-ai/DeepSeek-R1</option>
                     <option value="deepseek-r1-searching" {% if config.MODEL == 'deepseek-r1-searching' %}selected{% endif %}>deepseek-r1-searching 可联网搜索</option>
                     <option value="claude-3-5-haiku-20241022" {% if config.MODEL == 'claude-3-5-haiku-20241022' %}selected{% endif %}>claude-3-5-haiku-20241022</option>
@@ -698,7 +702,7 @@
                     <option value="gpt-4-turbo" {% if config.MODEL == 'gpt-4-turbo' %}selected{% endif %}>gpt-4-turbo *</option>
                     <option value="gemini-2.0-pro-exp-02-05" {% if config.MODEL == 'gemini-2.0-pro-exp-02-05' %}selected{% endif %}>gemini-2.0-pro-exp-02-05 *</option>
                     <option value="grok-3" {% if config.MODEL == 'grok-3' %}selected{% endif %}>grok-3 *</option>
-                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05','grok-3'] %}selected{% endif %}>其它</option>
+                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','gemini-2.0-flash-thinking-exp-1219','deepseek-v3-0324','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05','grok-3'] %}selected{% endif %}>其它</option>
                 </select>
                 <input type="text" id="customModel"
                     placeholder="请输入自定义模型名称"
@@ -804,9 +808,9 @@
         <div class="section">
             <h2>群聊消息接收配置</h2>
             <label>群聊消息处理模式:</label>
-            <select name="Accept_All_Group_Chat_Messages">
-                <option value=False {% if config.Accept_All_Group_Chat_Messages == False %}selected{% endif %}>仅当消息中出现@机器人 时作出回应</option>
-                <option value=True {% if config.Accept_All_Group_Chat_Messages == True %}selected{% endif %}>接收无论任何人的任何消息</option>
+            <select name="ACCEPT_ALL_GROUP_CHAT_MESSAGES">
+                <option value=False {% if config.ACCEPT_ALL_GROUP_CHAT_MESSAGES == False %}selected{% endif %}>仅当消息中出现@机器人 时作出回应</option>
+                <option value=True {% if config.ACCEPT_ALL_GROUP_CHAT_MESSAGES == True %}selected{% endif %}>接收无论任何人的任何消息</option>
             </select>
         </div>
 

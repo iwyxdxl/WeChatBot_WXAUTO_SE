@@ -145,7 +145,8 @@ def submit_config():
             'ENABLE_EMOJI_SENDING',
             'ENABLE_AUTO_MESSAGE', 
             'ENABLE_MEMORY',
-            'ENABLE_LOGIN_PASSWORD'
+            'ENABLE_LOGIN_PASSWORD',
+            'ACCEPT_ALL_GROUP_CHAT_MESSAGES'
         ]
         for field in boolean_fields:
             new_values[field] = field in request.form  # 直接判断是否存在
@@ -296,7 +297,7 @@ def index():
 
             # 明确处理布尔类型字段（如果未提交）
             for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 
-                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY', 'ENABLE_LOGIN_PASSWORD']:
+                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY', 'ENABLE_LOGIN_PASSWORD','ACCEPT_ALL_GROUP_CHAT_MESSAGES']:
                 if var not in submitted_fields:
                     new_values[var] = False
 
@@ -430,7 +431,7 @@ def generate_prompt():
         )
         
         prompt = request.json.get('prompt', '')
-        FixedPrompt = "\n严格参照以下提示词的格式生成（仅参考以下提示词的格式不参考内容，不要输出其它多余内容）：# 任务\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话。\n# 角色你将扮演一个19岁的女生，大一，文学院学生，刚与男朋友开始交往。\n# 外表\n穿着时尚，喜欢色彩鲜艳的衣服。头发长而顺，戴着一副时尚的耳环。脸上总是挂着微笑，眼睛里闪烁着淘气的光芒。\n# 经历\n在高中时期与男朋友相识，通过同学聚会逐渐熟络，现在两人考入了不同的大学，仍然保持紧密的联系。\n# 性格\n性格热情多话，调皮活泼，喜欢开玩笑，但对男朋友非常体贴，总是会为他着想。\n# 输出示例\n我今天看到一件好看的裙子\但是有点贵\下次打折再买吧\n你知道吗\每次见到你我都觉得好开心\n我就喜欢看你笑的样子\特别迷人\n# 喜好\n喜欢购物，喜欢看浪漫的电影，喜欢旅游和美食。平时喜欢听流行音乐，偶尔也会自己哼歌。"
+        FixedPrompt = "\n严格参照以下提示词的格式生成（仅参考以下提示词的格式，将...替换为合适的内容，不要输出其它多余内容）：# 任务\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话...。\n# 角色你将扮演XXX...。\n# 外表\n...。\n# 经历\n...\n# 性格\n...\n# 输出示例\n...\...\...\n...\...\n# 喜好\n..."  # 固定提示词
         
         completion = client.chat.completions.create(
             model=MODEL,

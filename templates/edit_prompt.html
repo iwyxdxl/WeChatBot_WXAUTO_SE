@@ -117,6 +117,34 @@
         .legal-notice .legal-content a:hover {
             text-decoration: underline;
         }
+        /* 统一所有输入控件的盒模型 */
+        .form-group input,
+        .form-group textarea,
+        #promptInput {
+            box-sizing: border-box; /* 确保宽度包含padding和border */
+        }
+
+        /* 统一padding */
+        .form-group input,
+        .form-group textarea,
+        #promptInput {
+            padding: 12px 15px; /* 统一垂直/水平间距 */
+        }
+
+        .textarea-container {
+            position: relative;
+            width: 100%;
+        }
+        .word-counter {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 12px;
+            color: #777;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -124,11 +152,14 @@
     <form method="post">
         <div class="form-group">
             <label>文件名:</label>
-            <input type="text" name="filename" value="{{ filename }}" required>
+            <input type="text" name="filename" placeholder="建议以角色名命名，文件名将同时作为记忆中ai扮演的角色的名字。" value="{{ filename }}" required>
         </div>
         <div class="form-group">
             <label>内容:</label>
-            <textarea name="content">{{ content }}</textarea>
+            <div class="textarea-container">
+                <textarea name="content" id="contentTextarea">{{ content }}</textarea>
+                <div class="word-counter" id="wordCounter">0 字</div>
+            </div>
         </div>
         <div>
             <button type="submit">保存</button>
@@ -171,6 +202,23 @@
             } else {
                 content.style.display = 'none';
                 this.textContent = '显示法律声明';
+            }
+        });
+
+        // 添加字数统计功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const textarea = document.getElementById('contentTextarea');
+            const counter = document.getElementById('wordCounter');
+            
+            // 初始计数
+            updateCounter();
+            
+            // 输入时更新计数
+            textarea.addEventListener('input', updateCounter);
+            
+            function updateCounter() {
+                const count = textarea.value.length;
+                counter.textContent = count + ' 字';
             }
         });
     </script>

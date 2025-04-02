@@ -10,9 +10,9 @@
 # For any further details regarding the license, please refer to the LICENSE file.
 # ***********************************************************************
 
-# 用户列表(请配置要和bot说话的账号的微信昵称，不要写备注！)
-# 例如：LISTEN_LIST = ['微信昵称1','提示词示例1']
-LISTEN_LIST = [['微信昵称1', '提示词示例1']]
+# 用户列表(请配置要和bot说话的账号的微信昵称！)
+# 例如：LISTEN_LIST = [['微信名1', '角色1'],['微信名2', '角色2']]
+LISTEN_LIST = [['微信名1', '角色1']]
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = ''
@@ -75,7 +75,7 @@ MAX_MESSAGE_LOG_ENTRIES = 30
 MAX_MEMORY_NUMBER = 50
 
 # 是否接收全部群聊消息
-Accept_All_Group_Chat_Messages = False
+ACCEPT_ALL_GROUP_CHAT_MESSAGES = True
 
 # 登录配置编辑器设置
 ENABLE_LOGIN_PASSWORD = False

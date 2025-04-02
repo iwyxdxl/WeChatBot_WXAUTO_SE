@@ -46,6 +46,7 @@ class Updater:
         "prompts",      # 聊天提示词
         "Memory_Temp",  # 临时记忆文件
         "__pycache__",  # Python缓存文件
+        "emojis",      # 表情包
     ]
 
     # GitHub代理列表

@@ -17,25 +17,14 @@ from datetime import datetime, time as dt_time
 import threading
 import time
 import os
-from wxauto import WeChat
+from Mwxauto.wxauto import WeChat
 from openai import OpenAI
 import random
 from typing import Optional
 import pyautogui
 import shutil
-import re  
-from config import (
-    DEEPSEEK_API_KEY, MAX_TOKEN, TEMPERATURE, MODEL, DEEPSEEK_BASE_URL, LISTEN_LIST, 
-    MOONSHOT_API_KEY, MOONSHOT_BASE_URL, MOONSHOT_TEMPERATURE, 
-    EMOJI_DIR, EMOJI_SENDING_PROBABILITY,
-    AUTO_MESSAGE, MIN_COUNTDOWN_HOURS, MAX_COUNTDOWN_HOURS, MOONSHOT_MODEL,
-    QUIET_TIME_START, QUIET_TIME_END, QUEUE_WAITING_TIME, 
-    AVERAGE_TYPING_SPEED, RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX,
-    ENABLE_IMAGE_RECOGNITION, ENABLE_EMOJI_RECOGNITION, 
-    ENABLE_EMOJI_SENDING, ENABLE_AUTO_MESSAGE, ENABLE_MEMORY, 
-    MEMORY_TEMP_DIR, MAX_MESSAGE_LOG_ENTRIES, MAX_MEMORY_NUMBER,
-    Accept_All_Group_Chat_Messages
-    )
+import re
+from config import *
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
@@ -46,7 +35,7 @@ wx = WeChat()
 ROBOT_WX_NAME = wx.A_MyIcon.Name
 # 设置监听列表
 for user_name in user_names:
-    wx.AddListenChat(who=user_name, savepic=True)
+    wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
 # 持续监听消息，并且收到消息后回复
 wait = 1  # 设置1秒查看一次是否有新消息
 
@@ -102,7 +91,7 @@ def check_user_timeouts():
                     if current_time - last_active >= wait_time:
                         if not is_quiet_time():
                             # 增加时间标记
-                            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
                             auto_content = f"[{current_time}] {AUTO_MESSAGE}"  
                             logger.info(f"为用户 {user} 发送自动消息:{auto_content}")
                             reply = get_deepseek_response(auto_content, user)
@@ -200,7 +189,7 @@ def message_listener():
             if wx is None:
                 wx = WeChat()
                 for user_name in user_names:
-                    wx.AddListenChat(who=user_name, savepic=True)
+                    wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
                 if not wx.GetSessionList():
                     time.sleep(5)
                     
@@ -222,7 +211,7 @@ def message_listener():
                             handle_emoji_message(msg, who)
                         else:
                             handle_wxauto_message(msg, who)
-                    elif Accept_All_Group_Chat_Messages:
+                    elif ACCEPT_ALL_GROUP_CHAT_MESSAGES:
                         if not msg.content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
                             msg.content = "群聊消息[" + msg.sender + "]:" + msg.content
                         if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
@@ -353,7 +342,7 @@ def handle_wxauto_message(msg, who):
                 # 记录到用户专属日志文件（添加[User][prompt]标记）
                 prompt_name = prompt_mapping.get(username, username)  # 获取配置的prompt名
                 log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
-                log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [User] {content}\n" 
+                log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{username}] {content}\n" 
                 
                 # 检查文件大小并轮转
                 if os.path.exists(log_file) and os.path.getsize(log_file) > 1 * 1024 * 1024:  # 1MB
@@ -363,7 +352,7 @@ def handle_wxauto_message(msg, who):
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(log_entry)
                 
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
             content = f"[{current_time}] {content}"
             logger.info(f"处理消息 - {username}: {content}")
             sender_name = username  # 使用昵称作为发送者名称    
@@ -464,14 +453,14 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
         if '\\' in reply:
             parts = [p.strip() for p in reply.split('\\') if p.strip()]
             for i, part in enumerate(parts):
-                wx.SendMsg(part, user_id)
+                wx.SendMsg(msg = part, who = user_id)
                 logger.info(f"分段回复 {sender_name}: {part}")
 
                 if ENABLE_MEMORY:
                     # 记录到用户专属日志文件（添加[AI]标记）
                     prompt_name = prompt_mapping.get(username, username)  # 获取配置的prompt名
                     log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
-                    log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [AI] {part}\n"  
+                    log_entry = f"{datetime.now().strftime('%Y-%m-%d  %A %H:%M:%S')} | [{prompt_name}] {part}\n"  
                     
                     # 检查文件大小并轮转
                     if os.path.exists(log_file) and os.path.getsize(log_file) > 1 * 1024 * 1024:  # 1MB
@@ -489,14 +478,14 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
                         delay = 2
                     time.sleep(delay)
         else:
-            wx.SendMsg(reply, user_id)
+            wx.SendMsg(msg = reply, who = user_id)
             logger.info(f"回复 {sender_name}: {reply}")
 
             if ENABLE_MEMORY:
                 # 记录到用户专属日志文件（添加[AI]标记）
                 prompt_name = prompt_mapping.get(username, username)  # 获取配置的prompt名
                 log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
-                log_entry = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | [AI] {reply}\n"  
+                log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{prompt_name}] {reply}\n"  
                 
                 # 检查文件大小并轮转
                 if os.path.exists(log_file) and os.path.getsize(log_file) > 1 * 1024 * 1024:  # 1MB
@@ -742,18 +731,18 @@ def summarize_and_save(user_id):
         # --- 生成总结 ---
         # 修改为使用全部日志内容
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
-        summary_prompt = f"请用中文总结以下对话，提取重要信息形成记忆片段的摘要（仅输出摘要不要输出其它信息）：\n{full_logs}"
+        summary_prompt = f"请以{prompt_name}的视角，用中文总结与{user_id}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{full_logs}"
         summary = get_deepseek_response(summary_prompt, "system")
-        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %H:%M]
+        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %A %H:%M]或[%Y-%m-%d %H:%M]
         summary = re.sub(
-            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]',
+            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2}( [A-Za-z]+)? \d{2}:\d{2}\]',
             '',
             summary,
             flags=re.MULTILINE
         ).strip()
-        
+
         # --- 评估重要性 ---
-        importance_prompt = f"为以下内容的重要性评分（1-5，直接回复数字）：\n{summary}"
+        importance_prompt = f"为以下记忆的重要性评分（1-5，直接回复数字）：\n{summary}"
         importance_response = get_deepseek_response(importance_prompt, "system")
         
         # 强化重要性提取逻辑
@@ -765,7 +754,7 @@ def summarize_and_save(user_id):
             logger.warning(f"无法解析重要性评分，使用默认值3。原始响应：{importance_response}")
 
         # --- 存储记忆 ---
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
         
         # 修正1：增加末尾换行
         memory_entry = f"""## 记忆片段 [{current_time}]
@@ -938,12 +927,20 @@ def main():
             memory_thread = threading.Thread(target=memory_manager)
             memory_thread.daemon = True
             memory_thread.start()
-        
-        # 启动后台线程来检查用户超时
+
         if ENABLE_AUTO_MESSAGE:
-            threading.Thread(target=check_user_timeouts, daemon=True).start()
+            for user in user_names:
+                reset_user_timer(user)
+            logger.info("已为所有用户初始化自动消息计时器")
+            
+            # 启动自动消息检查线程
+            auto_message_thread = threading.Thread(target=check_user_timeouts)
+            auto_message_thread.daemon = True
+            auto_message_thread.start()
+            logger.info("已启动自动消息检查线程")
 
         logger.info("开始运行BOT...")
+        print("\033[32m开始运行BOT...\033[0m")
 
         while True:
             time.sleep(wait)

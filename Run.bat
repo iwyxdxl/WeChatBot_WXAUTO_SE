@@ -9,8 +9,8 @@ chcp 65001 >nul
 :: 检查Python是否安装
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Python未安装，请先安装Python 3.8或更高的版本，但请安装3.12以下的版本。
-    echo 若您已安装Python,请检查是否已经将Python添加到系统Path。
+    echo [Info]Python未安装，请先安装Python 3.8或更高的版本，但请安装3.12以下的版本。
+    echo [Info]若您已安装Python,请检查是否已经将Python添加到系统Path。
     pause
     exit /b 1
 )
@@ -26,19 +26,19 @@ for /f "tokens=1,2 delims=." %%a in ("%pyversion%") do (
 
 :: 检查版本是否符合要求
 if %major% lss 3 (
-    echo 您的Python版本是%pyversion%，但需要至少Python 3.8，且低于Python 3.12。
+    echo [Info]您的Python版本是%pyversion%，但需要至少Python 3.8，且低于Python 3.12。
     pause
     exit /b 1
 )
 
 if %major% equ 3 (
     if %minor% lss 8 (
-        echo 您的Python版本是%pyversion%，但需要至少Python 3.8。
+        echo [Info]您的Python版本是%pyversion%，但需要至少Python 3.8。
         pause
         exit /b 1
     )
     if %minor% gtr 12 (
-        echo 您的Python版本是%pyversion%，最新支持了Python 3.12.8等版本。
+        echo [Info]您的Python版本是%pyversion%，最新支持了Python 3.12.8等版本。
         pause
         exit /b 1
     )
@@ -47,58 +47,58 @@ if %major% equ 3 (
 :: 检查pip是否安装
 python -m pip --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo pip未安装，请先安装pip。
+    echo [Info]pip未安装，请先安装pip。
     pause
     exit /b 1
 )
 
-echo Python版本检查通过。
+echo [Info]Python版本检查通过。
 
 
 :: ---------------------------
 :: 安装依赖
 :: ---------------------------
 
-echo 正在检测可用镜像源...
+echo [Info]正在检测可用镜像源...
 
 :: 尝试阿里源
-echo 正在尝试阿里源...
+echo [Info]正在尝试阿里源...
 python -m pip install --upgrade pip --index-url https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 if !errorlevel! equ 0 (
     set "SOURCE_URL=https://mirrors.aliyun.com/pypi/simple/"
     set "TRUSTED_HOST=mirrors.aliyun.com"
-    echo 成功使用阿里源。
+    echo [Info]成功使用阿里源。
     goto :INSTALL
 )
 
 :: 尝试清华源
-echo 正在尝试清华源...
+echo [Info]正在尝试清华源...
 python -m pip install --upgrade pip --index-url https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
 if !errorlevel! equ 0 (
     set "SOURCE_URL=https://pypi.tuna.tsinghua.edu.cn/simple"
     set "TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn"
-    echo 成功使用清华源。
+    echo [Info]成功使用清华源。
     goto :INSTALL
 )
 
 :: 尝试官方源
-echo 正在尝试官方源...
+echo [Info]正在尝试官方源...
 python -m pip install --upgrade pip --index-url https://pypi.org/simple
 if !errorlevel! equ 0 (
     set "SOURCE_URL=https://pypi.org/simple"
     set "TRUSTED_HOST="
-    echo 成功使用官方源。
+    echo [Info]成功使用官方源。
     goto :INSTALL
 )
 
 :: 所有源均失败
-echo 所有镜像源均不可用，请检查网络连接。
+echo [Info]所有镜像源均不可用，请检查网络连接。
 pause
 exit /b 1
 
 :INSTALL
-echo 正在使用源：%SOURCE_URL%
-echo 安装依赖...
+echo [Info]正在使用源：%SOURCE_URL%
+echo [Info]安装依赖...
 
 if "!TRUSTED_HOST!"=="" (
     python -m pip install -r requirements.txt -f ./libs --index-url !SOURCE_URL!
@@ -107,23 +107,23 @@ if "!TRUSTED_HOST!"=="" (
 )
 
 if !errorlevel! neq 0 (
-    echo 安装依赖失败，请检查网络或手动安装。
+    echo [Info]安装依赖失败，请检查网络或手动安装。
     pause
     exit /b 1
 )
 
-echo 依赖安装完成！
+echo [Info]依赖安装完成！
 cls
 
 :: ---------------------------
 :: 检查程序更新
 :: ---------------------------
 
-echo 检查程序更新...
+echo [Info]检查程序更新...
 
 python updater.py
 
-echo 程序更新完成！
+echo [Info]程序更新完成！
 
 :: 清屏
 cls
