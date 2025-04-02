@@ -14,7 +14,7 @@
 <img src="Demo_Image/4.png" alt="示例图片4" width="900px">
 
 # 版本号
-- v3.11 bata 1
+- v3.11
 
 # 目前支持的功能
 1. 自动回复
