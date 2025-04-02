@@ -146,7 +146,6 @@ def submit_config():
             'ENABLE_AUTO_MESSAGE', 
             'ENABLE_MEMORY',
             'ENABLE_LOGIN_PASSWORD',
-            'ACCEPT_ALL_GROUP_CHAT_MESSAGES'
         ]
         for field in boolean_fields:
             new_values[field] = field in request.form  # 直接判断是否存在
@@ -297,7 +296,7 @@ def index():
 
             # 明确处理布尔类型字段（如果未提交）
             for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 
-                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY', 'ENABLE_LOGIN_PASSWORD','ACCEPT_ALL_GROUP_CHAT_MESSAGES']:
+                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY', 'ENABLE_LOGIN_PASSWORD']:
                 if var not in submitted_fields:
                     new_values[var] = False
 
