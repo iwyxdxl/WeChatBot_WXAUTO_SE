@@ -19,7 +19,7 @@
 # along with WeChatBot.  If not, see <http://www.gnu.org/licenses/>.
 # ***********************************************************************
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, Response
 import re
 import ast
 import os
@@ -33,10 +33,16 @@ from functools import wraps
 import webbrowser
 from threading import Timer
 from flask import Flask
+import logging
+from queue import Queue, Empty
+import time
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24).hex()  # 48位十六进制字符串
 bot_process = None
+
+# 全局日志队列
+log_queue = Queue()
 
 # 新增登录相关路由
 @app.route('/login', methods=['GET', 'POST'])
@@ -453,17 +459,107 @@ def generate_prompt():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+class WebLogHandler(logging.Handler):
+    def emit(self, record):
+        log_entry = self.format(record)
+        log_queue.put(log_entry)
+
+# 配置日志处理器
+web_handler = WebLogHandler()
+web_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(web_handler)
+
+@app.route('/stream')
+@login_required
+def stream():
+    def event_stream():
+        retry_count = 0
+        while True:
+            try:
+                log = log_queue.get(timeout=5)
+                yield f"data: {log}\n\n"
+                retry_count = 0  # 成功时重置重试计数器
+            except Empty:
+                yield ":keep-alive\n\n"  # 发送心跳包
+                retry_count = min(retry_count + 1, 5)
+                time.sleep(2 ** retry_count)  # 指数退避
+            except Exception as e:
+                app.logger.error(f"SSE Error: {str(e)}")
+                yield "event: error\ndata: Connection closed\n\n"
+                break
+    
+    return Response(
+        event_stream(),
+        mimetype="text/event-stream",
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+
+@app.route('/api/log', methods=['POST'])
+def receive_bot_log():
+    try:
+        # 增加Content-Type检查
+        if not request.is_json:
+            return jsonify({'error': 'Unsupported Media Type'}), 415
+
+        log_data = request.json.get('log')
+        if log_data:
+            # 添加进程标识和颜色标记
+            colored_log = f"[BOT] \033[34m{log_data.strip()}\033[0m"
+            log_queue.put(colored_log)
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        app.logger.error(f"日志接收失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
+def kill_process_using_port(port):
+    """
+    检查指定端口是否被占用，如果被占用则结束占用的进程
+    """
+    # 遍历所有连接
+    for conn in psutil.net_connections():
+        # 由于 config 中 PORT 可能为字符串，转换为 int
+        if conn.laddr and conn.laddr.port == port:
+            # 根据不同平台，监听状态可能不同（Linux一般为 'LISTEN'，Windows为 'LISTENING'）
+            if conn.status in ('LISTEN', 'LISTENING'):
+                try:
+                    proc = psutil.Process(conn.pid)
+                    print(f"检测到端口 {port} 被进程 {conn.pid} 占用，尝试结束该进程……")
+                    proc.kill()
+                    proc.wait(timeout=3)
+                    print(f"进程 {conn.pid} 已被成功结束。")
+                except Exception as e:
+                    print(f"结束进程 {conn.pid} 时出现异常：{e}")
+
 if __name__ == '__main__':
+    class BotStatusFilter(logging.Filter):
+        def filter(self, record):
+            # 如果日志消息中包含 /bot_status 或 /api/log，则返回 False（不记录）
+            if '/bot_status' in record.getMessage() or '/api/log' in record.getMessage():
+                return False
+            return True
+
+    # 获取 werkzeug 的日志记录器并添加过滤器
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.addFilter(BotStatusFilter())
+
     # 新增配置文件存在检查
     config_path = os.path.join(os.path.dirname(__file__), 'config.py')
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"核心配置文件缺失: {config_path}")
     
     config = parse_config()
+    PORT = config.get('PORT', '5000')
+
+    # 在启动服务器前检查端口是否被占用，若占用则结束该进程
+    kill_process_using_port(PORT)
+
     print(f"\033[31m重要提示：\r\n若您的浏览器没有自动打开网页端，请手动访问http://localhost:{config.get('PORT', '5000')}/ \r\n \033[0m")
     if config.get('ENABLE_LOGIN_PASSWORD', False):
         print(f"\033[31m您已启用登录密码，密码为 {config.get('LOGIN_PASSWORD', '未设置')} 请勿泄露给其它人！\r\n \033[0m")
-    PORT = config.get('PORT', '5000')
     
     # 在启动服务器前设置定时器打开浏览器
     def open_browser():

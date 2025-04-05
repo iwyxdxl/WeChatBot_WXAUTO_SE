@@ -25,6 +25,8 @@ import pyautogui
 import shutil
 import re
 from config import *
+import requests
+from logging.handlers import HTTPHandler
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
@@ -53,12 +55,58 @@ user_queues = {}  # {user_id: {'messages': [], 'last_message_time': 时间戳, .
 queue_lock = threading.Lock()  # 队列访问锁
 chat_contexts = {}  # {user_id: [{'role': 'user', 'content': '...'}, ...]}
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+class BotHTTPHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.url = 'http://localhost:5000/api/log'  # 明确指定完整URL
+
+    def emit(self, record):
+        try:
+            log_entry = self.format(record)
+            headers = {
+                'Content-Type': 'application/json',
+                'User-Agent': 'WeChatBot/1.0'
+            }
+            data = {'log': log_entry}
+            
+            # 添加重试机制
+            for attempt in range(3):
+                try:
+                    resp = requests.post(
+                        self.url,
+                        json=data,  # 使用json参数自动设置Content-Type
+                        headers=headers,
+                        timeout=3
+                    )
+                    resp.raise_for_status()
+                    break
+                except requests.exceptions.RequestException as e:
+                    if attempt == 2:
+                        logger.error(f"日志发送失败（最终尝试）: {str(e)}")
+                    else:
+                        time.sleep(1)
+        except Exception as e:
+            logger.error(f"日志处理器异常: {str(e)}")
+
+# 配置日志处理器（统一使用根Logger）
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# 清除所有现有处理器（避免重复）
+logger.handlers.clear()
+
+# 创建通用格式化器
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# 配置HTTP处理器（单例）
+http_handler = BotHTTPHandler()
+http_handler.setFormatter(formatter)
+logger.addHandler(http_handler)
+
+# 配置控制台处理器（单例）
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # 存储用户的计时器和随机等待时间
 user_timers = {}
@@ -74,8 +122,7 @@ def parse_time(time_str):
         TimeResult = datetime.strptime(time_str, "%H:%M").time()
         return TimeResult
     except Exception as e:
-        logger.error("主动消息安静时间设置有误！请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号！")
-        print("\033[31m错误：主动消息安静时间设置有误！请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号！\033[0m")
+        logger.error("\033[31m错误：主动消息安静时间设置有误！请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号！\033[0m")
 
 quiet_time_start = parse_time(QUIET_TIME_START)
 quiet_time_end = parse_time(QUIET_TIME_END)
@@ -170,17 +217,17 @@ def get_deepseek_response(message, user_id):
         ErrorImformation = str(e)
         logger.error(f"Chat调用失败: {str(e)}", exc_info=True)
         if "real name verification" in ErrorImformation :
-            print("\033[31m错误：API服务商反馈请完成实名认证后再使用！ \033[0m")
+            logger.error("\033[31m错误：API服务商反馈请完成实名认证后再使用！ \033[0m")
         elif "rate" in ErrorImformation :
-            print("\033[31m错误：API服务商反馈当前访问API服务频次达到上限，请稍后再试！ \033[0m")
+            logger.error("\033[31m错误：API服务商反馈当前访问API服务频次达到上限，请稍后再试！ \033[0m")
         elif "paid" in ErrorImformation :
-            print("\033[31m错误：API服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！ \033[0m")
+            logger.error("\033[31m错误：API服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！ \033[0m")
         elif "Api key is invalid" in ErrorImformation :
-            print("\033[31m错误：API服务商反馈API KEY不可用，请检查配置选项！ \033[0m")
+            logger.error("\033[31m错误：API服务商反馈API KEY不可用，请检查配置选项！ \033[0m")
         elif "busy" in ErrorImformation :    
-            print("\033[31m错误：API服务商反馈服务器繁忙，请稍后再试！ \033[0m")
+            logger.error("\033[31m错误：API服务商反馈服务器繁忙，请稍后再试！ \033[0m")
         else :
-            print("\033[31m错误： " + str(e) + "\033[0m")
+            logger.error("\033[31m错误： " + str(e) + "\033[0m")
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
 def message_listener():
@@ -228,7 +275,7 @@ def message_listener():
                         
         except Exception as e:
             logger.error(f"Message: {str(e)}")
-            print("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若命令窗口收不到消息，请将微信聊天框置于最前台！ \033[0m")
+            logger.error("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若命令窗口收不到消息，请将微信聊天框置于最前台！ \033[0m")
             wx = None
         time.sleep(wait)
 
@@ -505,20 +552,25 @@ def send_reply(user_id, sender_name, username, merged_message, reply):
 
 def remove_timestamps(text):
     """
-    移除文本中所有[YYYY-MM-DD HH:MM:SS]格式的时间戳
+    移除文本中所有[YYYY-MM-DD (Weekday) HH:MM(:SS)]格式的时间戳
+    支持四种格式：
+    1. [YYYY-MM-DD Weekday HH:MM:SS] - 带星期和秒
+    2. [YYYY-MM-DD Weekday HH:MM] - 带星期但没有秒
+    3. [YYYY-MM-DD HH:MM:SS] - 带秒但没有星期
+    4. [YYYY-MM-DD HH:MM] - 基本格式
     并自动清理因去除时间戳产生的多余空格
     """
-    # 定义严格的时间戳正则模式（精确到秒级）
+    # 定义支持多种格式的时间戳正则模式
     timestamp_pattern = r'''
         \[                # 起始方括号
         \d{4}             # 年份：4位数字
         -(0[1-9]|1[0-2])  # 月份：01-12
-        -(0[1-9]|12\d|3[01]) # 日期：01-31
+        -(0[1-9]|[12]\d|3[01]) # 日期：01-31
+        (?:\s[A-Za-z]+)?  # 可选的星期部分
         \s                # 日期与时间之间的空格
         (?:2[0-3]|[01]\d) # 小时：00-23
         :[0-5]\d          # 分钟：00-59
-        :[0-5]\d          # 秒数：00-59
-        \]                # 结束方括号
+        (?::[0-5]\d)?     # 可选的秒数：00-59括号
     '''
     
     # 使用正则标志：
@@ -640,16 +692,24 @@ def capture_and_save_screenshot(who):
 def clean_up_temp_files ():
     # 检查是否存在该目录
     if os.path.isdir("screenshot"):
-        shutil.rmtree("screenshot")
-        print(f"目录 screenshot 已成功删除")
+        try:
+            shutil.rmtree("screenshot")
+        except Exception as e:
+            logger.error(f"删除目录 screenshot 失败: {str(e)}")
+            return
+        logger.info(f"目录 screenshot 已成功删除")
     else:
-        print(f"目录 screenshot 不存在，无需删除")
+        logger.info(f"目录 screenshot 不存在，无需删除")
 
     if os.path.isdir("wxauto文件"):
-        shutil.rmtree("wxauto文件")
-        print(f"目录 wxauto文件 已成功删除")
+        try:
+            shutil.rmtree("wxauto文件")
+        except Exception as e:
+            logger.error(f"删除目录 wxauto文件 失败: {str(e)}")
+            return
+        logger.info(f"目录 wxauto文件 已成功删除")
     else:
-        print(f"目录 wxauto文件 不存在，无需删除")
+        logger.info(f"目录 wxauto文件 不存在，无需删除")
 
 def is_quiet_time():
     current_time = datetime.now().time()
@@ -725,7 +785,7 @@ def summarize_and_save(user_id):
             logs = [line.strip() for line in f if line.strip()]
             # 修改检查条件：仅检查是否达到最小处理阈值
             if len(logs) < MAX_MESSAGE_LOG_ENTRIES:
-                logger.info(f"日志条目不足（{len(logs)}条），无需处理")
+                logger.info(f"日志条目不足（{len(logs)}条），未触发记忆总结。")
                 return
 
         # --- 生成总结 ---
@@ -733,9 +793,9 @@ def summarize_and_save(user_id):
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
         summary_prompt = f"请以{prompt_name}的视角，用中文总结与{user_id}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{full_logs}"
         summary = get_deepseek_response(summary_prompt, "system")
-        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %A %H:%M]或[%Y-%m-%d %H:%M]
+        # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %A %H:%M]或[%Y-%m-%d %H:%M]或[%Y-%m-%d %H:%M:%S]或[%Y-%m-%d %A %H:%M:%S]格式的时间戳
         summary = re.sub(
-            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2}( [A-Za-z]+)? \d{2}:\d{2}\]',
+            r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2}( [A-Za-z]+)? \d{2}:\d{2}(:\d{2})?\]',
             '',
             summary,
             flags=re.MULTILINE
@@ -754,7 +814,7 @@ def summarize_and_save(user_id):
             logger.warning(f"无法解析重要性评分，使用默认值3。原始响应：{importance_response}")
 
         # --- 存储记忆 ---
-        current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
+        current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M")
         
         # 修正1：增加末尾换行
         memory_entry = f"""## 记忆片段 [{current_time}]
@@ -854,9 +914,32 @@ def manage_memory_capacity(user_file):
         memory_scores = []
         for timestamp, importance, _ in segments:
             try:
-                time_diff = (now - datetime.strptime(timestamp, "%Y-%m-%d %H:%M")).total_seconds()
-            except ValueError:
+                # 尝试多种时间格式，支持新旧格式
+                formats = [
+                    "%Y-%m-%d %A %H:%M:%S",  # 新格式，带星期和秒
+                    "%Y-%m-%d %A %H:%M",     # 新格式，带星期但没有秒
+                    "%Y-%m-%d %H:%M:%S",     # 带秒但没有星期
+                    "%Y-%m-%d %H:%M"         # 原始格式
+                ]
+                
+                parsed_time = None
+                for fmt in formats:
+                    try:
+                        parsed_time = datetime.strptime(timestamp, fmt)
+                        break
+                    except ValueError:
+                        continue
+                
+                if parsed_time:
+                    time_diff = (now - parsed_time).total_seconds()
+                else:
+                    # 如果所有格式都解析失败
+                    logger.warning(f"无法解析时间戳: {timestamp}")
+                    time_diff = 0
+            except Exception as e:
+                logger.warning(f"时间戳解析错误: {str(e)}")
                 time_diff = 0
+                
             # 处理重要度缺失，默认值为3
             importance_value = int(importance) if importance else 3
             score = 0.6 * importance_value - 0.4 * (time_diff / 3600)
@@ -939,8 +1022,7 @@ def main():
             auto_message_thread.start()
             logger.info("已启动自动消息检查线程")
 
-        logger.info("开始运行BOT...")
-        print("\033[32m开始运行BOT...\033[0m")
+        logger.info("\033[32m开始运行BOT...\033[0m")
 
         while True:
             time.sleep(wait)
@@ -948,7 +1030,7 @@ def main():
         logger.error(f"发生异常: {str(e)}")
     except FileNotFoundError as e:
         logger.error(f"初始化失败: {str(e)}")
-        print(f"\033[31m错误：{str(e)}\033[0m")
+        logger.error(f"\033[31m错误：{str(e)}\033[0m")
         exit(1)
     finally:
         logger.info("程序退出")
@@ -960,3 +1042,4 @@ if __name__ == '__main__':
         logger.info("用户终止程序")
     except Exception as e:
         logger.error(f"发生异常: {str(e)}", exc_info=True)
+        logger.error(f"FALLBACK LOG: {datetime.now()} - ERROR - {str(e)}")  # 保证基础日志可见

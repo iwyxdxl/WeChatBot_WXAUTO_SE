@@ -83,18 +83,23 @@ class WeChatBase:
             return msgs
 
         for msg in msgs:
-            if msg.type not in ('friend', 'self'):
+            if msg.type not in ('friend', 'self'):  # 排除非好友/自己类型的消息
                 continue
-            if msg.content.startswith(f"[{self._lang('图片')}]") and savepic:
+                
+            # 仅处理非自己发送的媒体消息（新增类型判断）
+            if msg.content.startswith(f"[{self._lang('图片')}]") and savepic and msg.type != 'self':
                 imgpath = self._download_pic(msg.control)
                 msg.content = imgpath if imgpath else msg.content
-            elif msg.content.startswith(f"[{self._lang('文件')}]") and savefile:
+                
+            elif msg.content.startswith(f"[{self._lang('文件')}]") and savefile and msg.type != 'self':
                 filepath = self._download_file(msg.control)
                 msg.content = filepath if filepath else msg.content
-            elif msg.content.startswith(f"[{self._lang('语音')}]") and savevoice:
+                
+            elif msg.content.startswith(f"[{self._lang('语音')}]") and savevoice and msg.type != 'self':
                 voice_text = self._get_voice_text(msg.control)
                 voice_text = f"[语音消息]{voice_text}"
                 msg.content = voice_text if voice_text else msg.content
+                
             msg.info[1] = msg.content
         return msgs
     

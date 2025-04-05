@@ -96,25 +96,23 @@
         }
         #promptInput {
             flex: 1;
-            padding: 8px;
+            padding: 12px 15px; /* 统一padding值 */
             font-size: 16px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            height: 38px;
-            box-sizing: border-box; /* 确保高度包含内边距和边框 */
+            box-sizing: border-box;
         }
         #generateBtn {
             background-color: #4caf50;
             color: white;
-            padding: 10px 20px;
+            padding: 12px 20px; /* 调整垂直padding与其他输入框匹配 */
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 16px;    /* 保持字体一致 */
             transition: background-color 0.3s;
-            height: 38px;
-            white-space: nowrap;
-            box-sizing: border-box; /* 确保按钮与输入框对齐 */
+            box-sizing: border-box;
+            line-height: 1;      /* 确保文字垂直居中 */
         }
         #generateBtn:hover {
             background-color: #45a049;

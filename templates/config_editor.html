@@ -272,6 +272,114 @@
         .legal-notice .legal-content a:hover {
             text-decoration: underline;
         }
+
+        /* 日志容器 */
+    #log-container {
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        letter-spacing: 0.3px;
+        background: #f5f5f5; /* 浅灰色背景 */
+        color: #333; /* 深灰色文字 */
+        border: 1px solid #ddd; /* 浅灰色边框 */
+        border-radius: 4px;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    /* 日志条目基础样式 */
+    .log-entry {
+        padding: 4px 8px;
+        border-left: 3px solid transparent;
+        transition: background 0.3s ease;
+        background-color: #fff; /* 白色条目背景 */
+        margin: 2px;
+        border-radius: 3px;
+    }
+
+    /* 错误日志 */
+    .log-entry.error {
+        border-color: #ff4444;
+        background: rgba(255, 68, 68, 0.08); /* 浅红色背景 */
+    }
+
+    /* 警告日志 */
+    .log-entry.warning {
+        border-color: #ffb74d;
+        background: rgba(255, 183, 77, 0.08); /* 浅橙色背景 */
+    }
+
+    /* 信息日志 */
+    .log-entry.info {
+        border-color: #4caf50;
+        background: rgba(76, 175, 80, 0.08); /* 浅绿色背景 */
+    }
+
+    /* 日志容器状态 */
+    #log-container.collapsed {
+        height: 40px;
+        opacity: 0.8;
+        overflow: hidden;
+        background: #f0f0f0; /* 收起时更浅的灰色 */
+    }
+
+    #log-container.expanded {
+        height: 400px;
+        overflow-y: auto;
+        opacity: 1;
+    }
+
+    /* 日志切换按钮 */
+    #logToggle {
+        cursor: pointer;
+        color: #666; /* 中灰色文字 */
+        font-weight: normal;
+        margin-top: 10px;
+        text-align: center;
+        padding: 8px 0;
+        width: 100%;
+        background: #f0f0f0; /* 浅灰色背景 */
+        border-radius: 4px;
+        transition: background 0.3s ease;
+    }
+
+    #logToggle:hover {
+        background: #e0e0e0; /* 悬停时稍深的灰色 */
+        text-decoration: none;
+    }
+
+    /* 强制覆盖暗色模式 */
+    @media (prefers-color-scheme: dark) {
+        #log-container {
+            background: #f5f5f5 !important;
+            border-color: #ddd !important;
+            color: #333 !important;
+        }
+        .log-entry {
+            background-color: #fff !important;
+            color: #333 !important;
+        }
+        #logToggle {
+            background: #f0f0f0 !important;
+            color: #666 !important;
+        }
+    }
+
+    /* 日志控制按钮 */
+    .log-controls button {
+        padding: 6px 12px;
+        background: #e0e0e0; /* 浅灰色背景 */
+        border: 1px solid #ccc; /* 灰色边框 */
+        border-radius: 3px;
+        color: #333; /* 深灰色文字 */
+        cursor: pointer;
+        font-family: Arial, sans-serif;
+        transition: all 0.3s ease;
+    }
+
+    .log-controls button:hover {
+        background: #d0d0d0; /* 悬停时稍深的灰色 */
+    }
       </style>      
       
     <script>
@@ -313,6 +421,9 @@
                         { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219 (推荐)" },
                         { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (推荐)" },
                         { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
+                        { value: "doubao-1-5-pro-32k-250115", text: "豆包 doubao-1-5-pro-32k-250115" },
+                        { value: "doubao-pro-256k-241115", text: "豆包 doubao-pro-256k-241115" },
+                        { value: "doubao-1-5-lite-32k-250115", text: "豆包 doubao-1-5-lite-32k-250115" },
                         { value: "deepseek-ai/DeepSeek-R1", text: "deepseek-ai/DeepSeek-R1" },
                         { value: "deepseek-r1-searching", text: "deepseek-r1-searching 可联网搜索" },
                         { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
@@ -608,8 +719,31 @@
 
             checkBotStatus();
             document.getElementById('botButton').addEventListener('click', toggleBot);
+            document.getElementById('logToggle').addEventListener('click', toggleLogs);
         });
 
+        function ansiToHtml(text) {
+            const colors = {
+                '31': '#ff4444', // 红
+                '32': '#4CAF50', // 绿
+                '33': '#ffb74d', // 黄
+                '34': '#333333', // 黑
+                '35': '#ab47bc', // 紫
+                '36': '#26c6da', // 青
+                '37': '#e0e0e0'  // 白
+            };
+
+            return text.replace(/\033\[([0-9;]+)m/g, (match, code) => {
+                const codes = code.split(';');
+                let style = '';
+                codes.forEach(c => {
+                    if(c === '1') style += 'font-weight:bold;';
+                    if(colors[c]) style += `color:${colors[c]};`;
+                    if(c === '0') style = ''; // 重置样式
+                });
+                return style ? `</span><span style="${style}">` : '</span><span>';
+            }).replace(/^/, '<span>').replace(/$/, '</span>');
+        }
 
     </script>
 </head>
@@ -627,7 +761,7 @@
             <button id="botButton" class="nav-button">Start Bot</button>
             <a href="{{ url_for('prompt_list') }}" class="nav-button" id="promptManagement">Prompt管理</a>
         </div>
-    </div>
+    </div> 
 
     <form method="post">
         <div class="section">
@@ -691,6 +825,9 @@
                     <option value="gemini-2.0-flash-thinking-exp-1219" {% if config.MODEL == 'gemini-2.0-flash-thinking-exp-1219' %}selected{% endif %}>gemini-2.0-flash-thinking-exp-1219 (推荐)</option>  
                     <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>deepseek-ai/DeepSeek-V3 (推荐)</option>
                     <option value="deepseek-v3-0324" {% if config.MODEL == 'deepseek-v3-0324' %}selected{% endif %}>deepseek-v3-0324 (推荐)</option>
+                    <option value="doubao-1-5-pro-32k-250115" {% if config.MODEL == 'doubao-1-5-pro-32k-250115' %}selected{% endif %}>豆包 doubao-1-5-pro-32k-250115</option>
+                    <option value="doubao-pro-256k-241115" {% if config.MODEL == 'doubao-pro-256k-241115' %}selected{% endif %}>豆包 doubao-pro-256k-241115</option>
+                    <option value="doubao-1-5-lite-32k-250115" {% if config.MODEL == 'doubao-1-5-lite-32k-250115' %}selected{% endif %}>豆包 doubao-1-5-lite-32k-250115</option>
                     <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>deepseek-ai/DeepSeek-R1</option>
                     <option value="deepseek-r1-searching" {% if config.MODEL == 'deepseek-r1-searching' %}selected{% endif %}>deepseek-r1-searching 可联网搜索</option>
                     <option value="claude-3-5-haiku-20241022" {% if config.MODEL == 'claude-3-5-haiku-20241022' %}selected{% endif %}>claude-3-5-haiku-20241022</option>
@@ -702,7 +839,7 @@
                     <option value="gpt-4-turbo" {% if config.MODEL == 'gpt-4-turbo' %}selected{% endif %}>gpt-4-turbo *</option>
                     <option value="gemini-2.0-pro-exp-02-05" {% if config.MODEL == 'gemini-2.0-pro-exp-02-05' %}selected{% endif %}>gemini-2.0-pro-exp-02-05 *</option>
                     <option value="grok-3" {% if config.MODEL == 'grok-3' %}selected{% endif %}>grok-3 *</option>
-                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','gemini-2.0-flash-thinking-exp-1219','deepseek-v3-0324','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05','grok-3'] %}selected{% endif %}>其它</option>
+                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','gemini-2.0-flash-thinking-exp-1219','deepseek-v3-0324','doubao-1-5-pro-32k-250115','doubao-pro-256k-241115','doubao-1-5-lite-32k-250115','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05','grok-3'] %}selected{% endif %}>其它</option>
                 </select>
                 <input type="text" id="customModel"
                     placeholder="请输入自定义模型名称"
@@ -920,11 +1057,20 @@
             </div>
         </div>
 
+        <div class="section">
+            <h2>程序运行日志</h2>
+            <div id="log-container" class="collapsed">
+                <div id="logs"></div>
+            </div>
+            <div class="legal-toggle" id="logToggle" style="text-align: center">展开日志</div>
+        </div>
+
         <div style="margin-top: 20px;">
             <button type="submit">保存配置</button>
             <button type="button" onclick="resetForm()">重置表单</button>
         </div>
     </form>
+    
     <div class="legal-notice">
         <div class="legal-toggle" id="toggleLegal">显示法律声明</div>
         <div class="legal-content" id="legalContent">
@@ -953,6 +1099,88 @@
         </div>
     </div>
     <script>
+        // 日志显示相关功能
+        let logPaused = false;
+        const logElement = document.getElementById('logs');
+        const maxLogLines = 200;
+        let logExpanded = false;
+
+        const initEventSource = () => {
+            const es = new EventSource('/stream');
+            
+            es.addEventListener('message', e => {
+                if(e.data.trim()) {
+                    const logType = e.data.includes('ERROR') ? 'error' : 
+                                e.data.includes('WARNING') ? 'warning' : 'info';
+                    addLogEntry(e.data, logType);
+                }
+            });
+
+            es.addEventListener('error', (e) => {
+                console.error('SSE Error:', e);
+                es.close();
+                setTimeout(initEventSource, 5000);  // 5秒后重连
+            });
+        }
+
+        function addLogEntry(text, type) {
+            const entry = document.createElement('div');
+            entry.innerHTML = ansiToHtml(text);  // 转换ANSI代码为HTML
+            entry.className = `log-entry ${type}`;
+            entry.style.whiteSpace = 'pre-wrap'; // 启用自动换行
+
+            // 暗色主题适配
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                entry.style.backgroundColor = '#2d2d2d';
+            }
+            
+            const logElement = document.getElementById('logs');
+            logElement.appendChild(entry);
+
+            // 自动滚动（仅当未暂停时）
+            const container = document.getElementById('log-container');
+            if(!logPaused && container.scrollTop + container.clientHeight >= container.scrollHeight - 50) {
+                container.scrollTop = container.scrollHeight;
+            }
+
+            // 限制最大行数
+            while(logElement.children.length > maxLogLines) {
+                logElement.removeChild(logElement.firstChild);
+            }
+        }
+
+        function toggleLogs() {
+            const container = document.getElementById('log-container');
+            const toggleBtn = document.getElementById('logToggle');
+            
+            logExpanded = !logExpanded;
+            container.classList.toggle('expanded', logExpanded);
+            container.classList.toggle('collapsed', !logExpanded);
+            
+            toggleBtn.textContent = logExpanded ? '收起日志' : '展开日志';
+            
+            // 展开时自动滚动到底部
+            if(logExpanded) {
+                setTimeout(() => {
+                    container.scrollTop = container.scrollHeight;
+                }, 100);
+            }
+        }
+        document.getElementById('log-container').classList.add('collapsed');
+
+        // 建立SSE连接
+        const eventSource = new EventSource('/stream');
+        eventSource.onmessage = function(e) {
+            if(e.data.trim()) {
+                addLogEntry(e.data);
+            }
+        };
+
+        eventSource.onerror = function(err) {
+            console.error("EventSource failed:", err);
+            addLogEntry('[系统] 日志连接中断，尝试重连中...');
+            setTimeout(() => location.reload(), 5000);
+        };
         document.getElementById('toggleLegal').addEventListener('click', function() {
             var content = document.getElementById('legalContent');
             if (content.style.display === 'none' || content.style.display === '') {

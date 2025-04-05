@@ -283,7 +283,7 @@ class WeChat(WeChatBase, Listener):
         self._show()
         return IsRedPixel(self.A_ChatIcon)
     
-    def GetNextNewMessage(self, savepic=False, savefile=False, savevoice=False, timeout=10):
+    def GetNextNewMessage(self, savepic=True, savefile=False, savevoice=True, timeout=10):
         """获取下一个新消息"""
         msgs_ = self.GetAllMessage()
         msgids = [i[-1] for i in msgs_]
@@ -855,7 +855,7 @@ class WeChat(WeChatBase, Listener):
         wxlog.debug(f'获取到 {len(AcceptableNewFriendsList)} 条新的好友申请')
         return AcceptableNewFriendsList
     
-    def AddListenChat(self, who, savepic=False, savefile=False, savevoice=False):
+    def AddListenChat(self, who, savepic=True, savefile=False, savevoice=True):
         """添加监听对象
         
         Args:

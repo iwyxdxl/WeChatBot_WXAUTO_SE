@@ -30,6 +30,7 @@ import shutil
 import json
 import logging
 from typing import Tuple
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +312,62 @@ class Updater:
             elif choice in ('n', 'no'):
                 return False
             print("请输入 y 或 n")
+
+    def download_update(self, download_url: str, callback=None) -> bool:
+        """下载更新包，并在下载过程中通过 callback 输出进度指示"""
+        headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': f'{self.REPO_NAME}-UpdateChecker'
+        }
+        
+        while True:
+            try:
+                proxied_url = self.get_proxy_url(download_url)
+                logger.info(f"正在从 {proxied_url} 下载更新...")
+                
+                response = requests.get(
+                    proxied_url,
+                    headers=headers,
+                    timeout=30,
+                    stream=True
+                )
+                response.raise_for_status()
+                
+                os.makedirs(self.temp_dir, exist_ok=True)
+                zip_path = os.path.join(self.temp_dir, 'update.zip')
+                
+                total_length = response.headers.get("Content-Length")
+                if total_length is not None:
+                    total_length = int(total_length)
+                downloaded = 0
+            
+                with open(zip_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_length:
+                                percent = downloaded / total_length * 100
+                                # 添加进度条显示
+                                bar_length = 30
+                                filled = int(bar_length * downloaded // total_length)
+                                bar = '█' * filled + ' ' * (bar_length - filled)
+                                sys.stdout.write(f"\r下载进度 |{bar}| {percent:.1f}% ({downloaded/1024/1024:.1f}MB/{total_length/1024/1024:.1f}MB)")
+                            else:
+                                sys.stdout.write(f"\r已下载: {downloaded/1024/1024:.1f} MB")
+                            sys.stdout.flush()
+                print("\n下载完成")  # 换行确保后续输出不混乱
+                
+                return True
+                    
+            except requests.RequestException as e:
+                logger.warning(f"使用当前代理下载更新失败: {str(e)}")
+                if self.try_next_proxy():
+                    logger.info("正在切换到下一个代理服务器...")
+                    continue
+                else:
+                    logger.error("所有代理服务器均已尝试失败")
+                    return False
 
     def update(self, callback=None) -> dict:
         """执行更新"""
