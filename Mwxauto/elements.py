@@ -104,6 +104,12 @@ class WeChatBase:
         return msgs
     
     def _download_pic(self, msgitem):
+        
+        savepath = os.path.join(WxParam.DEFALUT_SAVEPATH, f"微信图片_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.jpg")
+        if savepath and os.path.exists(savepath):
+            wxlog.debug(f"图片已存在: {savepath}, 跳过保存")
+            return savepath
+
         self._show()
         imgcontrol = msgitem.ButtonControl(Name='')
         if not imgcontrol.Exists(0.5):
@@ -661,6 +667,11 @@ class WeChatImage:
             savepath = os.path.join(WxParam.DEFALUT_SAVEPATH, f"微信图片_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.jpg")
         if not os.path.exists(os.path.split(savepath)[0]):
             os.makedirs(os.path.split(savepath)[0])
+
+        # 如果文件已经存在，跳过保存过程
+        if savepath and os.path.exists(savepath):
+            wxlog.debug(f"图片已存在: {savepath}, 跳过保存")
+            return savepath
             
         if self.t_zoom.Exists(maxSearchSeconds=5):
             self.t_save.Click(simulateMove=False)

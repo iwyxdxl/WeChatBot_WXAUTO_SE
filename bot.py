@@ -25,8 +25,7 @@ import pyautogui
 import shutil
 import re
 from config import *
-import requests
-from logging.handlers import HTTPHandler
+import queue
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
@@ -55,55 +54,77 @@ user_queues = {}  # {user_id: {'messages': [], 'last_message_time': 时间戳, .
 queue_lock = threading.Lock()  # 队列访问锁
 chat_contexts = {}  # {user_id: [{'role': 'user', 'content': '...'}, ...]}
 
-class BotHTTPHandler(logging.Handler):
-    def __init__(self):
+class AsyncHTTPHandler(logging.Handler):
+    def __init__(self, url, retry_attempts=3, timeout=3):
         super().__init__()
-        self.url = 'http://localhost:5000/api/log'  # 明确指定完整URL
+        self.url = url
+        self.retry_attempts = retry_attempts
+        self.timeout = timeout
+        self.log_queue = queue.Queue()
+        self._stop_event = threading.Event()
+        # 后台线程用于处理日志队列
+        self.worker = threading.Thread(target=self._process_queue, daemon=True)
+        self.worker.start()
 
     def emit(self, record):
         try:
             log_entry = self.format(record)
-            headers = {
-                'Content-Type': 'application/json',
-                'User-Agent': 'WeChatBot/1.0'
-            }
+            self.log_queue.put(log_entry)
+        except Exception:
+            self.handleError(record)
+
+    def _process_queue(self):
+        headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'WeChatBot/1.0'
+        }
+        while not self._stop_event.is_set():
+            try:
+                # 等待日志消息，超时用于检测停止标志
+                log_entry = self.log_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
             data = {'log': log_entry}
-            
-            # 添加重试机制
-            for attempt in range(3):
+            for attempt in range(self.retry_attempts):
                 try:
                     resp = requests.post(
                         self.url,
-                        json=data,  # 使用json参数自动设置Content-Type
+                        json=data,
                         headers=headers,
-                        timeout=3
+                        timeout=self.timeout
                     )
                     resp.raise_for_status()
                     break
                 except requests.exceptions.RequestException as e:
-                    if attempt == 2:
-                        logger.error(f"日志发送失败（最终尝试）: {str(e)}")
+                    if attempt == self.retry_attempts - 1:
+                        # 如果多次尝试仍然失败，可以选择将错误写入本地或者直接忽略
+                        pass
                     else:
                         time.sleep(1)
-        except Exception as e:
-            logger.error(f"日志处理器异常: {str(e)}")
+            self.log_queue.task_done()
 
-# 配置日志处理器（统一使用根Logger）
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+    def close(self):
+        self._stop_event.set()
+        self.worker.join()
+        super().close()
 
-# 清除所有现有处理器（避免重复）
-logger.handlers.clear()
-
-# 创建通用格式化器
+# 创建日志格式器
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-# 配置HTTP处理器（单例）
-http_handler = BotHTTPHandler()
-http_handler.setFormatter(formatter)
-logger.addHandler(http_handler)
+# 初始化异步HTTP处理器，替换原来的BotHTTPHandler
+async_http_handler = AsyncHTTPHandler(url='http://localhost:5000/api/log')
+async_http_handler.setFormatter(formatter)
 
-# 配置控制台处理器（单例）
+# 配置根Logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.handlers.clear()
+
+# 添加异步HTTP日志处理器
+logger.addHandler(async_http_handler)
+
+# 同时可以保留控制台日志处理器
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
