@@ -35,7 +35,7 @@ TEMPERATURE = 1.1
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = ''
 MOONSHOT_BASE_URL = 'https://vg.v1api.cc/v1'
-MOONSHOT_MODEL = 'gpt-4-vision-preview'
+MOONSHOT_MODEL = 'gpt-4o'
 MOONSHOT_TEMPERATURE = 0.8
 ENABLE_IMAGE_RECOGNITION = True
 ENABLE_EMOJI_RECOGNITION = True
