@@ -380,10 +380,161 @@
     .log-controls button:hover {
         background: #d0d0d0; /* 悬停时稍深的灰色 */
     }
-      </style>      
+
+    #reminder-list .entry {
+        grid-template-columns: 0.75fr 1fr 2.5fr 3fr auto; /* 类型 | 用户ID | 时间/日期 | 内容 | 删除按钮 */
+        gap: 10px; /* 可以根据需要调整间距 */
+        align-items: center; /* 保持垂直居中 */
+    }
+
+    /* 针对时间/日期输入的样式 */
+    #reminder-list input[type="time"],
+    #reminder-list input[type="datetime-local"] {
+        padding: 6px;
+        height: 36px; /* 保持与其他输入一致 */
+        min-width: 140px; /* 给 datetime-local 更多空间 */
+    }
+
+    /* 窄屏幕下的响应式调整 */
+    @media (max-width: 700px) { /* 可能需要调整断点 */
+        #reminder-list .entry {
+            grid-template-columns: 1fr; /* 在窄屏幕上堆叠所有元素 */
+        }
+        /* 可能需要为时间/日期输入设置宽度100% */
+        #reminder-list input[type="time"],
+        #reminder-list input[type="datetime-local"] {
+            width: 100%;
+        }
+    }
+    </style>      
       
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // 加载提醒并启动刷新
+            loadReminders();
+            startReminderRefresh();
+            setupReminderInputListeners();
+            
+            // 每30秒检查一次文件时间戳
+            setInterval(checkFileTimestamp, 30000);
+
+            document.querySelectorAll('#reminder-list').forEach(container => {
+                container.addEventListener('input', debounce(saveReminders, 500));
+            });
+            // 获取联网搜索相关的 DOM 元素
+            const onlineApiProvider = document.getElementById('onlineApiProvider');
+            const customOnlineApiUrl = document.getElementById('customOnlineApiUrl');
+            const finalOnlineApiUrl = document.getElementById('finalOnlineApiUrl');
+            const onlineModelSelect = document.getElementById('onlineModelSelect');
+            const customOnlineModel = document.getElementById('customOnlineModel');
+            const finalOnlineModel = document.getElementById('finalOnlineModel');
+
+            function updateOnlineModelOptions() {
+                let options = []; 
+                const apiUrl = onlineApiProvider.value;
+                const savedModel = finalOnlineModel.value; // 获取保存在隐藏字段中的当前值
+                
+                // 根据API服务商设置可用选项
+                if (apiUrl === 'https://vg.v1api.cc/v1') {
+                    options = [
+                        { value: 'deepseek-r1-searching', text: 'deepseek-r1-searching' },
+                        { value: 'net-gpt-4o-mini', text: 'net-gpt-4o-mini' },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else {
+                    options = [
+                        { value: 'other', text: '其它' }
+                    ];
+                }
+                
+                // 清空现有选项
+                onlineModelSelect.innerHTML = '';
+                
+                // 检查保存的值是否在新选项中
+                let modelInOptions = false;
+                options.forEach(opt => {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = opt.value;
+                    optionElement.textContent = opt.text;
+                    if (opt.value === savedModel) {
+                        optionElement.selected = true;
+                        modelInOptions = true;
+                    }
+                    onlineModelSelect.appendChild(optionElement);
+                });
+                
+                // 如果保存的值不在选项中，选择"其它"并显示自定义输入框
+                if (!modelInOptions && savedModel) {
+                    onlineModelSelect.value = 'other';
+                    customOnlineModel.value = savedModel;
+                    customOnlineModel.style.display = 'block';
+                }
+                
+                // 确保隐藏字段的值是正确的
+                finalOnlineModel.value = savedModel;
+                
+                // 触发change事件以确保UI状态正确
+                onlineModelSelect.dispatchEvent(new Event('change'));
+            }
+
+            // 初始化自定义 API URL 输入框的显示/隐藏
+            if (onlineApiProvider.value === 'other') {
+                customOnlineApiUrl.style.display = 'block'; // 如果选的是 "其它"，显示输入框
+            } else {
+                customOnlineApiUrl.style.display = 'none'; // 否则隐藏
+                finalOnlineApiUrl.value = onlineApiProvider.value; // 确保隐藏字段的值是选中的预设 URL
+            }
+
+            // 初始化时调用一次，根据页面加载时的服务商选项来填充模型列表
+            updateOnlineModelOptions();
+
+            // 初始化自定义模型输入框的显示/隐藏 (需要在 updateOnlineModelOptions 调用之后)
+            if (onlineModelSelect.value === 'other') {
+                 customOnlineModel.style.display = 'block'; // 如果选的是 "其它"，显示输入框
+                 finalOnlineModel.value = customOnlineModel.value || ''; // 如果自定义框有值，用它的值
+            } else {
+                 customOnlineModel.style.display = 'none'; // 否则隐藏
+                 finalOnlineModel.value = onlineModelSelect.value; // 确保隐藏字段是选中的模型
+            }
+
+
+            // ---- 事件监听器 ----
+
+            // 监听联网 API 服务商下拉框的变化
+            onlineApiProvider.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    customOnlineApiUrl.style.display = 'block'; // 选择 "其它"，显示自定义 URL 输入框
+                    finalOnlineApiUrl.value = customOnlineApiUrl.value; // 隐藏字段的值来自自定义输入框
+                } else {
+                    customOnlineApiUrl.style.display = 'none'; // 选择预设，隐藏自定义 URL 输入框
+                    finalOnlineApiUrl.value = this.value; // 隐藏字段的值来自选中的预设值
+                }
+                updateOnlineModelOptions(); // 服务商变化，需要更新模型选项
+            });
+
+            // 监听自定义 API URL 输入框的内容变化
+            customOnlineApiUrl.addEventListener('input', () => {
+                 // 当自定义 URL 输入框内容改变时，实时更新隐藏字段的值
+                finalOnlineApiUrl.value = customOnlineApiUrl.value;
+            });
+
+            // 监听联网模型选择下拉框的变化
+            onlineModelSelect.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    customOnlineModel.style.display = 'block'; // 选择 "其它"，显示自定义模型输入框
+                    finalOnlineModel.value = customOnlineModel.value; // 隐藏字段的值来自自定义输入框
+                } else {
+                    customOnlineModel.style.display = 'none'; // 选择预设，隐藏自定义模型输入框
+                    finalOnlineModel.value = this.value; // 隐藏字段的值来自选中的预设值
+                }
+            });
+
+            // 监听自定义模型输入框的内容变化
+            customOnlineModel.addEventListener('input', () => {
+                // 当自定义模型输入框内容改变时，实时更新隐藏字段的值
+                finalOnlineModel.value = customOnlineModel.value;
+            });
+
             // 获取 API 服务商相关的 DOM 元素
             const apiProviderSelect = document.getElementById('apiProvider');
             const customApiUrlInput = document.getElementById('customApiUrl');
@@ -400,10 +551,10 @@
                 
                 if (apiUrl === 'https://api.siliconflow.cn/v1/') {
                     options = [
-                        { value: "deepseek-ai/DeepSeek-V3", text: "硅基DeepSeeek V3模型 （可用免费额度）" },
-                        { value: "deepseek-ai/DeepSeek-R1", text: "硅基DeepSeeek R1模型 （可用免费额度）" },
-                        { value: "Pro/deepseek-ai/DeepSeek-V3", text: "硅基DeepSeeek V3 Pro模型 （需充值后方可使用）" },
-                        { value: "Pro/deepseek-ai/DeepSeek-R1", text: "硅基DeepSeeek R1 Pro模型 （需充值后方可使用）" },
+                        { value: "deepseek-ai/DeepSeek-V3", text: "硅基DeepSeeek V3模型  (可用免费额度)" },
+                        { value: "deepseek-ai/DeepSeek-R1", text: "硅基DeepSeeek R1模型  (可用免费额度)" },
+                        { value: "Pro/deepseek-ai/DeepSeek-V3", text: "硅基DeepSeeek V3 Pro模型  (需充值后方可使用)" },
+                        { value: "Pro/deepseek-ai/DeepSeek-R1", text: "硅基DeepSeeek R1 Pro模型  (需充值后方可使用)" },
                         { value: "other", text: "其它" }
                     ];
                 } else if (apiUrl === 'https://api.deepseek.com') {
@@ -425,7 +576,7 @@
                         { value: "doubao-pro-256k-241115", text: "豆包 doubao-pro-256k-241115" },
                         { value: "doubao-1-5-lite-32k-250115", text: "豆包 doubao-1-5-lite-32k-250115" },
                         { value: "deepseek-ai/DeepSeek-R1", text: "deepseek-ai/DeepSeek-R1" },
-                        { value: "deepseek-r1-searching", text: "deepseek-r1-searching 可联网搜索" },
+                        { value: "deepseek-r1-searching", text: "deepseek-r1-searching (带联网功能)" },
                         { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
                         { value: "chatgpt-4o-latest", text: "chatgpt-4o-latest *" },
                         { value: "claude-3-5-sonnet-20241022", text: "claude-3-5-sonnet-20241022 *" },
@@ -458,7 +609,7 @@
                 });
                 // 更新隐藏字段
                 finalModelInput.value = modelSelect.value;
-                // 触发模型选择的 change 事件以更新自定义输入框显示（解决当选"其它"时输入框缺失的问题）
+                // 触发模型选择的 change 事件以更新自定义输入框显示 (解决当选"其它"时输入框缺失的问题)
                 modelSelect.dispatchEvent(new Event('change'));
             }
 
@@ -511,6 +662,106 @@
             
             // 初始调用，确保模型选项与当前API服务商对应
             updateModelOptions();
+
+            // 获取图片识别相关 DOM
+            const imageApiProvider = document.getElementById('imageApiProvider');
+            const customImageApiUrl = document.getElementById('customImageApiUrl');
+            const finalImageApiUrl = document.getElementById('finalImageApiUrl');
+            const imageModelSelect = document.getElementById('imageModelSelect');
+            const customImageModel = document.getElementById('customImageModel');
+            const finalImageModel = document.getElementById('finalImageModel');
+
+            function updateImageModelOptions() {
+                let options = [];
+                const apiUrl = imageApiProvider.value;
+                const savedModel = finalImageModel.value; // 获取隐藏字段中保存的当前值
+                
+                // 根据API服务商设置可用选项
+                if (apiUrl === 'https://api.moonshot.cn/v1') {
+                    options = [
+                        { value: 'moonshot-v1-128k-vision-preview', text: 'moonshot-v1-128k-vision-preview' },
+                        { value: 'moonshot-v1-32k-vision-preview',  text: 'moonshot-v1-32k-vision-preview' },
+                        { value: 'moonshot-v1-8k-vision-preview',   text: 'moonshot-v1-8k-vision-preview' },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else if (apiUrl === 'https://vg.v1api.cc/v1') {
+                    options = [
+                        { value: 'gpt-4o', text: 'gpt-4o' },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else {
+                    options = [
+                        { value: 'other', text: '其它' }
+                    ];
+                }
+                
+                // 清空现有选项
+                imageModelSelect.innerHTML = '';
+                
+                // 检查保存的值是否在新选项中
+                let modelInOptions = false;
+                options.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.value; 
+                    o.textContent = opt.text;
+                    if (opt.value === savedModel) {
+                        o.selected = true;
+                        modelInOptions = true;
+                    }
+                    imageModelSelect.appendChild(o);
+                });
+                
+                // 如果保存的值不在选项中，选择"其它"并显示自定义输入框
+                if (!modelInOptions && savedModel) {
+                    imageModelSelect.value = 'other';
+                    customImageModel.value = savedModel;
+                    customImageModel.style.display = 'block';
+                }
+                
+                // 确保隐藏字段的值是正确的
+                finalImageModel.value = savedModel;
+                
+                // 触发change事件以确保UI状态正确
+                imageModelSelect.dispatchEvent(new Event('change'));
+            }
+
+            // 初始化自定义 URL 和模型输入框的显示
+            if (imageApiProvider.value === 'other') {
+                customImageApiUrl.style.display = 'block';
+            } else {
+                customImageApiUrl.style.display = 'none';
+                finalImageApiUrl.value = imageApiProvider.value;
+            }
+            updateImageModelOptions();
+
+            // 监听服务商切换
+            imageApiProvider.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    customImageApiUrl.style.display = 'block';
+                    finalImageApiUrl.value = customImageApiUrl.value;
+                } else {
+                    customImageApiUrl.style.display = 'none';
+                    finalImageApiUrl.value = this.value;
+                }
+                updateImageModelOptions();
+            });
+            customImageApiUrl.addEventListener('input', () => {
+                finalImageApiUrl.value = customImageApiUrl.value;
+            });
+
+            // 监听模型下拉切换
+            imageModelSelect.addEventListener('change', function() {
+                if (this.value === 'other') {
+                    customImageModel.style.display = 'block';
+                    finalImageModel.value = customImageModel.value;
+                } else {
+                    customImageModel.style.display = 'none';
+                    finalImageModel.value = this.value;
+                }
+            });
+            customImageModel.addEventListener('input', () => {
+                finalImageModel.value = customImageModel.value;
+            });
 
             // 以下代码保持原有逻辑
             function addEntry() {
@@ -720,6 +971,11 @@
             checkBotStatus();
             document.getElementById('botButton').addEventListener('click', toggleBot);
             document.getElementById('logToggle').addEventListener('click', toggleLogs);
+
+            // 导入配置功能
+            document.getElementById('importButton').addEventListener('click', function() {
+                document.getElementById('importModal').style.display = 'block';
+            });
         });
 
         function ansiToHtml(text) {
@@ -745,6 +1001,388 @@
             }).replace(/^/, '<span>').replace(/$/, '</span>');
         }
 
+        let reminderRefreshInterval;
+        let isManualEditing = false;
+
+        // 添加输入事件监听
+        function setupReminderInputListeners() {
+            document.querySelectorAll('#reminder-list .reminder-content, #reminder-list .reminder-user-id, #reminder-list .reminder-time, #reminder-list .reminder-datetime').forEach(input => {
+                input.addEventListener('focus', () => {
+                    isManualEditing = true;
+                    console.log("[提醒] 检测到手动输入，暂停自动刷新");
+                });
+                
+                input.addEventListener('blur', () => {
+                    isManualEditing = false;
+                    console.log("[提醒] 输入完成，恢复自动刷新");
+                    // 延迟保存，确保数据已更新
+                    setTimeout(saveReminders, 300);
+                });
+                
+                // 添加键盘事件监听器，实现按下Enter键时保存
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        input.blur(); // 触发blur事件，会自动保存
+                    }
+                });
+            });
+            
+            // 为类型选择器添加事件监听
+            document.querySelectorAll('#reminder-list .reminder-type').forEach(select => {
+                select.addEventListener('change', () => {
+                    const entry = select.closest('.entry');
+                    const timeInput = entry.querySelector('.reminder-time');
+                    const dateTimeInput = entry.querySelector('.reminder-datetime');
+                    
+                    if (select.value === 'recurring') {
+                        timeInput.style.display = 'block';
+                        dateTimeInput.style.display = 'none';
+                    } else { // 'one-off'
+                        timeInput.style.display = 'none';
+                        dateTimeInput.style.display = 'block';
+                    }
+                    
+                    // 类型变更后保存
+                    saveReminders();
+                });
+            });
+        }
+        
+        async function checkFileTimestamp() {
+            try {
+                const response = await fetch('/check_reminder_file_timestamp');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.changed) {
+                        loadReminders(); // 文件已更改，重新加载
+                        console.log("[提醒] 检测到文件已被外部修改，已重新加载");
+                    }
+                }
+            } catch (error) {
+                console.error("[提醒] 检查文件时间戳失败:", error);
+            }
+        }
+
+        async function loadReminders() {
+            try {
+                // 检查用户是否在手动编辑，如果是则跳过刷新
+                if (isManualEditing) {
+                    console.log("[提醒] 用户正在编辑，跳过自动刷新");
+                    return;
+                }
+
+                // 添加时间戳参数避免缓存
+                const response = await fetch('/get_all_reminders?_=' + new Date().getTime());
+                if (!response.ok) throw new Error(`服务器错误: ${response.status}`);
+                
+                const serverData = await response.json();
+                const container = document.getElementById('reminder-list');
+                
+                // 如果容器不存在，创建它
+                if (!container) {
+                    console.error("[提醒] 提醒列表容器不存在");
+                    return;
+                }
+                
+                // 将服务器数据转换为标准格式
+                const normalizedServerData = serverData.map(item => {
+                    const result = {
+                        type: item.reminder_type,
+                        userId: item.user_id,
+                        content: item.content
+                    };
+                    
+                    // 根据类型添加不同的时间字段
+                    if (item.reminder_type === 'recurring') {
+                        result.time = item.time_str;
+                        result.datetime = ''; // 一次性提醒的日期时间为空
+                    } else if (item.reminder_type === 'one-off') {
+                        result.time = ''; // 重复提醒的时间为空
+                        // 将 YYYY-MM-DD HH:MM 转换为 YYYY-MM-DDTHH:MM 格式
+                        result.datetime = item.target_datetime_str.replace(' ', 'T');
+                    }
+                    
+                    return result;
+                });
+                
+                // 获取并标准化当前页面上的数据
+                const currentEntries = Array.from(container.querySelectorAll('.entry'));
+                const normalizedClientData = currentEntries.map(entry => {
+                    const type = entry.querySelector('.reminder-type').value;
+                    const time = entry.querySelector('.reminder-time').value;
+                    const datetime = entry.querySelector('.reminder-datetime').value;
+                    
+                    return {
+                        type: type,
+                        userId: entry.querySelector('.reminder-user-id').value,
+                        content: entry.querySelector('.reminder-content').value,
+                        time: type === 'recurring' ? time : '',
+                        datetime: type === 'one-off' ? datetime : ''
+                    };
+                });
+                
+                // 判断数据是否有变化
+                const serverJSON = JSON.stringify(normalizedServerData);
+                const clientJSON = JSON.stringify(normalizedClientData);
+                
+                if (serverJSON !== clientJSON) {
+                    console.log("[提醒] 检测到数据变化，更新列表");
+                    
+                    // 清空现有条目
+                    container.innerHTML = '';
+                    
+                    // 添加服务器返回的提醒项
+                    if (Array.isArray(serverData) && serverData.length > 0) {
+                        serverData.forEach(reminder => addReminderItem(reminder));
+                        console.log(`[提醒] 已加载 ${serverData.length} 条提醒`);
+                    } else {
+                        console.log("[提醒] 没有提醒数据");
+                    }
+                    
+                    // 重新绑定事件监听器
+                    setupReminderInputListeners();
+                } else {
+                    console.log("[提醒] 数据无变化，无需更新");
+                }
+            } catch (error) {
+                console.error('加载提醒失败:', error);
+                // 不显示错误提示，避免干扰用户
+            }
+        }
+
+        function startReminderRefresh() {
+            // 清除可能存在的旧定时器
+            if (reminderRefreshInterval) {
+                clearInterval(reminderRefreshInterval);
+            }
+            
+            // 设置新的刷新间隔（5秒）- 更频繁的刷新以提高响应性
+            reminderRefreshInterval = setInterval(() => {
+                // 仅在页面可见时刷新，不再考虑isManualEditing
+                if (document.visibilityState === 'visible') {
+                    loadReminders();
+                }
+            }, 5000);
+            
+            // 立即执行一次加载
+            loadReminders();
+            
+            // 在页面可见性变化时重新加载
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    loadReminders();
+                }
+            });
+        }
+
+        window.addEventListener('error', () => {
+            startReminderRefresh();
+        });
+
+        function addReminderItem(reminder = null) {
+            const container = document.getElementById('reminder-list');
+            const div = document.createElement('div');
+            div.className = 'entry'; // 使用更新后的 CSS
+            container.appendChild(div);
+            // 默认值 (用于新添加的行)
+            const defaultType = 'recurring';
+            const defaultUserId = '';
+            const defaultTime = '08:00';
+            const defaultDateTime = ''; // datetime-local 需要 YYYY-MM-DDTHH:MM
+            const defaultContent = '';
+
+            // 如果传入了 reminder 对象，则使用它的值
+            const isNew = reminder === null;
+            const type = !isNew ? reminder.reminder_type : defaultType;
+            const userId = !isNew ? reminder.user_id : defaultUserId;
+            const content = !isNew ? reminder.content : defaultContent;
+            // 处理时间/日期格式转换：JSON (YYYY-MM-DD HH:MM) -> datetime-local (YYYY-MM-DDTHH:MM)
+            let timeStr = defaultTime;
+            let dateTimeStr = defaultDateTime;
+            if (!isNew) {
+                if (type === 'recurring' && reminder.time_str) {
+                    timeStr = reminder.time_str;
+                } else if (type === 'one-off' && reminder.target_datetime_str) {
+                    // 转换 YYYY-MM-DD HH:MM 为 YYYY-MM-DDTHH:MM
+                    dateTimeStr = reminder.target_datetime_str.replace(' ', 'T');
+                }
+            }
+
+            // 构建 HTML 结构
+            div.innerHTML = `
+                <select class="reminder-type" style="height: 36px; padding: 6px;">
+                    <option value="recurring" ${type === 'recurring' ? 'selected' : ''}>每日重复</option>
+                    <option value="one-off" ${type === 'one-off' ? 'selected' : ''}>一次性</option>
+                </select>
+                <input type="text" class="reminder-user-id" placeholder="微信昵称/备注" value="${userId}" style="min-width: 120px;">
+                <!-- 时间/日期输入框，初始根据类型显示/隐藏 -->
+                <input type="time" class="reminder-time" value="${timeStr}" step="60" min="00:00" max="23:59" style="display: ${type === 'recurring' ? 'block' : 'none'};">
+                <input type="datetime-local" class="reminder-datetime" value="${dateTimeStr}" style="display: ${type === 'one-off' ? 'block' : 'none'};">
+                <input type="text" class="reminder-content" placeholder="提醒内容" value="${content}" style="flex-grow: 1;">
+                <button type="button" onclick="removeReminder(this)">删除</button>
+            `;
+            container.appendChild(div);
+            setupReminderInputListeners(); // 绑定输入事件监听器
+
+            // --- 添加事件监听器以切换时间/日期输入框 ---
+            const typeSelect = div.querySelector('.reminder-type');
+            const timeInput = div.querySelector('.reminder-time');
+            const dateTimeInput = div.querySelector('.reminder-datetime');
+
+            const toggleTimeInputs = () => {
+                if (typeSelect.value === 'recurring') {
+                    timeInput.style.display = 'block';
+                    dateTimeInput.style.display = 'none';
+                } else { // 'one-off'
+                    timeInput.style.display = 'none';
+                    dateTimeInput.style.display = 'block';
+                }
+            };
+
+            typeSelect.addEventListener('change', toggleTimeInputs);
+
+            // 如果是加载现有数据，确保初始状态正确 (虽然内联样式已设置，但以防万一)
+            // toggleTimeInputs(); // 调用一次以确保初始显示正确 (内联 style 应该足够)
+        }
+
+        async function saveReminders() {
+            const items = Array.from(document.querySelectorAll('#reminder-list .entry'));
+            const remindersPayload = [];
+
+            for (const item of items) {
+                const typeSelect = item.querySelector('.reminder-type');
+                const userIdInput = item.querySelector('.reminder-user-id');
+                const timeInput = item.querySelector('.reminder-time');
+                const dateTimeInput = item.querySelector('.reminder-datetime');
+                const contentInput = item.querySelector('.reminder-content');
+
+                const reminderType = typeSelect.value;
+                const userId = userIdInput.value.trim();
+                const content = contentInput.value.trim();
+
+                // 基本校验：用户ID和内容不能为空
+                if (!userId || !content) {
+                    console.warn("跳过不完整的提醒条目:", item);
+                    continue; // 跳过不完整的条目
+                }
+
+                let reminderData = {
+                    reminder_type: reminderType,
+                    user_id: userId,
+                    content: content
+                };
+
+                if (reminderType === 'recurring') {
+                    const timeStr = timeInput.value;
+                    if (!timeStr) { // 校验时间是否为空
+                         console.warn("跳过 recurring 提醒，缺少时间:", item);
+                         continue;
+                    }
+                    reminderData.time_str = timeStr; // HH:MM
+                } else if (reminderType === 'one-off') {
+                    const dateTimeValue = dateTimeInput.value; // YYYY-MM-DDTHH:MM
+                     if (!dateTimeValue) { // 校验日期时间是否为空
+                         console.warn("跳过 one-off 提醒，缺少日期时间:", item);
+                         continue;
+                    }
+                    // 格式转换: YYYY-MM-DDTHH:MM -> YYYY-MM-DD HH:MM
+                    reminderData.target_datetime_str = dateTimeValue.replace('T', ' ');
+                } else {
+                     console.warn("跳过未知类型的提醒:", item);
+                     continue; // 跳过未知类型
+                }
+                remindersPayload.push(reminderData);
+            } // 结束 for 循环
+
+            // 发送数据到后端
+            try {
+                // 发送到新的后端端点
+                const response = await fetch('/save_all_reminders', { // <--- 更新 API 端点
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(remindersPayload) // 发送收集到的所有提醒数据
+                });
+
+                const result = await response.json();
+                if (!response.ok) {
+                    // 尝试从后端获取更详细的错误信息
+                    const errorMsg = result.error || `保存失败，状态码: ${response.status}`;
+                    throw new Error(errorMsg);
+                }
+
+                showAlert("提醒配置已自动保存！", true);
+                // 保存成功后通常不需要手动刷新，因为有定时刷新
+                // loadReminders(); // 如需即时刷新可取消注释
+
+            } catch (error) {
+                console.error('保存所有提醒失败:', error);
+                showAlert(`保存提醒失败：${error.message}`, false);
+            }
+        }
+
+        function addReminder() {
+            addReminderItem();
+        }
+
+        function removeReminder(button) {
+            button.closest('.entry').remove(); // 使用 closest 查找父级 .entry 并移除
+            // 移除后立即触发保存
+            setTimeout(saveReminders, 100); // 使用短延迟确保DOM更新后执行
+        }
+
+        // 防抖函数优化
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+        // 关闭导入模态框
+        function closeImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('modalImportFile').value = '';
+        }
+
+        // 提交导入配置
+        async function submitImportConfig() {
+            const fileInput = document.getElementById('modalImportFile');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('请选择配置文件');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            if (!file.name.endsWith('.py')) {
+                alert('请选择.py格式的配置文件');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('config_file', file);
+            
+            try {
+                const response = await fetch('/import_config', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(result.message || '配置导入成功，请刷新页面查看导入的参数。');
+                    closeImportModal();
+                    window.location.reload(); // 刷新页面显示导入的配置
+                } else {
+                    alert(result.error || '导入失败，请检查文件格式是否正确。');
+                }
+            } catch (error) {
+                console.error('导入配置出错:', error);
+                alert('导入失败: ' + (error.message || '未知错误'));
+            }
+        }
     </script>
 </head>
 <body>
@@ -752,14 +1390,16 @@
         后台已关闭，请重新启动
     </div>
     
-    <!-- 修改提示框：用于显示保存成功或失败信息 -->
+    <!-- 提示框：用于显示保存成功或失败信息 -->
     <div id="config-alert" class="success-alert" style="display:none;"></div>
     
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-        <h1>WeChatBot配置编辑器</h1>
+        <h1>WeChatBot配置编辑器 v3.14</h1>
         <div>
             <button id="botButton" class="nav-button">Start Bot</button>
             <a href="{{ url_for('prompt_list') }}" class="nav-button" id="promptManagement">Prompt管理</a>
+            <a href="https://ciu4ws3raf1.feishu.cn/docx/EgE7d5JvtopzmIxYZMKcLU2xnge?from=from_copylink" 
+               class="nav-button" target="_blank" style="background-color: #2196F3;">帮助文档</a>
         </div>
     </div> 
 
@@ -789,7 +1429,6 @@
         <div class="section">
             <h2>Chat 模型配置</h2>
             
-            <!-- API 服务商 -->
             <div class="form-group">
                 <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1vuQeYxEnj/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=108" target="_blank">[查看使用教程]</a> )</label>
                 <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
@@ -808,14 +1447,13 @@
                     value="{{ config.DEEPSEEK_BASE_URL }}">
             </div>
 
-            <!-- 模型选择 -->
             <div class="form-group">
                 <label>模型选择: (首次使用推荐DeepSeek V3模型,带*的模型收费较高)</label>
                 <select id="modelSelect" name="temp_MODEL">
-                    <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基DeepSeeek V3模型 （可用免费额度）</option>
-                    <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基DeepSeeek R1模型 （可用免费额度）</option>
-                    <option value="Pro/deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基DeepSeeek V3 Pro模型 （需充值后方可使用）</option>
-                    <option value="Pro/deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基DeepSeeek R1 Pro模型 （需充值后方可使用）</option>
+                    <option value="deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基DeepSeeek V3模型  (可用免费额度)</option>
+                    <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基DeepSeeek R1模型  (可用免费额度)</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-V3" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-V3' %}selected{% endif %}>硅基DeepSeeek V3 Pro模型  (需充值后方可使用)</option>
+                    <option value="Pro/deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'Pro/deepseek-ai/DeepSeek-R1' %}selected{% endif %}>硅基DeepSeeek R1 Pro模型  (需充值后方可使用)</option>
                     <option value="deepseek-chat" {% if config.MODEL == 'deepseek-chat' %}selected{% endif %}>DeepSeeek官方V3模型</option>
                     <option value="deepseek-reasoner" {% if config.MODEL == 'deepseek-reasoner' %}selected{% endif %}>DeepSeeek官方R1模型</option>
                     <option value="gpt-3.5-turbo" {% if config.MODEL == 'gpt-3.5-turbo' %}selected{% endif %}>gpt-3.5-turbo</option>
@@ -829,7 +1467,7 @@
                     <option value="doubao-pro-256k-241115" {% if config.MODEL == 'doubao-pro-256k-241115' %}selected{% endif %}>豆包 doubao-pro-256k-241115</option>
                     <option value="doubao-1-5-lite-32k-250115" {% if config.MODEL == 'doubao-1-5-lite-32k-250115' %}selected{% endif %}>豆包 doubao-1-5-lite-32k-250115</option>
                     <option value="deepseek-ai/DeepSeek-R1" {% if config.MODEL == 'deepseek-ai/DeepSeek-R1' %}selected{% endif %}>deepseek-ai/DeepSeek-R1</option>
-                    <option value="deepseek-r1-searching" {% if config.MODEL == 'deepseek-r1-searching' %}selected{% endif %}>deepseek-r1-searching 可联网搜索</option>
+                    <option value="deepseek-r1-searching" {% if config.MODEL == 'deepseek-r1-searching' %}selected{% endif %}>deepseek-r1-searching (带联网功能)</option>
                     <option value="claude-3-5-haiku-20241022" {% if config.MODEL == 'claude-3-5-haiku-20241022' %}selected{% endif %}>claude-3-5-haiku-20241022</option>
                     <option value="chatgpt-4o-latest" {% if config.MODEL == 'chatgpt-4o-latest' %}selected{% endif %}>chatgpt-4o-latest *</option>
                     <option value="claude-3-5-sonnet-20241022" {% if config.MODEL == 'claude-3-5-sonnet-20241022' %}selected{% endif %}>claude-3-5-sonnet-20241022 *</option>
@@ -865,11 +1503,12 @@
             <div class="form-group">
                 <label>温度 (0-2): (如果回复出现乱码请将温度调到1.1或0.7以下)</label>
                 <input type="number" step="0.1" name="TEMPERATURE" value="{{ config.TEMPERATURE }}">
+                <small>温度越高，ai思维越发散，但是温度过高可能导致ai胡言乱语。</small>
             </div>
             
         </div>
         
-       <div class="section">
+        <div class="section">
             <h2>图片/表情包识别配置</h2>
             <div class="form-group">
                 <div class="switch-container">
@@ -895,27 +1534,122 @@
             </div>
 
             <div class="form-group">
-                <label>MOONSHOT_API_KEY: (申请网站 <a href="https://platform.moonshot.cn/" target="_blank">https://platform.moonshot.cn/</a> 免费15元额度)</label>
+                <label>图像识别API服务商：</label>
+                <select id="imageApiProvider" name="temp_IMAGE_BASE_URL">
+                    <option value="https://api.moonshot.cn/v1" {% if config.MOONSHOT_BASE_URL=='https://api.moonshot.cn/v1' %}selected{% endif %}>MOONSHOT月之暗面</option>
+                    <option value="https://vg.v1api.cc/v1" {% if config.MOONSHOT_BASE_URL=='https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
+                    <option value="other" {% if config.MOONSHOT_BASE_URL not in ['https://api.moonshot.cn/v1','https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
+                </select>
+                <input type="text" id="customImageApiUrl" class="custom-input"
+                       placeholder="请输入自定义API地址"
+                       {% if config.MOONSHOT_BASE_URL not in ['https://api.moonshot.cn/v1','https://vg.v1api.cc/v1'] %}
+                       value="{{ config.MOONSHOT_BASE_URL }}"
+                       style="display:block;"
+                       {% endif %}>
+                <input type="hidden" id="finalImageApiUrl" name="MOONSHOT_BASE_URL" value="{{ config.MOONSHOT_BASE_URL }}">
+                <small>推荐使用WeAPIs，API Key可与Chat模型配置保持一致。<a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">[点击注册]</a></small><br>
+                <small>MOONSHOT月之暗面注册地址：<a href="https://platform.moonshot.cn/" target="_blank">[点击注册]</a></small><br>
+            </div>
+
+            <div class="form-group">
+                <label>识图模型选择：</label>
+                <select id="imageModelSelect" name="temp_IMAGE_MODEL">
+                    <!-- JS 动态填充 -->
+                </select>
+                <input type="text" id="customImageModel" class="custom-input"
+                       placeholder="请输入自定义模型名称"
+                       {% if config.MOONSHOT_MODEL not in ['moonshot-v1-128k-vision-preview','moonshot-v1-32k-vision-preview','moonshot-v1-8k-vision-preview','gpt-4o'] %}
+                       value="{{ config.MOONSHOT_MODEL }}"
+                       style="display:block;"
+                       {% endif %}>
+                <input type="hidden" id="finalImageModel" name="MOONSHOT_MODEL" value="{{ config.MOONSHOT_MODEL }}">
+            </div>
+
+            <div class="form-group">
+                <label>API Key:</label>
                 <input type="text" placeholder="sk-xxxxxxxxxx" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
             </div>
-
             <div class="form-group">
-                <label>MOONSHOT_BASE_URL: (一般无需修改)</label>
-                <input type="text" placeholder="https://api.moonshot.cn/v1" name="MOONSHOT_BASE_URL" value="{{ config.MOONSHOT_BASE_URL }}">
-            </div>
-
-            <div class="form-group">
-                <label>识图模型选择:</label>
-                <select name="MOONSHOT_MODEL">
-                    <option value="moonshot-v1-128k-vision-preview" {% if config.MOONSHOT_MODEL == 'moonshot-v1-128k-vision-preview' %}selected{% endif %}>moonshot-v1-128k-vision-preview</option>
-                    <option value="moonshot-v1-32k-vision-preview" {% if config.MOONSHOT_MODEL == 'moonshot-v1-32k-vision-preview' %}selected{% endif %}>moonshot-v1-32k-vision-preview</option>
-                    <option value="moonshot-v1-8k-vision-preview" {% if config.MOONSHOT_MODEL == 'moonshot-v1-8k-vision-preview' %}selected{% endif %}>moonshot-v1-8k-vision-preview</option>    
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>MOONSHOT温度 (0-1):</label>
+                <label>温度 (0-1):</label>
                 <input type="number" step="0.1" name="MOONSHOT_TEMPERATURE" value="{{ config.MOONSHOT_TEMPERATURE }}">
+                <small>温度越高，ai思维越发散，但是温度过高可能导致ai胡言乱语。</small>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>联网搜索配置</h2>
+            <div style="margin-bottom: 10px; font-style: italic; color: #555;">
+                <small>注意：此功能为实验性功能，AI搜索结果可能不准确。</small>
+            </div>
+            <div class="form-group">
+                <div class="switch-container">
+                    <div class="switch-item">
+                        <label><b>启用联网搜索功能</b></label>
+                        <div class="switch">
+                            <label class="switch-label">
+                                <input type="checkbox" name="ENABLE_ONLINE_API" {% if config.ENABLE_ONLINE_API %}checked{% endif %}>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>联网API服务商：</label>
+                <select id="onlineApiProvider" name="temp_ONLINE_BASE_URL">
+                    <option value="https://vg.v1api.cc/v1" {% if config.ONLINE_BASE_URL=='https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
+                    <option value="other" {% if config.ONLINE_BASE_URL not in ['https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
+                </select>
+                <input type="text" id="customOnlineApiUrl" class="custom-input"
+                       placeholder="请输入自定义联网API地址"
+                       {% if config.ONLINE_BASE_URL not in ['https://vg.v1api.cc/v1'] %}
+                       value="{{ config.ONLINE_BASE_URL }}"
+                       style="display:block;"  
+                       {% endif %}>
+                <input type="hidden" id="finalOnlineApiUrl" name="ONLINE_BASE_URL" value="{{ config.ONLINE_BASE_URL }}">
+                <small>推荐使用WeAPIs，API Key可与Chat模型配置保持一致。<a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">[点击注册]</a></small><br>
+            </div>
+
+            <div class="form-group">
+                <label>联网搜索模型：</label>
+                <select id="onlineModelSelect" name="temp_ONLINE_MODEL">
+                </select>
+                <input type="text" id="customOnlineModel" class="custom-input"
+                       placeholder="请输入自定义模型名称 (请使用带联网功能的模型)"
+                       {% if config.ONLINE_MODEL not in ['deepseek-r1-searching','net-gpt-4o-mini'] %}
+                       value="{{ config.ONLINE_MODEL }}"
+                       style="display:block;" 
+                       {% endif %}>
+                <input type="hidden" id="finalOnlineModel" name="ONLINE_MODEL" value="{{ config.ONLINE_MODEL }}">
+            </div>
+
+            <div class="form-group">
+                <label>联网API Key:</label>
+                <input type="text" placeholder="sk-xxxxxxxxxx" name="ONLINE_API_KEY" value="{{ config.ONLINE_API_KEY }}">
+            </div>
+
+            <div class="form-group">
+                <label>联网API温度 (0-1):</label>
+                <input type="number" step="0.1" name="ONLINE_API_TEMPERATURE" value="{{ config.ONLINE_API_TEMPERATURE }}">
+                <small>温度越高，ai思维越发散，但过高可能导致胡言乱语。</small>
+            </div>
+
+            <div class="form-group">
+                <label>联网API回复最大Token:</label>
+                <input type="number" step="100" name="ONLINE_API_MAX_TOKEN" value="{{ config.ONLINE_API_MAX_TOKEN }}">
+            </div>
+            
+            <div class="form-group">
+                <label>触发联网请求的提示词:</label>
+                <input type="text" placeholder="触发联网请求的提示词" name="SEARCH_DETECTION_PROMPT" value="{{ config.SEARCH_DETECTION_PROMPT }}">
+                <small>此处填你希望AI查询哪些信息，比如天气、新闻、歌词...</small><br>
+            </div>
+            <div class="form-group">
+                <label>联网API固定提示词 (可选):</label>
+                <input type="text" placeholder="联网API固定提示词" name="ONLINE_FIXED_PROMPT" value="{{ config.ONLINE_FIXED_PROMPT }}">
+                <small>填写后，每次联网搜索请求将自动附加此提示词。例如若您希望AI回复所在地天气，可在此处填写您的所在地信息。</small><br>
+                <small>示例：当前所在地为上海浦东区...</small>
             </div>
         </div>
 
@@ -955,9 +1689,9 @@
             <h2>回复间隔配置</h2>
             <div class="form-group">
                 <label>消息间隔时间 = 字数 * (平均时间 + 随机时间)</label>
-                <label>平均打字速度（秒/字）:</label>
+                <label>平均打字速度 (秒/字):</label>
                 <input type="number" step="0.01" name="AVERAGE_TYPING_SPEED" value="{{ config.AVERAGE_TYPING_SPEED }}">
-                <label>随机打字速度（秒/字）：</label>
+                <label>随机打字速度 (秒/字)：</label>
                 <div style="display: flex; gap: 10px;">              
                     <input type="number" step="0.01" name="RANDOM_TYPING_SPEED_MIN" value="{{ config.RANDOM_TYPING_SPEED_MIN }}">
                     至
@@ -965,7 +1699,7 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>消息队列等待时间（建议5-10秒）:</label>
+                <label>消息队列等待时间 (建议5-10秒):</label>
                 <input type="number" step="1" name="QUEUE_WAITING_TIME" value="{{ config.QUEUE_WAITING_TIME }}">
             </div>
         </div>
@@ -983,20 +1717,29 @@
             </div>
 
             <div class="form-group">
-                <label>触发临时记忆总结进Prompt的阈值数量（条）:</label>
+                <label>触发聊天记录总结进Prompt的阈值数量 (条):</label>
                 <input type="number" step="1" name="MAX_MESSAGE_LOG_ENTRIES" value="{{ config.MAX_MESSAGE_LOG_ENTRIES }}">
             </div>
 
             <div class="form-group">
-                <label>最大记忆数量（条）:</label>
+                <label>最大记忆数量 (条):</label>
                 <input type="number" step="1" name="MAX_MEMORY_NUMBER" value="{{ config.MAX_MEMORY_NUMBER }}">
             </div>
 
             <div class="form-group">
-                <label>临时记忆存放目录:</label>
+                <label>聊天记录临时存放目录:</label>
                 <input type="text" name="MEMORY_TEMP_DIR" value="{{ config.MEMORY_TEMP_DIR }}">
             </div>
 
+            <div class="form-group">
+                <label><b>允许AI读取Prompt当中的记忆片段</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                        <input type="checkbox" name="UPLOAD_MEMORY_TO_AI" {% if config.UPLOAD_MEMORY_TO_AI %}checked{% endif %}>
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <div class="section">
@@ -1015,6 +1758,7 @@
             <div class="form-group">
                 <label>主动消息内容(发送给ai获取回复):</label>
                 <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
+                <small>如果开启了联网功能，您也可以在这里设置联网请求比如“获取最新的新闻资讯”。</small>
             </div>
             
             <div class="form-group">
@@ -1033,6 +1777,63 @@
                     至
                     <input type="text" name="QUIET_TIME_END" value="{{ config.QUIET_TIME_END }}" placeholder="HH:MM">
                 </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>定时器与提醒配置</h2>
+
+            <div class="form-group">
+                <label><b>启用定时器提醒功能</b></label>
+                <div class="switch">
+                    <label class="switch-label">
+                    <input type="checkbox" name="ENABLE_REMINDERS" {% if config.ENABLE_REMINDERS %}checked{% endif %}>
+                    <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            <p>
+            开启后，您可以给AI发送指令如“15分钟后提醒我出门”、“下午3点叫我开会”、“每天早上8点跟我道早安”来生成临时一次性定时/重复定时消息。
+            </p>
+            <p>
+            如果开启了联网搜索功能，你还可以通过指令如“每天早上10点跟我讲讲今天的新闻”来生成定时联网消息。
+            </p>
+            <p>
+            定时消息将储存在目录下的<code>recurring_reminders.json</code> 文件中并在程序运行时调用。
+            </p>
+            <p>
+            推荐使用云部署的方式来运行本程序，这样可以保持程序24h运行以获得更好的体验：<a href="https://www.bilibili.com/video/BV11x9vYnEbC/" target="_blank">[查看教程]</a>
+            </p>
+            <p></p>
+            <div class="form-group">
+                <div class="switch-container">
+                    <div class="switch-item">
+                        <label><b>允许在安静时间内发送提醒</b></label>
+                        <div class="switch">
+                            <label class="switch-label">
+                            <input type="checkbox" name="ALLOW_REMINDERS_IN_QUIET_TIME" {% if config.ALLOW_REMINDERS_IN_QUIET_TIME %}checked{% endif %}>
+                            <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="switch-item">
+                        <label><b>使用语音通话提醒用户 (仅支持私聊)</b></label>
+                        <div class="switch">
+                            <label class="switch-label">
+                            <input type="checkbox" name="USE_VOICE_CALL_FOR_REMINDERS" {% if config.USE_VOICE_CALL_FOR_REMINDERS %}checked{% endif %}>
+                            <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <h3>提醒管理 (修改后重启Bot生效)</h3>
+            <div class="form-group">
+                <label>配置定时提醒：</label>
+                <div id="reminder-list">
+                    
+                </div>
+                <button type="button" onclick="addReminder()" style="margin-top: 10px;">添加提醒</button>
             </div>
         </div>
 
@@ -1065,9 +1866,32 @@
             <div class="legal-toggle" id="logToggle" style="text-align: center">展开日志</div>
         </div>
 
-        <div style="margin-top: 20px;">
-            <button type="submit">保存配置</button>
-            <button type="button" onclick="resetForm()">重置表单</button>
+        <!-- 在表单底部重置按钮旁边添加导入按钮 -->
+        <div class="form-group" style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" style="background-color: #4CAF50;">保存配置</button>
+            <button type="button" id="importButton" style="background-color: #2196F3;">导入配置</button>
+            <input type="file" id="importConfigFile" style="display: none;" accept=".py">
+        </div>
+
+        <!-- 导入配置的模态框 -->
+        <div id="importModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000;">
+            <div style="background-color: white; width: 80%; max-width: 500px; margin: 100px auto; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
+                <h3>导入配置文件</h3>
+                <p>请选择旧版本的config.py文件：</p>
+                <input type="file" id="modalImportFile" accept=".py">
+                <div style="margin-top: 10px; font-size: 14px; color: #666;">
+                    <p>注意：</p>
+                    <ul>
+                        <li>仅导入配置文件中已存在的参数</li>
+                        <li>不会删除或覆盖当前配置中的其他参数</li>
+                        <li>导入后需要点击"保存配置"才会生效</li>
+                    </ul>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 15px; gap: 10px;">
+                    <button type="button" onclick="closeImportModal()" style="background-color: #ccc;">取消</button>
+                    <button type="button" onclick="submitImportConfig()" style="background-color: #2196F3;">导入</button>
+                </div>
+            </div>
         </div>
     </form>
     
@@ -1081,10 +1905,10 @@
             </p>
             <p>
                 本软件是自由软件，您可以根据 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
-                GNU 通用公共许可证 第3版（或更高版本）</a> 的条款重新发布和修改本软件。
+                GNU 通用公共许可证 第3版 (或更高版本)</a> 的条款重新发布和修改本软件。
             </p>
             <p>
-                本软件按“现状”提供，不提供任何明示或暗示的担保（包括适销性或特定用途适用性）。<br>
+                本软件按“现状”提供，不提供任何明示或暗示的担保 (包括适销性或特定用途适用性)。<br>
                 如您未收到完整的许可证副本，请访问 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
                 GNU GPL 3.0 中文版</a> 获取。
             </p>
@@ -1137,7 +1961,7 @@
             const logElement = document.getElementById('logs');
             logElement.appendChild(entry);
 
-            // 自动滚动（仅当未暂停时）
+            // 自动滚动 (仅当未暂停时)
             const container = document.getElementById('log-container');
             if(!logPaused && container.scrollTop + container.clientHeight >= container.scrollHeight - 50) {
                 container.scrollTop = container.scrollHeight;

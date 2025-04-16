@@ -31,6 +31,7 @@ import json
 import logging
 from typing import Tuple
 import sys
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,9 @@ class Updater:
     SKIP_FILES = [
         "prompts",      # 聊天提示词
         "Memory_Temp",  # 临时记忆文件
-        "__pycache__",  # Python缓存文件
         "emojis",      # 表情包
+        "recurring_reminders.json",  # 定时提醒
+        "config.py",    # 配置文件(单独处理)
     ]
 
     # GitHub代理列表
@@ -198,6 +200,48 @@ class Updater:
                         'output': "检查更新失败：无法连接到更新服务器"
                     }
 
+    def backup_important_files(self) -> bool:
+        """在更新前备份重要文件和文件夹到数据备份/{时间}目录"""
+        try:
+            # 创建带时间戳的备份目录
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_dir = os.path.join(self.root_dir, '数据备份', timestamp)
+            os.makedirs(backup_dir, exist_ok=True)
+            
+            # 需要备份的文件和文件夹
+            files_to_backup = [
+                "config.py",
+                "recurring_reminders.json"
+            ]
+            
+            folders_to_backup = [
+                "prompts",
+                "emojis"
+            ]
+            
+            # 备份单个文件
+            for file in files_to_backup:
+                src_file = os.path.join(self.root_dir, file)
+                if os.path.exists(src_file):
+                    dst_file = os.path.join(backup_dir, file)
+                    os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                    shutil.copy2(src_file, dst_file)
+                    logger.info(f"已备份文件: {file}")
+            
+            # 备份文件夹
+            for folder in folders_to_backup:
+                src_folder = os.path.join(self.root_dir, folder)
+                if os.path.exists(src_folder):
+                    dst_folder = os.path.join(backup_dir, folder)
+                    shutil.copytree(src_folder, dst_folder)
+                    logger.info(f"已备份文件夹: {folder}")
+            
+            logger.info(f"重要文件已备份到: {backup_dir}")
+            return True
+        except Exception as e:
+            logger.error(f"备份重要文件失败: {str(e)}")
+            return False
+
     def should_skip_file(self, file_path: str) -> bool:
         """检查是否应该跳过更新某个文件"""
         return any(skip_file in file_path for skip_file in self.SKIP_FILES)
@@ -302,7 +346,7 @@ class Updater:
     def prompt_update(self, update_info: dict) -> bool:
         """提示用户是否更新"""
         print(self.format_version_info(self.get_current_version(), update_info))
-        print("\033[31m重要提醒:更新前请务必备份自己的config.py、prompt和emojis!!! \033[0m")
+        print("\033[31m重要提醒:更新前请务必备份自己的config.py、recurring_reminders.json、prompts和emojis!!! \033[0m")
         
         while True:
             choice = input("\n是否现在更新?\n输入'y'更新 / 输入'n'取消更新并继续启动: ").lower().strip()
@@ -393,6 +437,15 @@ class Updater:
                     
             log_progress(f"开始更新到版本: {update_info['version']}")
             
+            # 添加重要文件备份步骤
+            log_progress("开始备份重要文件...")
+            if not self.backup_important_files():
+                log_progress("备份重要文件", False, "备份失败")
+                if not self.prompt_continue_update():
+                    return {'success': False, 'output': '\n'.join(progress)}
+            else:
+                log_progress("备份重要文件", True, "备份完成")
+            
             log_progress("开始下载更新...")
             if not self.download_update(update_info['download_url'], callback=log_progress):
                 log_progress("下载更新", False, "下载失败")
@@ -418,8 +471,15 @@ class Updater:
             # 合并配置文件：保留旧config.py所有原始内容，仅追加新版本中新增的配置项
             current_config = os.path.join(self.root_dir, "config.py")
             new_config = os.path.join(self.temp_dir, "extracted", new_dir, "config.py")
-            Updater.merge_config(current_config, new_config, current_config)
-            log_progress("合并配置文件", True, "配置合并完成")
+            if os.path.exists(current_config) and os.path.exists(new_config):
+                log_progress("开始合并配置文件...")
+                Updater.merge_config(current_config, new_config, current_config)
+                log_progress("合并配置文件", True, "配置合并完成")
+            else:
+                log_progress("合并配置文件", False, "配置文件不存在，无法合并")
+                if not os.path.exists(current_config) and os.path.exists(new_config):
+                    shutil.copy2(new_config, current_config)
+                    log_progress("复制新配置文件", True, "已复制新的配置文件")
                 
             with open(self.version_file, 'w', encoding='utf-8') as f:
                 json.dump({
@@ -437,6 +497,19 @@ class Updater:
         except Exception as e:
             logger.error(f"更新失败: {str(e)}")
             return {'success': False, 'error': str(e), 'output': f"更新失败: {str(e)}"}
+
+    def prompt_continue_update(self) -> bool:
+        """当备份失败时，询问用户是否继续更新"""
+        print("\n\033[31m警告：备份重要文件失败！\033[0m")
+        while True:
+            choice = input("是否仍要继续更新?\n输入'y'继续更新 / 输入'n'取消更新: ").lower().strip()
+            if choice in ('y', 'yes'):
+                print("\n继续更新...")
+                return True
+            elif choice in ('n', 'no'):
+                print("\n已取消更新")
+                return False
+            print("请输入 y 或 n")
 
     @staticmethod
     def parse_config_file(path):

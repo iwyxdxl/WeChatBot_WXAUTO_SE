@@ -36,6 +36,7 @@ from flask import Flask
 import logging
 from queue import Queue, Empty
 import time
+import json
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24).hex()  # 48位十六进制字符串
@@ -151,7 +152,12 @@ def submit_config():
             'ENABLE_EMOJI_SENDING',
             'ENABLE_AUTO_MESSAGE', 
             'ENABLE_MEMORY',
+            'UPLOAD_MEMORY_TO_AI',
             'ENABLE_LOGIN_PASSWORD',
+            'ENABLE_REMINDERS',
+            'ALLOW_REMINDERS_IN_QUIET_TIME',
+            'USE_VOICE_CALL_FOR_REMINDERS',
+            'ENABLE_ONLINE_API',
         ]
         for field in boolean_fields:
             new_values[field] = field in request.form  # 直接判断是否存在
@@ -301,8 +307,18 @@ def index():
                     new_values[var] = value
 
             # 明确处理布尔类型字段（如果未提交）
-            for var in ['ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION', 
-                        'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY', 'ENABLE_LOGIN_PASSWORD']:
+            for var in ['ENABLE_IMAGE_RECOGNITION', 
+                        'ENABLE_EMOJI_RECOGNITION', 
+                        'ENABLE_EMOJI_SENDING',
+                        'ENABLE_AUTO_MESSAGE', 
+                        'ENABLE_MEMORY', 
+                        'UPLOAD_MEMORY_TO_AI',
+                        'ENABLE_LOGIN_PASSWORD'
+                        'ENABLE_REMINDERS',
+                        'ALLOW_REMINDERS_IN_QUIET_TIME',
+                        'USE_VOICE_CALL_FOR_REMINDERS',
+                        'ENABLE_ONLINE_API',
+                        ]:
                 if var not in submitted_fields:
                     new_values[var] = False
 
@@ -436,16 +452,37 @@ def generate_prompt():
         )
         
         prompt = request.json.get('prompt', '')
-        FixedPrompt = "\n严格参照以下提示词的格式生成（仅参考以下提示词的格式，将...替换为合适的内容，不要输出其它多余内容，注意仅在<# 输出示例>部分输出的每个分句之间以'\'进行分隔且不输出逗号和句号，其它部分正常输出）：# 任务\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话...。\n\n# 角色\n你将扮演...。\n\n# 外表\n...。\n\n# 经历\n...\n\n# 性格\n...\n\n# 输出示例\n...\...\...\n...\...\n\n# 喜好\n...\n\n"  # 固定提示词
+        FixedPrompt = (
+            "\n请严格按照以下格式生成提示词（仅参考以下格式，将...替换为合适的内容，不要输出其他多余内容）。"
+            "\n注意：仅在<# 输出示例>部分需要输出以'\\'进行分隔的短句，且不输出逗号和句号，其它部分应当正常输出。"
+            "\n\n# 任务"
+            "\n你需要扮演指定角色，根据角色的经历，模仿她的语气进行线上的日常对话。"
+            "\n\n# 角色"
+            "\n你将扮演...。"
+            "\n\n# 外表"
+            "\n...。"
+            "\n\n# 经历"
+            "\n...。"
+            "\n\n# 性格"
+            "\n...。"
+            "\n\n# 输出示例"
+            "\n...\...\..."
+            "\n...\..."
+            "\n\n# 喜好"
+            "\n...。\n"
+        )  # 固定提示词
         
+        config = parse_config()
+        temperature = config.get('TEMPERATURE', 0.7)
+
         completion = client.chat.completions.create(
             model=MODEL,
             messages=[{
-                "role": "user",
-                "content": prompt + FixedPrompt
+            "role": "user",
+            "content": prompt + FixedPrompt
             }],
-            temperature=0.7,
-            max_tokens=2000
+            temperature=temperature,
+            max_tokens=5000
         )
         
         reply = completion.choices[0].message.content
@@ -458,6 +495,184 @@ def generate_prompt():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# 获取所有提醒 
+@app.route('/get_all_reminders')
+@login_required
+def get_all_reminders():
+    """
+    获取 JSON 文件中所有的提醒记录 (包括 recurring 和 one-off)。
+    """
+    try:
+        json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'recurring_reminders.json')
+        if not os.path.exists(json_path):
+            return jsonify([]) # 文件不存在则返回空列表
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            all_reminders = json.load(f)
+
+        # 基本验证，确保返回的是列表
+        if not isinstance(all_reminders, list):
+             app.logger.warning(f"文件 {json_path} 内容不是有效的JSON列表，将返回空列表。")
+             return jsonify([])
+
+        return jsonify(all_reminders) # <--- 返回所有提醒
+
+    except json.JSONDecodeError:
+        app.logger.error(f"文件 recurring_reminders.json 格式错误，无法解析。")
+        return jsonify([]) # 格式错误也返回空列表
+    except Exception as e:
+        app.logger.error(f"获取所有提醒失败: {str(e)}")
+        return jsonify({'error': f'获取所有提醒失败: {str(e)}'}), 500
+
+
+# 重命名: 保存所有提醒 (覆盖整个文件)
+@app.route('/save_all_reminders', methods=['POST']) # <--- Route Renamed
+@login_required
+def save_all_reminders():
+    """
+    接收前端提交的所有提醒列表 (recurring 和 one-off)，
+    验证后覆盖写入 recurring_reminders.json 文件。
+    """
+    try:
+        json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'recurring_reminders.json')
+        # 获取前端提交的完整提醒列表
+        reminders_data = request.get_json()
+
+        # --- 验证前端提交的数据 ---
+        if not isinstance(reminders_data, list):
+            raise ValueError("无效的数据格式，应为提醒列表")
+
+        validated_reminders = []
+        # 定义验证规则
+        recurring_required = ['reminder_type', 'user_id', 'time_str', 'content']
+        one_off_required = ['reminder_type', 'user_id', 'target_datetime_str', 'content']
+        time_pattern = re.compile(r'^([01]\d|2[0-3]):([0-5]\d)$') # HH:MM
+        # YYYY-MM-DD HH:MM (允许个位数月/日，但通常前端datetime-local会补零)
+        datetime_pattern = re.compile(r'^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]) ([01]\d|2[0-3]):([0-5]\d)$')
+
+        for idx, item in enumerate(reminders_data, 1):
+            if not isinstance(item, dict):
+                 raise ValueError(f"第{idx}条记录不是有效的对象")
+
+            reminder_type = item.get('reminder_type')
+            user_id = str(item.get('user_id', '')).strip()
+            content = str(item.get('content', '')).strip()
+
+            # 通用验证
+            if not reminder_type in ['recurring', 'one-off']:
+                 raise ValueError(f"第{idx}条记录类型无效: {reminder_type}")
+            if not user_id: raise ValueError(f"第{idx}条用户ID不能为空")
+            if len(user_id) > 50: raise ValueError(f"第{idx}条用户ID过长（最大50字符）")
+            if not content: raise ValueError(f"第{idx}条内容不能为空")
+            if len(content) > 200: raise ValueError(f"第{idx}条内容过长（最大200字符）")
+
+            # 特定类型验证
+            if reminder_type == 'recurring':
+                if not all(field in item for field in recurring_required):
+                    raise ValueError(f"第{idx}条(recurring)记录字段缺失")
+                time_str = str(item.get('time_str', '')).strip()
+                if not time_pattern.match(time_str):
+                    raise ValueError(f"第{idx}条(recurring)时间格式错误，应为 HH:MM ({time_str})")
+                validated_reminders.append({
+                    'reminder_type': 'recurring',
+                    'user_id': user_id,
+                    'time_str': time_str,
+                    'content': content
+                })
+            elif reminder_type == 'one-off':
+                if not all(field in item for field in one_off_required):
+                     raise ValueError(f"第{idx}条(one-off)记录字段缺失")
+                target_datetime_str = str(item.get('target_datetime_str', '')).strip()
+                # 验证 YYYY-MM-DD HH:MM 格式
+                if not datetime_pattern.match(target_datetime_str):
+                    raise ValueError(f"第{idx}条(one-off)日期时间格式错误，应为 YYYY-MM-DD HH:MM ({target_datetime_str})")
+                validated_reminders.append({
+                    'reminder_type': 'one-off',
+                    'user_id': user_id,
+                    'target_datetime_str': target_datetime_str,
+                    'content': content
+                })
+
+        # --- 原子化写入操作 ---
+        # 使用临时文件确保写入安全，覆盖原文件
+        temp_dir = os.path.dirname(json_path)
+        with tempfile.NamedTemporaryFile('w', delete=False, dir=temp_dir, encoding='utf-8', suffix='.tmp') as temp_f:
+            json.dump(validated_reminders, temp_f, ensure_ascii=False, indent=2) # 写入验证后的完整列表
+            temp_path = temp_f.name
+        # 替换原文件
+        shutil.move(temp_path, json_path)
+
+        return jsonify({'status': 'success', 'message': '所有提醒已更新'})
+
+    except ValueError as ve: # 捕获验证错误
+         app.logger.error(f'提醒保存验证失败: {str(ve)}')
+         return jsonify({'error': f'数据验证失败: {str(ve)}'}), 400
+    except Exception as e:
+        app.logger.error(f'提醒保存失败: {str(e)}')
+        return jsonify({'error': f'服务器内部错误: {str(e)}'}), 500
+
+@app.route('/import_config', methods=['POST'])
+@login_required
+def import_config():
+    global bot_process
+    # 如果 bot 正在运行，则不允许导入配置
+    if bot_process and bot_process.poll() is None:
+        return jsonify({'error': '程序正在运行，请先停止再导入配置'}), 400
+
+    try:
+        if 'config_file' not in request.files:
+            return jsonify({'error': '未找到上传的配置文件'}), 400
+            
+        config_file = request.files['config_file']
+        if not config_file.filename.endswith('.py'):
+            return jsonify({'error': '请上传.py格式的配置文件'}), 400
+            
+        # 创建临时文件用于解析配置
+        with tempfile.NamedTemporaryFile('wb', suffix='.py', delete=False) as temp_f:
+            temp_path = temp_f.name
+            config_file.save(temp_path)
+        
+        # 解析临时配置文件
+        imported_config = {}
+        try:
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#') or not line:
+                        continue
+                    match = re.match(r'^(\w+)\s*=\s*(.+)$', line)
+                    if match:
+                        var_name = match.group(1)
+                        var_value_str = match.group(2)
+                        try:
+                            var_value = ast.literal_eval(var_value_str)
+                            imported_config[var_name] = var_value
+                        except:
+                            imported_config[var_name] = var_value_str
+        finally:
+            # 清理临时文件
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+        
+        # 获取当前配置作为基础
+        current_config = parse_config()
+        
+        # 合并配置：只更新导入配置中存在的项
+        for key, value in imported_config.items():
+            if key in current_config:  # 只更新当前配置中已存在的项
+                current_config[key] = value
+        
+        # 更新配置文件
+        update_config(current_config)
+        
+        return jsonify({'success': True, 'message': '配置导入成功，共导入了{}个有效参数'.format(len(imported_config))}), 200
+    except Exception as e:
+        app.logger.error(f"配置导入失败: {str(e)}")
+        return jsonify({'error': f'导入失败: {str(e)}'}), 500
+
 
 class WebLogHandler(logging.Handler):
     def emit(self, record):
@@ -505,12 +720,29 @@ def receive_bot_log():
         if not request.is_json:
             return jsonify({'error': 'Unsupported Media Type'}), 415
 
-        log_data = request.json.get('log')
-        if log_data:
-            # 添加进程标识和颜色标记
-            colored_log = f"[BOT] \033[34m{log_data.strip()}\033[0m"
-            log_queue.put(colored_log)
-        return jsonify({'status': 'success'})
+        # 支持两种格式：单个日志或日志数组
+        if 'logs' in request.json:  # 批量日志
+            logs_data = request.json.get('logs', [])
+            if isinstance(logs_data, list):
+                for log_entry in logs_data:
+                    if log_entry:
+                        # 添加进程标识和颜色标记
+                        colored_log = f"[BOT] \033[34m{log_entry.strip()}\033[0m"
+                        log_queue.put(colored_log)
+                return jsonify({'status': 'success', 'processed': len(logs_data)})
+            return jsonify({'error': 'Invalid logs format'}), 400
+            
+        elif 'log' in request.json:  # 兼容单条日志格式
+            log_data = request.json.get('log')
+            if log_data:
+                # 添加进程标识和颜色标记
+                colored_log = f"[BOT] \033[34m{log_data.strip()}\033[0m"
+                log_queue.put(colored_log)
+            return jsonify({'status': 'success'})
+            
+        else:
+            return jsonify({'error': 'Missing log data'}), 400
+            
     except Exception as e:
         app.logger.error(f"日志接收失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -537,8 +769,8 @@ def kill_process_using_port(port):
 if __name__ == '__main__':
     class BotStatusFilter(logging.Filter):
         def filter(self, record):
-            # 如果日志消息中包含 /bot_status 或 /api/log，则返回 False（不记录）
-            if '/bot_status' in record.getMessage() or '/api/log' in record.getMessage():
+            # 如果日志消息中包含以下日志，则返回 False（不记录）
+            if '/bot_status' in record.getMessage() or '/api/log' in record.getMessage() or '/save_all_reminders' in record.getMessage() or '/get_all_reminders' in record.getMessage():
                 return False
             return True
 

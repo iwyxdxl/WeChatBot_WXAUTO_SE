@@ -19,7 +19,7 @@ DEEPSEEK_API_KEY = ''
 # 硅基流动API注册地址，免费15元额度 https://cloud.siliconflow.cn/
 DEEPSEEK_BASE_URL = 'https://vg.v1api.cc/v1'
 # 硅基流动API的模型
-MODEL = 'deepseek-ai/DeepSeek-V3'
+MODEL = 'deepseek-v3-0324'
 
 # 如果要使用官方的API
 # DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -34,8 +34,8 @@ TEMPERATURE = 1.1
 # Moonshot AI配置（用于图片和表情包识别）
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = ''
-MOONSHOT_BASE_URL = 'https://api.moonshot.cn/v1'
-MOONSHOT_MODEL = 'moonshot-v1-128k-vision-preview'
+MOONSHOT_BASE_URL = 'https://vg.v1api.cc/v1'
+MOONSHOT_MODEL = 'gpt-4-vision-preview'
 MOONSHOT_TEMPERATURE = 0.8
 ENABLE_IMAGE_RECOGNITION = True
 ENABLE_EMOJI_RECOGNITION = True
@@ -73,6 +73,7 @@ ENABLE_MEMORY = True
 MEMORY_TEMP_DIR = 'Memory_Temp'
 MAX_MESSAGE_LOG_ENTRIES = 30
 MAX_MEMORY_NUMBER = 50
+UPLOAD_MEMORY_TO_AI = True
 
 # 是否接收全部群聊消息
 ACCEPT_ALL_GROUP_CHAT_MESSAGES = False
@@ -81,3 +82,23 @@ ACCEPT_ALL_GROUP_CHAT_MESSAGES = False
 ENABLE_LOGIN_PASSWORD = False
 LOGIN_PASSWORD = '123456'
 PORT = 5000
+
+# 定时器/提醒设置
+# 启用提醒功能
+ENABLE_REMINDERS = True
+# 是否允许在安静时间内发送提醒 (True/False)
+# 如果设置为 False，则在安静时间内安排的提醒将被跳过。
+ALLOW_REMINDERS_IN_QUIET_TIME = True
+# 是否使用语音通话进行提醒
+# 群聊无法使用语音通话进行提醒
+USE_VOICE_CALL_FOR_REMINDERS = False
+
+# 联网API配置
+ENABLE_ONLINE_API = False
+ONLINE_BASE_URL = 'https://vg.v1api.cc/v1'
+ONLINE_MODEL = 'deepseek-r1-searching'
+ONLINE_API_KEY = ''
+ONLINE_API_TEMPERATURE = 0.7
+ONLINE_API_MAX_TOKEN = 2000
+SEARCH_DETECTION_PROMPT = '是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等'
+ONLINE_FIXED_PROMPT = ''
