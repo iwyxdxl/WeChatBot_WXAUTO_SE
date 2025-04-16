@@ -8,10 +8,11 @@
 - 一群 617379532（已满） 二群 964162330（已满） 三群 970883587（已满） 四群 948397427（已满） 五群 1035170563
 
 # 效果展示
-<img src="Demo_Image/1.jpg" alt="示例图片1" width="300px">
-<img src="Demo_Image/2.jpg" alt="示例图片2" width="300px">
-<img src="Demo_Image/3.png" alt="示例图片3" width="900px">
-<img src="Demo_Image/4.png" alt="示例图片4" width="900px">
+<img src="Demo_Image/1.png" alt="示例图片1" width="300px">
+<img src="Demo_Image/2.png" alt="示例图片2" width="300px">
+<img src="Demo_Image/3.png" alt="示例图片2" width="300px">
+<img src="Demo_Image/4.png" alt="示例图片3" width="900px">
+<img src="Demo_Image/5.png" alt="示例图片4" width="900px">
 
 # 版本号
 - v3.14
