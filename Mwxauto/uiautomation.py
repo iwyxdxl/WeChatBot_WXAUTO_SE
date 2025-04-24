@@ -51,26 +51,26 @@ IsNT6orHigher = os.sys.getwindowsversion().major >= 6
 ProcessTime = time.perf_counter  #this returns nearly 0 when first call it if python version <= 3.6
 ProcessTime()  # need to call it once if python version <= 3.6
 
-try:
-    from anytree import Node, RenderTree
+# try:
+#     from anytree import Node, RenderTree
 
-    def PrintAllControlTree(ele):
-        def findall(ele, n=0, node=None):
-            nn = '\n'
-            nodename = f"[{ele.ControlTypeName} {n}](\"{ele.ClassName}\", \"{ele.Name.replace(nn, '')}\", \"{''.join([str(i) for i in ele.GetRuntimeId()])}\")"
-            if not node:
-                node1 = Node(nodename)
-            else:
-                node1 = Node(nodename, parent=node)
-            eles = ele.GetChildren()
-            for ele1 in eles:
-                findall(ele1, n+1, node1)
-            return node1
-        tree = RenderTree(findall(ele))
-        for pre, fill, node in tree:
-            print(f"{pre}{node.name}")
-except:
-    pass
+#     def PrintAllControlTree(ele):
+#         def findall(ele, n=0, node=None):
+#             nn = '\n'
+#             nodename = f"[{ele.ControlTypeName} {n}](\"{ele.ClassName}\", \"{ele.Name.replace(nn, '')}\", \"{''.join([str(i) for i in ele.GetRuntimeId()])}\")"
+#             if not node:
+#                 node1 = Node(nodename)
+#             else:
+#                 node1 = Node(nodename, parent=node)
+#             eles = ele.GetChildren()
+#             for ele1 in eles:
+#                 findall(ele1, n+1, node1)
+#             return node1
+#         tree = RenderTree(findall(ele))
+#         for pre, fill, node in tree:
+#             print(f"{pre}{node.name}")
+# except:
+#     pass
 
 class _AutomationClient:
     _instance = None
@@ -2186,7 +2186,7 @@ def GetMonitorsRect(dpiAwarenessPerMonitor: bool = False) -> List[Rect]:
     SetDpiAwareness(dpiAwarenessPerMonitor)
     MonitorEnumProc = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_size_t, ctypes.c_size_t, ctypes.POINTER(ctypes.wintypes.RECT), ctypes.c_size_t)
     rects = []
-    def MonitorCallback(hMonitor: int, hdcMonitor: int, lprcMonitor: ctypes.POINTER(ctypes.wintypes.RECT), dwData: int):
+    def MonitorCallback(hMonitor: int, hdcMonitor: int, lprcMonitor, dwData: int):
         rect = Rect(lprcMonitor.contents.left, lprcMonitor.contents.top, lprcMonitor.contents.right, lprcMonitor.contents.bottom)
         rects.append(rect)
         return 1
@@ -4011,7 +4011,7 @@ class ObjectModelPattern():
         """Refer https://docs.microsoft.com/en-us/windows/desktop/api/uiautomationclient/nn-uiautomationclient-iuiautomationobjectmodelpattern"""
         self.pattern = pattern
 
-    def GetUnderlyingObjectModel(self) -> ctypes.POINTER(comtypes.IUnknown):
+    def GetUnderlyingObjectModel(self) -> 'ctypes._Pointer':
         """
         Call IUIAutomationObjectModelPattern::GetUnderlyingObjectModel, todo.
         Return `ctypes.POINTER(comtypes.IUnknown)`, an interface used to access the underlying object model of the provider.
@@ -4646,7 +4646,7 @@ class TextRange():
         if textRange:
             return TextRange(textRange=textRange)
 
-    def GetAttributeValue(self, textAttributeId: int) -> ctypes.POINTER(comtypes.IUnknown):
+    def GetAttributeValue(self, textAttributeId: int):
         """
         Call IUIAutomationTextRange::GetAttributeValue.
         textAttributeId: int, a value in class `TextAttributeId`.
@@ -4654,7 +4654,7 @@ class TextRange():
         Refer https://docs.microsoft.com/en-us/windows/desktop/api/uiautomationclient/nf-uiautomationclient-iuiautomationtextrange-getattributevalue
         """
         return self.textRange.GetAttributeValue(textAttributeId)
-
+    
     def GetBoundingRectangles(self) -> List[Rect]:
         """
         Call IUIAutomationTextRange::GetBoundingRectangles.
@@ -5310,13 +5310,12 @@ PatternConstructors = {
 }
 
 
-def CreatePattern(patternId: int, pattern: ctypes.POINTER(comtypes.IUnknown)):
-    """Create a concreate pattern by pattern id and pattern(POINTER(IUnknown))."""
+def CreatePattern(patternId, pattern):
+    """Create a concrete pattern by pattern id and pattern (POINTER(IUnknown))."""
     subPattern = pattern.QueryInterface(GetPatternIdInterface(patternId))
     if subPattern:
         return PatternConstructors[patternId](pattern=subPattern)
-
-
+    
 class Control():
     ValidKeys = set(['ControlType', 'ClassName', 'AutomationId', 'Name', 'SubName', 'RegexName', 'Depth', 'Compare'])
     def __init__(self, searchFromControl: 'Control' = None, searchDepth: int = 0xFFFFFFFF, searchInterval: float = SEARCH_INTERVAL, foundIndex: int = 1, element=None, **searchProperties):
@@ -5382,12 +5381,12 @@ class Control():
         newControl = Control.CreateControlFromElement(control.Element)
         return newControl
     
-    @property
-    def tree(self):
-        try:
-            return PrintAllControlTree(self)
-        except Exception as e:
-            pass
+    # @property
+    # def tree(self):
+    #     try:
+    #         return PrintAllControlTree(self)
+    #     except Exception as e:
+    #         pass
 
     def SetSearchFromControl(self, searchFromControl: 'Control') -> None:
         """searchFromControl: `Control` or its subclass"""
@@ -6638,7 +6637,7 @@ class Control():
     def ImageControl(self, searchDepth=0xFFFFFFFF, searchInterval=SEARCH_INTERVAL, foundIndex=1, element=0, **searchProperties) -> 'ImageControl':
         return ImageControl(searchDepth=searchDepth, searchInterval=searchInterval, foundIndex=foundIndex, element=element, searchFromControl=self, **searchProperties)
 
-    def ListControl(self, searchDepth=0xFFFFFFFF, searchInterval=SEARCH_INTERVAL, foundIndex=1, element=0, **searchProperties) -> 'listControl':
+    def ListControl(self, searchDepth=0xFFFFFFFF, searchInterval=SEARCH_INTERVAL, foundIndex=1, element=0, **searchProperties) -> 'ListControl':
         return ListControl(searchDepth=searchDepth, searchInterval=searchInterval, foundIndex=foundIndex, element=element, searchFromControl=self, **searchProperties)
 
     def ListItemControl(self, searchDepth=0xFFFFFFFF, searchInterval=SEARCH_INTERVAL, foundIndex=1, element=0, **searchProperties) -> 'ListItemControl':

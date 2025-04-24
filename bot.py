@@ -29,7 +29,8 @@ from config import *
 import queue
 import json
 from threading import Timer
-import sys
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
@@ -40,7 +41,7 @@ wx = WeChat()
 ROBOT_WX_NAME = wx.A_MyIcon.Name
 # 设置监听列表
 for user_name in user_names:
-    wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
+    wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
 # 持续监听消息，并且收到消息后回复
 wait = 1  # 设置1秒查看一次是否有新消息
 
@@ -285,8 +286,6 @@ def check_user_timeouts():
                                 }
                             else:
                                 user_queues[user]['messages'].append(auto_content)
-                                if len(user_queues[user]['messages']) > 5:
-                                    user_queues[user]['messages'].pop(0)
                                 user_queues[user]['last_message_time'] = time.time()
 
                         # 重置计时器（不触发 on_user_message）
@@ -443,7 +442,7 @@ def message_listener():
             if wx is None:
                 wx = WeChat()
                 for user_name in user_names:
-                    wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
+                    wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
                     
             msgs = wx.GetListenMessage()
             for chat in msgs:
@@ -549,85 +548,205 @@ def handle_emoji_message(msg, who):
         emoji_timer = threading.Timer(3.0, timer_callback)
         emoji_timer.start()
 
+def fetch_and_extract_text(url: str) -> Optional[str]:
+    """
+    获取给定 URL 的网页内容并提取主要文本。
+
+    Args:
+        url (str): 要抓取的网页链接。
+
+    Returns:
+        Optional[str]: 提取并清理后的网页文本内容（限制了最大长度），如果失败则返回 None。
+    """
+    try:
+        # 基本 URL 格式验证 (非常基础)
+        parsed_url = urlparse(url)
+        if not all([parsed_url.scheme, parsed_url.netloc]):
+             logger.warning(f"无效的URL格式，跳过抓取: {url}")
+             return None
+
+        headers = {'User-Agent': REQUESTS_USER_AGENT}
+        logger.info(f"开始抓取链接内容: {url}")
+        response = requests.get(url, headers=headers, timeout=REQUESTS_TIMEOUT, allow_redirects=True)
+        response.raise_for_status()  # 检查HTTP请求是否成功 (状态码 2xx)
+
+        # 检查内容类型，避免处理非HTML内容（如图片、PDF等）
+        content_type = response.headers.get('Content-Type', '').lower()
+        if 'html' not in content_type:
+            logger.warning(f"链接内容类型非HTML ({content_type})，跳过文本提取: {url}")
+            return None
+
+        # 使用BeautifulSoup解析HTML
+        # 指定 lxml 解析器以获得更好的性能和兼容性
+        soup = BeautifulSoup(response.content, 'lxml') # 使用 response.content 获取字节流，让BS自动处理编码
+
+        # --- 文本提取策略 ---
+        # 尝试查找主要内容区域 (这部分可能需要根据常见网站结构调整优化)
+        main_content_tags = ['article', 'main', '.main-content', '#content', '.post-content'] # 示例选择器
+        main_text = ""
+        for tag_selector in main_content_tags:
+            element = soup.select_one(tag_selector)
+            if element:
+                main_text = element.get_text(separator='\n', strip=True)
+                break # 找到一个就停止
+
+        # 如果没有找到特定的主要内容区域，则获取整个 body 的文本作为备选
+        if not main_text and soup.body:
+            main_text = soup.body.get_text(separator='\n', strip=True)
+        elif not main_text: # 如果连 body 都没有，则使用整个 soup
+             main_text = soup.get_text(separator='\n', strip=True)
+
+        # 清理文本：移除过多空行
+        lines = [line for line in main_text.splitlines() if line.strip()]
+        cleaned_text = '\n'.join(lines)
+
+        # 限制内容长度
+        if len(cleaned_text) > MAX_WEB_CONTENT_LENGTH:
+            cleaned_text = cleaned_text[:MAX_WEB_CONTENT_LENGTH] + "..." # 截断并添加省略号
+            logger.info(f"网页内容已提取，并截断至 {MAX_WEB_CONTENT_LENGTH} 字符。")
+        elif cleaned_text:
+            logger.info(f"成功提取网页文本内容 (长度 {len(cleaned_text)}).")
+        else:
+            logger.warning(f"未能从链接 {url} 提取到有效文本内容。")
+            return None # 如果提取后为空，也视为失败
+
+        return cleaned_text
+
+    except requests.exceptions.Timeout:
+        logger.error(f"抓取链接超时 ({REQUESTS_TIMEOUT}秒): {url}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"抓取链接时发生网络错误: {url}, 错误: {e}")
+        return None
+    except Exception as e:
+        # 捕获其他可能的错误，例如 BS 解析错误
+        logger.error(f"处理链接时发生未知错误: {url}, 错误: {e}", exc_info=True)
+        return None
+
+# 辅助函数：将用户消息记录到记忆日志 (如果启用)
+def log_user_message_to_memory(username, original_content):
+    """将用户的原始消息记录到记忆日志文件。"""
+    if ENABLE_MEMORY:
+        try:
+            prompt_name = prompt_mapping.get(username, username)
+            log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
+            log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{username}] {original_content}\n"
+            os.makedirs(os.path.dirname(log_file), exist_ok=True)
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(log_entry)
+        except Exception as write_err:
+             logger.error(f"写入用户 {username} 的记忆日志失败: {write_err}")
+
 def handle_wxauto_message(msg, who):
-    """处理来自Wxauto的消息，包括可能的提醒功能。"""
+    """
+    处理来自Wxauto的消息，包括可能的提醒、图片/表情、链接内容获取和常规聊天。
+    """
+    global can_send_messages # 引用全局变量以控制发送状态
     try:
         username = who
-        content = getattr(msg, 'content', None) or getattr(msg, 'text', None)
-        img_path = None
-        is_emoji = False
-        global can_send_messages
+        # 获取原始消息内容
+        original_content = getattr(msg, 'content', None) or getattr(msg, 'text', None)
 
-        if not content:
+        # 如果消息内容为空，则直接返回
+        if not original_content:
             logger.warning("收到的消息没有内容。")
             return
 
-        on_user_message(username) # 重置自动消息计时器
+        # 重置该用户的自动消息计时器
+        on_user_message(username)
 
-        # --- 提醒检查 ---
-        # 如果启用了提醒功能，在图片/表情处理之前检查关键字
+        # --- 1. 提醒检查 (基于原始消息内容) ---
         reminder_keywords = ["每日","每天","提醒","提醒我", "定时", "分钟后", "小时后", "计时", "闹钟", "通知我", "叫我", "提醒一下", "倒计时", "稍后提醒", "稍后通知", "提醒时间", "设置提醒", "喊我"]
-        if ENABLE_REMINDERS and any(keyword in content for keyword in reminder_keywords):
-            logger.info(f"检测到可能的提醒请求，用户 {username}: {content}")
-            reminder_set = try_parse_and_set_reminder(content, username)
+        if ENABLE_REMINDERS and any(keyword in original_content for keyword in reminder_keywords):
+            logger.info(f"检测到可能的提醒请求，用户 {username}: {original_content}")
+            # 尝试解析并设置提醒
+            reminder_set = try_parse_and_set_reminder(original_content, username)
+            # 如果成功设置了提醒，则处理完毕，直接返回
             if reminder_set:
-                logger.info(f"成功为用户 {username} 设置提醒。")
-                
-                # 如果设置了提醒，可以选择是否继续作为普通聊天消息处理。
-                # 目前选择仅确认提醒并停止进一步处理此消息。
+                logger.info(f"成功为用户 {username} 设置提醒，消息处理结束。")
                 return # 停止进一步处理此消息
 
-        # --- 图片/表情处理 ---
-        if content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+        # --- 2. 图片/表情处理 (基于原始消息内容) ---
+        img_path = None         # 图片路径
+        is_emoji = False        # 是否为表情包
+        # processed_content 初始化为原始消息，后续步骤可能修改它
+        processed_content = original_content
+
+        # 检查是否为图片文件路径
+        if original_content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
              if ENABLE_IMAGE_RECOGNITION:
-                img_path = content
+                img_path = original_content
                 is_emoji = False
-                content = None # 稍后将被识别结果替换
+                processed_content = None # 标记为None，稍后会被识别结果替换
+                logger.info(f"检测到图片消息，准备识别: {img_path}")
              else:
-                content = "[图片]" # 如果未启用识别功能，用占位符替换路径
+                processed_content = "[图片]" # 如果未启用识别，使用占位符
+                logger.info("检测到图片消息，但图片识别功能已禁用。")
 
-        if content and "[动画表情]" in content:
+        # 检查是否为动画表情
+        elif original_content and "[动画表情]" in original_content:
             if ENABLE_EMOJI_RECOGNITION:
-                img_path = capture_and_save_screenshot(username)
+                img_path = capture_and_save_screenshot(username) # 截图
                 is_emoji = True
-                content = None # 稍后将被识别结果替换
+                processed_content = None # 标记为None，稍后会被识别结果替换
+                logger.info("检测到动画表情，准备截图识别...")
             else:
-                content = "[动画表情]" # 如果未启用识别功能，用占位符替换
-                clean_up_temp_files() # 清理可能已拍摄但未使用的截图
+                processed_content = "[动画表情]" # 如果未启用识别，使用占位符
+                clean_up_temp_files() # 清理可能的临时文件
+                logger.info("检测到动画表情，但表情识别功能已禁用。")
 
+        # 如果需要进行图片/表情识别
         if img_path:
-            # 尝试图片识别
-            logger.info(f"处理图片/表情消息 - 用户 {username}: {img_path}")
+            logger.info(f"开始识别图片/表情 - 用户 {username}: {img_path}")
+            # 调用识别函数
             recognized_text = recognize_image_with_moonshot(img_path, is_emoji=is_emoji)
-            content = recognized_text if recognized_text else ("[图片]" if not is_emoji else "[动画表情]") # 使用识别文本或回退占位符
-            clean_up_temp_files() # 清理截图文件
-            can_send_messages = True # 确保在识别过程中暂停后可以发送消息
+            # 使用识别结果或回退占位符更新 processed_content
+            processed_content = recognized_text if recognized_text else ("[图片]" if not is_emoji else "[动画表情]")
+            clean_up_temp_files() # 清理临时截图文件
+            can_send_messages = True # 确保识别后可以发送消息
+            logger.info(f"图片/表情识别完成，结果: {processed_content}")
 
-        # --- 普通消息处理 ---
-        # 仅在内容存在时继续处理（可能是原始文本、占位符或识别文本）
-        if content:
-            if ENABLE_MEMORY:
-                # 将用户消息记录到记忆日志文件
-                prompt_name = prompt_mapping.get(username, username)
-                log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
-                log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{username}] {content}\n"
-                # 确保目录存在
-                os.makedirs(os.path.dirname(log_file), exist_ok=True)
-                # 写入日志条目
-                try:
-                    with open(log_file, 'a', encoding='utf-8') as f:
-                        f.write(log_entry)
-                except Exception as write_err:
-                     logger.error(f"写入用户 {username} 的记忆日志失败: {write_err}")
+        # --- 3. 链接内容获取 (仅当ENABLE_URL_FETCHING为True且当前非图片/表情处理流程时) ---
+        fetched_web_content = None
+        # 只有在启用了URL抓取，并且当前处理的不是图片/表情（即processed_content不为None）时才进行
+        if ENABLE_URL_FETCHING and processed_content is not None:
+            # 使用正则表达式查找 URL
+            url_pattern = r'https?://[^\s<>"]+|www\.[^\s<>"]+'
+            urls_found = re.findall(url_pattern, original_content) # 仍在原始消息中查找URL
 
+            if urls_found:
+                # 优先处理第一个找到的有效链接
+                url_to_fetch = urls_found[0]
+                logger.info(f"检测到链接，用户 {username}，准备抓取: {url_to_fetch}")
+                # 调用辅助函数抓取和提取文本
+                fetched_web_content = fetch_and_extract_text(url_to_fetch)
 
+                if fetched_web_content:
+                    logger.info(f"成功获取链接内容摘要 (长度 {len(fetched_web_content)})。")
+                    # 构建包含链接摘要的新消息内容，用于发送给AI
+                    # 注意：这里替换了 processed_content，AI将收到包含原始消息和链接摘要的组合信息
+                    processed_content = f"用户发送了消息：“{original_content}”\n其中包含的链接的主要内容摘要如下（可能不完整）：\n---\n{fetched_web_content}\n---\n"
+                else:
+                    logger.warning(f"未能从链接 {url_to_fetch} 提取有效文本内容。将按原始消息处理。")
+                    # 如果抓取失败，processed_content 保持不变（可能是原始文本，或图片/表情占位符）
+            # else: (如果没找到URL) 不需要操作，继续使用当前的 processed_content
+
+        # --- 4. 记录用户消息到记忆 (如果启用) ---
+        log_user_message_to_memory(username, processed_content)
+
+        # --- 5. 将最终处理后的消息加入队列 ---
+        # 只有在 processed_content 有效时才加入队列
+        if processed_content:
+            # 获取当前时间戳，添加到消息内容前
             current_time_str = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
-            content_with_time = f"[{current_time_str}] {content}"
-            logger.info(f"处理消息 - 用户 {username}: {content_with_time}")
-            sender_name = username
+            content_with_time = f"[{current_time_str}] {processed_content}" # 使用最终处理过的内容
+            logger.info(f"准备将处理后的消息加入队列 - 用户 {username}: {content_with_time[:150]}...") # 日志截断防止过长
 
-            # 添加到用户消息队列
+            sender_name = username # 发送者名字（对于好友聊天，who就是username）
+
+            # 使用锁保护对共享队列的访问
             with queue_lock:
+                # 如果用户队列不存在，则初始化
                 if username not in user_queues:
                     user_queues[username] = {
                         'messages': [content_with_time],
@@ -635,21 +754,19 @@ def handle_wxauto_message(msg, who):
                         'username': username,
                         'last_message_time': time.time()
                     }
-                    logger.info(f"已为用户 {sender_name} 初始化消息队列")
+                    logger.info(f"已为用户 {sender_name} 初始化消息队列并加入消息。")
                 else:
-                    # 添加新消息，保持队列大小限制（例如，5条）
+                    # 用户队列已存在，追加消息并管理队列长度
                     user_queues[username]['messages'].append(content_with_time)
-                    MAX_QUEUE_LEN = 5 # 定义最大队列长度
-                    if len(user_queues[username]['messages']) > MAX_QUEUE_LEN:
-                         user_queues[username]['messages'].pop(0)
+                    # 更新最后消息时间戳
                     user_queues[username]['last_message_time'] = time.time()
-                    logger.info(f"用户 {sender_name} 的消息已加入队列（当前 {len(user_queues[username]['messages'])} 条）并更新最后消息时间")
+                    logger.info(f"用户 {sender_name} 的消息已加入队列（当前 {len(user_queues[username]['messages'])} 条）并更新时间。")
         else:
-            # 如果启用了图片/表情识别但未能生成文本，且原始内容为None（因为是图片路径或"[动画表情]"），可能会发生这种情况
-            logger.warning(f"在处理后未找到用户 {username} 的可处理内容。")
+            # 如果经过所有处理后 processed_content 变为 None 或空字符串，则记录警告
+            logger.warning(f"在处理后未找到用户 {username} 的可处理内容。原始消息: '{original_content}'")
 
     except Exception as e:
-        can_send_messages = True # 确保在发生错误时可以恢复发送消息
+        can_send_messages = True # 确保发生错误时可以恢复发送消息
         logger.error(f"消息处理失败 (handle_wxauto_message): {str(e)}", exc_info=True)
 
 def check_inactive_users():
@@ -745,7 +862,6 @@ def process_user_messages(user_id):
     else:
         logger.error(f"未能为用户 {user_id} 生成任何回复。")
         
-
 def send_reply(user_id, sender_name, username, original_merged_message, reply):
     """发送回复消息，可能分段发送，并管理发送标志。"""
     global is_sending_message
@@ -767,61 +883,65 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
         is_sending_message = True  # <<< 在发送前设置标志
         logger.info(f"准备向 {sender_name} (用户ID: {user_id}) 发送消息")
 
-        # --- 表情包发送 ---
+        # --- 表情包发送逻辑 ---
+        emoji_path = None
         if ENABLE_EMOJI_SENDING:
             emotion = is_emoji_request(reply)
             if emotion:
                 logger.info(f"触发表情请求（概率{EMOJI_SENDING_PROBABILITY}%） 用户 {user_id}，情绪: {emotion}")
                 emoji_path = send_emoji(emotion)
-                if emoji_path:
-                    try:
-                        wx.SendFiles(filepath=emoji_path, who=user_id)
-                        logger.info(f"已向 {user_id} 发送表情包 {emotion}")
-                        time.sleep(random.uniform(0.5, 1.5))  # 表情发送后稍作延迟
-                    except Exception as e:
-                        logger.error(f"向 {user_id} 发送表情包失败: {str(e)}")
 
-        # --- 文本消息发送 ---
-        reply = remove_timestamps(reply)  # 移除时间戳（如果有）
+        # --- 文本消息处理 ---
+        reply = remove_timestamps(reply)
+        if SEPARATE_ROW_SYMBOLS:
+            parts = [p.strip() for p in re.split(r'\\|\n', reply) if p.strip()]
+        else:
+            parts = [p.strip() for p in re.split(r'\\', reply) if p.strip()]
 
-        # 处理可能的分段消息（例如 '\\' 或者 '\n' 分隔符）
-        parts = [p.strip() for p in re.split(r'\\|\n', reply) if p.strip()]
-        if not parts:  # 如果分割后消息为空
+        if not parts:
             logger.warning(f"回复消息在分割/清理后为空，无法发送给 {user_id}。")
-            is_sending_message = False  # 确保标志被重置，即使提前返回
+            is_sending_message = False
             return
 
-        if len(parts) > 1:  # 分段消息
-            logger.info(f"向 {user_id} 发送分段消息（共 {len(parts)} 段）")
-            for i, part in enumerate(parts):
-                wx.SendMsg(msg=part, who=user_id)
-                logger.info(f"分段回复 {i+1}/{len(parts)} 给 {sender_name}: {part}")
-                # 如果启用记忆功能，记录到记忆日志
-                if ENABLE_MEMORY:
-                    log_ai_reply_to_memory(username, part)
+        # --- 构建消息队列（文本+表情随机插入）---
+        message_actions = [('text', part) for part in parts]
+        if emoji_path:
+            # 随机选择插入位置（0到len(message_actions)之间，包含末尾）
+            insert_pos = random.randint(0, len(message_actions))
+            message_actions.insert(insert_pos, ('emoji', emoji_path))
 
-                if i < len(parts) - 1:
-                    # 根据下一段的长度计算延迟时间
-                    next_part_len = len(parts[i+1])
+        # --- 发送混合消息队列 ---
+        for idx, (action_type, content) in enumerate(message_actions):
+            if action_type == 'emoji':
+                try:
+                    wx.SendFiles(filepath=content, who=user_id)
+                    logger.info(f"已向 {user_id} 发送表情包")
+                    time.sleep(random.uniform(0.5, 1.5))  # 表情包发送后随机延迟
+                except Exception as e:
+                    logger.error(f"发送表情包失败: {str(e)}")
+            else:
+                wx.SendMsg(msg=content, who=user_id)
+                logger.info(f"分段回复 {idx+1}/{len(message_actions)} 给 {sender_name}: {content[:50]}...")
+                if ENABLE_MEMORY:
+                    log_ai_reply_to_memory(username, content)
+
+            # 处理分段延迟（仅当下一动作为文本时计算）
+            if idx < len(message_actions) - 1:
+                next_action = message_actions[idx + 1]
+                if action_type == 'text' and next_action[0] == 'text':
+                    next_part_len = len(next_action[1])
                     base_delay = next_part_len * AVERAGE_TYPING_SPEED
                     random_delay = random.uniform(RANDOM_TYPING_SPEED_MIN, RANDOM_TYPING_SPEED_MAX)
-                    total_delay = base_delay + random_delay
-                    # 确保最小延迟（例如 1 秒），避免消息发送过快
-                    final_delay = max(1.0, total_delay)
-                    logger.debug(f"分段延迟时间 for {user_id}: {final_delay:.2f} 秒")
-                    time.sleep(final_delay)
-        else:  # 单条消息（未分段或只有一段）
-            single_reply = parts[0]  # 获取单条消息内容
-            wx.SendMsg(msg=single_reply, who=user_id)
-            logger.info(f"回复 {sender_name}: {single_reply}")
-            # 如果启用记忆功能，记录到记忆日志
-            if ENABLE_MEMORY:
-                log_ai_reply_to_memory(username, single_reply)
+                    total_delay = max(1.0, base_delay + random_delay)
+                    time.sleep(total_delay)
+                else:
+                    # 表情包前后使用固定随机延迟
+                    time.sleep(random.uniform(0.5, 1.5))
 
     except Exception as e:
         logger.error(f"向 {user_id} 发送回复失败: {str(e)}", exc_info=True)
     finally:
-        is_sending_message = False  # <<< 在发送完成或出错后重置标志
+        is_sending_message = False
 
 def remove_timestamps(text):
     """
@@ -1066,6 +1186,9 @@ def summarize_and_save(user_id):
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
         summary_prompt = f"请以{prompt_name}的视角，用中文总结与{user_id}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{full_logs}"
         summary = get_deepseek_response(summary_prompt, "system", store_context=False)
+        # 获取总结失败则不进行记忆总结
+        if summary is None or summary == "抱歉，我现在有点忙，稍后再聊吧。":
+            return False
         # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %A %H:%M]或[%Y-%m-%d %H:%M]或[%Y-%m-%d %H:%M:%S]或[%Y-%m-%d %A %H:%M:%S]格式的时间戳
         summary = re.sub(
             r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2}( [A-Za-z]+)? \d{2}:\d{2}(:\d{2})?\]',
@@ -1579,7 +1702,6 @@ def send_confirmation_reply(user_id, confirmation_prompt, log_context, fallback_
         except Exception as send_fallback_err:
              # 如果连发送备用消息都失败了，记录严重错误
              logger.critical(f"发送备用确认消息也失败 ({log_context}): {send_fallback_err}")
-
     
 def trigger_reminder(user_id, timer_id, reminder_message):
     """当短期提醒到期时由 threading.Timer 调用的函数。"""
@@ -1617,8 +1739,6 @@ def trigger_reminder(user_id, timer_id, reminder_message):
                 }
             else:
                 user_queues[user_id]['messages'].append(formatted_message)
-                if len(user_queues[user_id]['messages']) > 5:
-                    user_queues[user_id]['messages'].pop(0)
                 user_queues[user_id]['last_message_time'] = time.time()
         
         logger.info(f"已将提醒消息 '{reminder_message}' 添加到用户 {user_id} 的消息队列，用以执行联网检查流程")
@@ -1848,8 +1968,6 @@ def recurring_reminder_checker():
                                         }
                                     else:
                                         user_queues[user_id]['messages'].append(formatted_message)
-                                        if len(user_queues[user_id]['messages']) > 5:
-                                            user_queues[user_id]['messages'].pop(0)
                                         user_queues[user_id]['last_message_time'] = time.time()
                                 
                                 logger.info(f"已将{reminder_type}提醒 '{content}' 添加到用户 {user_id} 的消息队列，用以执行联网检查流程")
@@ -2029,7 +2147,7 @@ def main():
         wx = WeChat()
         for user_name in user_names:
             logger.info(f"添加监听用户: {user_name}")
-            wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
+            wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
 
         # 初始化所有用户的自动消息计时器
         if ENABLE_AUTO_MESSAGE: # 仅在启用自动消息时才初始化
@@ -2045,9 +2163,6 @@ def main():
             logger.info("所有用户自动消息计时器初始化完成。")
         else:
             logger.info("自动消息功能已禁用，跳过计时器初始化。")
-        # ==============================================================
-        # ====================== 初始化代码结束 ======================
-        # ==============================================================
 
         # --- 启动后台线程 ---
         logger.info("\033[32m启动后台线程...\033[0m")
@@ -2083,10 +2198,6 @@ def main():
             auto_message_thread.daemon = True
             auto_message_thread.start()
             logger.info("主动消息检查线程已启动。")
-        # 注意：上面已经根据 ENABLE_AUTO_MESSAGE 决定是否初始化计时器和启动线程了，这里无需重复判断
-        # else:
-        #      logger.info("主动消息功能已禁用。") # 这句日志在初始化部分已经有了
-
 
         logger.info("\033[32mBOT已成功启动并运行中...\033[0m")
 
@@ -2099,7 +2210,6 @@ def main():
     except Exception as e:
         logger.critical(f"主程序发生严重错误: {str(e)}", exc_info=True)
     finally:
-        # ... (原有的 finally 清理代码) ...
         logger.info("程序准备退出，执行清理操作...")
 
         # 取消活动的短期一次性提醒定时器
@@ -2118,9 +2228,6 @@ def main():
                  logger.info(f"已取消 {cancelled_count} 个短期一次性定时器。")
             else:
                  logger.info("没有活动的短期一次性提醒定时器需要取消。")
-
-        # --- 注意：不需要在这里显式保存 recurring_reminders ---
-        # --- 保存操作已在添加/删除时完成 ---
 
         if 'async_http_handler' in globals() and isinstance(async_http_handler, AsyncHTTPHandler):
             logger.info("正在关闭异步HTTP日志处理器...")

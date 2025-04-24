@@ -49,13 +49,13 @@ class WxResponse(dict):
         return cls(status="失败", msg=msg, data=data)
     
 # 监听器基类，实现后台消息监听
-class Listener:
+class Listener():
     def _listener_start(self):
         wxlog.debug('开始监听')
         self._listener_is_listening = True
-        self._listener_messages = {}  # 存储监听到的消息
-        self._lock = threading.Lock()  # 线程锁，保护共享数据
-        self._listener_stop_event = threading.Event()  # 停止事件
+        self._listener_messages = {}
+        self._lock = threading.Lock()
+        self._listener_stop_event = threading.Event()
         self._listener_thread = threading.Thread(target=self._listener_listen, daemon=True)
         self._listener_thread.start()
 
@@ -67,7 +67,7 @@ class Listener:
                 self._get_listen_messages()
             except:
                 wxlog.debug(f'监听消息失败：{traceback.format_exc()}')
-            time.sleep(1)  # 监听间隔
+            time.sleep(WxParam.LISTEN_INTERVAL)
 
     def _listener_stop(self):
         self._listener_is_listening = False
@@ -75,49 +75,27 @@ class Listener:
         self._listener_thread.join()
 
     def _get_listen_messages(self):
-        """获取监听的新消息"""
         temp_listen = self.listen.copy()
         for who in temp_listen:
             chat = temp_listen.get(who, None)
             try:
                 if chat is None or not chat.UiaAPI.Exists(0.1):
                     continue
-                
-                with self._lock:
-                    # 检查并获取新消息
-                    msg = chat.GetNewMessage(
-                        savepic=chat.savepic, 
-                        savefile=chat.savefile, 
-                        savevoice=chat.savevoice
-                    )
-                    
-                    # 检查是否有真正的新消息
-                    if msg:
-                        # 过滤掉可能重复的消息ID
-                        if not hasattr(chat, 'processed_msg_ids'):
-                            chat.processed_msg_ids = set()
-                        
-                        # 过滤已处理的消息
-                        new_msgs = []
-                        for m in msg:
-                            if m.id not in chat.processed_msg_ids:
-                                chat.processed_msg_ids.add(m.id)
-                                new_msgs.append(m)
-                        
-                        # 限制已处理ID集合的大小，避免内存泄漏
-                        if len(chat.processed_msg_ids) > 1000:
-                            chat.processed_msg_ids = set(list(chat.processed_msg_ids)[-500:])
-                        
-                        # 只添加真正的新消息
-                        if new_msgs:
-                            wxlog.debug(f"获取到 {len(new_msgs)} 条新消息")
-                            if chat not in self._listener_messages:
-                                self._listener_messages[chat] = new_msgs
-                            else:
-                                self._listener_messages[chat].extend(new_msgs)
-                        
-            except Exception as e:
-                wxlog.debug(f'监听消息处理异常：{str(e)}\n{traceback.format_exc()}')
+            except:
+                continue
+            with self._lock:
+                msg = chat.GetNewMessage(
+                    savepic=chat.savepic, 
+                    savefile=chat.savefile, 
+                    savevoice=chat.savevoice,
+                    parse_links=chat.parse_links
+                )
+                if msg:
+                    wxlog.debug(f"获取到消息：{msg}")
+                    if chat not in self._listener_messages:
+                        self._listener_messages[chat] = msg
+                    else:
+                        self._listener_messages[chat].extend(msg)
 
 class WeChat(WeChatBase, Listener):
     VERSION: str = '3.9.11.17'
@@ -283,7 +261,7 @@ class WeChat(WeChatBase, Listener):
         self._show()
         return IsRedPixel(self.A_ChatIcon)
     
-    def GetNextNewMessage(self, savepic=True, savefile=False, savevoice=True, timeout=10):
+    def GetNextNewMessage(self, savepic=True, savefile=False, savevoice=True, parse_links = False, timeout=10):
         """获取下一个新消息"""
         msgs_ = self.GetAllMessage()
         msgids = [i[-1] for i in msgs_]
@@ -308,7 +286,7 @@ class WeChat(WeChatBase, Listener):
             ]
             if NewMsgItems:
                 wxlog.debug('获取当前窗口新消息')
-                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice)
+                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice, parse_links)
                 self.usedmsgid = msgids
                 return {self.CurrentChat(): msgs}
 
@@ -326,7 +304,7 @@ class WeChat(WeChatBase, Listener):
             for session in sessiondict:
                 self.ChatWith(session)
                 NewMsgItems = self.C_MsgList.GetChildren()[-sessiondict[session]:]
-                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice)
+                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice, parse_links)
                 msgs_ = self.GetAllMessage()
                 self.usedmsgid = [i[-1] for i in msgs_]
                 return {session:msgs}
@@ -784,7 +762,7 @@ class WeChat(WeChatBase, Listener):
             return WxResponse.failure(f"文件发送异常: {str(e)}")
 
             
-    def GetAllMessage(self, savepic=False, savefile=False, savevoice=False):
+    def GetAllMessage(self, savepic=False, savefile=False, savevoice=False, parse_links = False):
         '''获取当前窗口中加载的所有聊天记录
         
         Args:
@@ -796,7 +774,7 @@ class WeChat(WeChatBase, Listener):
         if not self.C_MsgList.Exists(0.2):
             return []
         MsgItems = self.C_MsgList.GetChildren()
-        msgs = self._getmsgs(MsgItems, savepic, savefile=savefile, savevoice=savevoice)
+        msgs = self._getmsgs(MsgItems, savepic, savefile=savefile, savevoice=savevoice, parse_links=parse_links)
         return msgs
     
     def LoadMoreMessage(self):
@@ -893,7 +871,7 @@ class WeChat(WeChatBase, Listener):
         wxlog.debug(f'获取到 {len(AcceptableNewFriendsList)} 条新的好友申请')
         return AcceptableNewFriendsList
     
-    def AddListenChat(self, who, savepic=True, savefile=False, savevoice=True):
+    def AddListenChat(self, who, savepic=True, savefile=False, savevoice=True, parse_links = False):
         """添加监听对象
         
         Args:
@@ -905,7 +883,7 @@ class WeChat(WeChatBase, Listener):
         # 支持列表形式的参数
         if isinstance(who, list):
             for i in who:
-                self.AddListenChat(i, savepic, savefile, savevoice)
+                self.AddListenChat(i, savepic, savefile, savevoice, parse_links)
             return None
             
         exists = uia.WindowControl(searchDepth=1, ClassName='ChatWnd', Name=who).Exists(maxSearchSeconds=0.1)
@@ -917,6 +895,7 @@ class WeChat(WeChatBase, Listener):
         self.listen[who].savepic = savepic
         self.listen[who].savefile = savefile
         self.listen[who].savevoice = savevoice
+        self.listen[who].parse_links = parse_links
         
         return WxResponse.success(f"添加监听对象 {who} 成功")
 
@@ -942,6 +921,7 @@ class WeChat(WeChatBase, Listener):
                     self.listen[chat_who].savepic = chat.savepic
                     self.listen[chat_who].savefile = chat.savefile
                     self.listen[chat_who].savevoice = chat.savevoice
+                    self.listen[chat_who].parse_links = chat.parse_links
                     # 更新引用
                     chat = self.listen[chat_who]
                     wxlog.debug(f"已重新打开监听对象`{chat_who}`窗口")
@@ -969,6 +949,7 @@ class WeChat(WeChatBase, Listener):
                         self.listen[chat_who].savepic = chat.savepic
                         self.listen[chat_who].savefile = chat.savefile
                         self.listen[chat_who].savevoice = chat.savevoice
+                        self.listen[chat_who].parse_links = chat.parse_links
                         # 更新引用
                         chat = self.listen[chat_who]
                         wxlog.debug(f"已重新打开监听对象`{chat_who}`窗口")

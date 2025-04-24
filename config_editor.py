@@ -158,6 +158,7 @@ def submit_config():
             'ALLOW_REMINDERS_IN_QUIET_TIME',
             'USE_VOICE_CALL_FOR_REMINDERS',
             'ENABLE_ONLINE_API',
+            'SEPARATE_ROW_SYMBOLS',
         ]
         for field in boolean_fields:
             new_values[field] = field in request.form  # 直接判断是否存在
@@ -318,6 +319,7 @@ def index():
                         'ALLOW_REMINDERS_IN_QUIET_TIME',
                         'USE_VOICE_CALL_FOR_REMINDERS',
                         'ENABLE_ONLINE_API',
+                        'SEPARATE_ROW_SYMBOLS',
                         ]:
                 if var not in submitted_fields:
                     new_values[var] = False
@@ -799,5 +801,5 @@ if __name__ == '__main__':
     
     Timer(1, open_browser).start()  # 延迟1秒确保服务器已启动
     
-    app.run(debug=False, port=PORT)
+    app.run(host="0.0.0.0", debug=False, port=PORT)
     

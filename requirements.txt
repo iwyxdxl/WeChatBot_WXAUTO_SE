@@ -12,3 +12,5 @@ werkzeug
 psutil
 filelock
 requests
+beautifulsoup4
+lxml

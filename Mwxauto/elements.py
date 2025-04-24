@@ -12,7 +12,6 @@ import re
 import win32gui
 import win32con
 
-
 class WxParam:
     SYS_TEXT_HEIGHT = 33
     TIME_TEXT_HEIGHT = 34
@@ -22,6 +21,7 @@ class WxParam:
     DEFALUT_SAVEPATH = os.path.join(os.getcwd(), 'wxauto文件')
     SHORTCUT_SEND = '{Enter}'
     MOUSE_MOVE = False  # 关键参数：控制是否移动鼠标
+    LISTEN_INTERVAL = 1
 
 class WeChatBase:
     def _lang(self, text, langtype='MAIN'):
@@ -67,7 +67,7 @@ class WeChatBase:
         uia.SetGlobalSearchTimeout(10.0)
         return ParseMessage(Msg, MsgItem, self)
     
-    def _getmsgs(self, msgitems, savepic=False, savefile=False, savevoice=False):
+    def _getmsgs(self, msgitems, savepic=False, savefile=False, savevoice=False, parse_links=False):
         msgs = []
         for MsgItem in msgitems:
             if MsgItem.ControlTypeName == 'ListItemControl':
@@ -77,6 +77,8 @@ class WeChatBase:
             f"[{self._lang('图片')}]",
             f"[{self._lang('文件')}]",
             f"[{self._lang('语音')}]",
+            f"[{self._lang('链接')}]",
+            f"[{self._lang('音乐')}]",
         ]
 
         if not [i for i in msgs if i.content[:4] in msgtypes]:
@@ -86,7 +88,7 @@ class WeChatBase:
             if msg.type not in ('friend', 'self'):  # 排除非好友/自己类型的消息
                 continue
                 
-            # 仅处理非自己发送的媒体消息（新增类型判断）
+            # 仅处理非自己发送的媒体消息
             if msg.content.startswith(f"[{self._lang('图片')}]") and savepic and msg.type != 'self':
                 imgpath = self._download_pic(msg.control)
                 msg.content = imgpath if imgpath else msg.content
@@ -99,11 +101,173 @@ class WeChatBase:
                 voice_text = self._get_voice_text(msg.control)
                 voice_text = f"[语音消息]{voice_text}"
                 msg.content = voice_text if voice_text else msg.content
-                
+            
+            elif msg.content in (f"[{self._lang('链接')}]", f"[{self._lang('音乐')}]") and msg.type != 'self' and parse_links:
+                card_url = self._get_card_url(msg.control, msg.content)
+                if card_url:
+                    msg.content = f"[卡片链接]{card_url}"
+
             msg.info[1] = msg.content
         return msgs
     
+    def _get_card_url(self, msgitem, content):
+        """
+        获取链接或音乐卡片的URL
+        
+        Args:
+            msgitem: 消息项控件
+            content: 消息内容
+        
+        Returns:
+            str: 解析出的URL或错误信息
+        """
+        if content not in ('[链接]', '[音乐]'):
+            return None
+        
+        if content == '[链接]' and (
+            msgitem.TextControl(Name="邀请你加入群聊").Exists(0)\
+            or msgitem.TextControl(Name="Group Chat Invitation").Exists(0)):
+            return '[链接](群聊邀请)'
+        
+        if not msgitem.PaneControl().Exists(0):
+            return None
+        
+        link_control_list = msgitem.PaneControl().GetChildren()
+        if len(link_control_list) < 2:
+            return None
+        
+        link_control = link_control_list[1]
+        if not link_control.ButtonControl().Exists(0):
+            return None
+
+        RollIntoView(self.C_MsgList, link_control)
+        
+        try:
+            wxlog.debug("点击链接卡片获取URL")
+            msgitem.GetAllProgeny()[-1][-1].Click()
+
+            t0 = time.time()
+            browser_found = False
+            while not browser_found and time.time() - t0 < 15:
+                try:
+                    if FindWindow('Chrome_WidgetWin_0', '微信'):
+                        browser_found = True
+                        break
+                    time.sleep(0.1)
+                except Exception as e:
+                    wxlog.debug(f"等待浏览器窗口时发生异常: {e}")
+                    time.sleep(0.5)
+            
+            if not browser_found:
+                wxlog.debug("等待浏览器窗口超时")
+                return '无法打开浏览器窗口'
+            
+            # 获取浏览器控件
+            wxbrowser = uia.PaneControl(ClassName="Chrome_WidgetWin_0", Name="微信", searchDepth=1)
+            
+            # 等待文档加载完成
+            time.sleep(2)
+
+            t0 = time.time()
+            doc_loaded = False
+            while time.time() - t0 < 10:
+                try:
+                    # 尝试获取DocumentControl并检查其子元素
+                    if wxbrowser.DocumentControl().Exists(0.5):
+                        # 检查是否有子元素或特定安全提示元素存在
+                        has_children = wxbrowser.DocumentControl().GetChildren()
+                        security_notice = wxbrowser.DocumentControl().TextControl(Name="mp appmsg sec open").Exists(0)
+                        
+                        if has_children and not security_notice:
+                            doc_loaded = True
+                            break
+                    
+                except Exception as e:
+                    wxlog.debug(f"检查文档加载时发生异常: {e}")
+                
+                time.sleep(0.2)  # 稍微增加检查间隔
+            
+            # 如果文档未加载成功，关闭浏览器并返回错误
+            if not doc_loaded:
+                if wxbrowser.Exists(0):
+                    try:
+                        wxbrowser.PaneControl(searchDepth=1, ClassName='').ButtonControl(Name="关闭").Click()
+                    except:
+                        pass
+                return '无法加载文档内容'
+            
+            # 复制链接URL
+            t0 = time.time()
+            while True:
+                if time.time() - t0 > 15:  # 增加超时时间到15秒
+                    try:
+                        wxbrowser.PaneControl(searchDepth=1, ClassName='').ButtonControl(Name="关闭").Click()
+                    except:
+                        pass
+                    return '无法获取url'
+                
+                try:
+                    # 点击"更多"按钮
+                    wxbrowser.PaneControl(searchDepth=1, ClassName='').MenuItemControl(Name="更多").Click()
+                    time.sleep(0.5)
+                    
+                    # 尝试点击"复制链接"选项
+                    copyurl = wxbrowser.PaneControl(ClassName='Chrome_WidgetWin_0').MenuItemControl(Name='复制链接')
+                    if copyurl.Exists(0.5):
+                        copyurl.Click()
+                        break
+                except Exception as e:
+                    wxlog.debug(f"点击更多菜单时发生异常: {e}")
+                    time.sleep(0.5)
+            
+            # 从剪贴板获取URL - 添加重试机制
+            max_retries = 5
+            retry_delay = 0.5
+            url = None
+            
+            for retry in range(max_retries):
+                try:
+                    # 添加短暂延迟，确保复制操作完成
+                    time.sleep(retry_delay)
+                    
+                    # 尝试读取剪贴板
+                    url = ReadClipboardData().get('13', '')
+                    if url:  # 如果成功获取URL，跳出循环
+                        break
+                        
+                except Exception as e:
+                    wxlog.debug(f"读取剪贴板尝试 {retry+1}/{max_retries} 失败: {e}")
+                    time.sleep(retry_delay)  # 在重试前稍微等待
+            
+            # 关闭浏览器窗口
+            try:
+                wxbrowser.PaneControl(searchDepth=1, ClassName='').ButtonControl(Name="关闭").Click()
+            except Exception as e:
+                wxlog.debug(f"关闭浏览器窗口时发生异常: {e}")
+            
+            # 返回URL或错误信息
+            if url:
+                return url
+            else:
+                return '无法从剪贴板读取URL'
+                
+        except Exception as e:
+            # 捕获所有未处理的异常
+            wxlog.error(f"解析链接时发生未处理异常: {e}")
+            
+            # 尝试关闭可能打开的浏览器窗口
+            try:
+                browser = uia.PaneControl(ClassName="Chrome_WidgetWin_0", Name="微信", searchDepth=1)
+                if browser.Exists(0.5):
+                    browser.PaneControl(searchDepth=1, ClassName='').ButtonControl(Name="关闭").Click()
+            except:
+                pass
+                
+            return f'解析失败: {str(e)}'
+
     def _download_pic(self, msgitem):
+        time.sleep(1)
+
         # 使用消息项的运行时ID作为唯一标识符
         msg_id = ''.join([str(i) for i in msgitem.GetRuntimeId()])
         filename = f"微信图片_{msg_id}.png"
@@ -118,57 +282,7 @@ class WeChatBase:
         if not os.path.exists(WxParam.DEFALUT_SAVEPATH):
             os.makedirs(WxParam.DEFALUT_SAVEPATH)
         
-        # 确保图片窗口被关闭
-        handle = FindWindow(name='另存为...')
-        if handle:
-            savehandle = FindWinEx(handle, classname='Button', name='保存(&S)')[0]
-            win32gui.SendMessage(savehandle, win32con.BM_CLICK, 0, 0)
-            time.sleep(0.5)
-        hwnd = FindWindow(name="确认另存为")
-        while hwnd:
-            buttons_found = FindWinEx(hwnd, classname='Button', name='否(&N)')
-            
-            if buttons_found:  # 检查列表是否为空
-                cancelhandle = buttons_found[0] # 如果不为空，才获取第一个元素
-                try:
-                    win32gui.SendMessage(cancelhandle, win32con.BM_CLICK, 0, 0)
-                    time.sleep(0.1) 
-                except Exception as e:
-                    # 处理点击可能发生的异常
-                    print(f"点击 '否(N)' 按钮时出错: {e}")
-                    
-            else:
-                # 如果没找到按钮，可以选择跳过点击，或者尝试其他方法关闭窗口
-                print("警告：在 '确认另存为' 窗口中未找到 '否(N)' 按钮。")
-                # 也许直接发送 ESC 更安全？
-                break # 没找到按钮，可能窗口状态不对，退出循环
-
-            # 重新检查窗口是否还在，避免死循环
-            time.sleep(0.1) # 加个小延时
-            hwnd = FindWindow(name="确认另存为")
-
-        handle = FindWindow(name='另存为...')
-        while handle:
-            cancel_buttons = FindWinEx(handle, classname='Button', name='取消')
-            if cancel_buttons:
-                cancelhandle = cancel_buttons[0]
-                try:
-                    win32gui.SendMessage(cancelhandle, win32con.BM_CLICK, 0, 0)
-                    time.sleep(0.1)
-                except Exception as e:
-                    print(f"点击 '取消' 按钮时出错: {e}")
-            else:
-                print("警告：在 '另存为...' 窗口中未找到 '取消' 按钮。")
-                break
-                
-            time.sleep(0.1)
-            handle = FindWindow(name='另存为...')
-        # 关闭图片预览窗口
-        ImageWin = FindWindow(classname='ImagePreviewWnd')
-        while ImageWin:
-            win32gui.SendMessage(ImageWin, win32con.WM_CLOSE, 0, 0)
-            time.sleep(0.1)
-            ImageWin = FindWindow(classname='ImagePreviewWnd')
+        close_save_windows()
 
         self._show()
         imgcontrol = msgitem.ButtonControl(Name='')
@@ -360,57 +474,7 @@ class ChatWnd(WeChatBase):
         """
         wxlog.debug(f"发送消息：{self.who} --> {msg}")
         
-        # 再次确保图片窗口被关闭
-        handle = FindWindow(name='另存为...')
-        if handle:
-            savehandle = FindWinEx(handle, classname='Button', name='保存(&S)')[0]
-            win32gui.SendMessage(savehandle, win32con.BM_CLICK, 0, 0)
-            time.sleep(0.5)
-        hwnd = FindWindow(name="确认另存为")
-        while hwnd:
-            buttons_found = FindWinEx(hwnd, classname='Button', name='否(&N)')
-            
-            if buttons_found:  # 检查列表是否为空
-                cancelhandle = buttons_found[0] # 如果不为空，才获取第一个元素
-                try:
-                    win32gui.SendMessage(cancelhandle, win32con.BM_CLICK, 0, 0)
-                    time.sleep(0.1) 
-                except Exception as e:
-                    # 处理点击可能发生的异常
-                    print(f"点击 '否(N)' 按钮时出错: {e}")
-                    
-            else:
-                # 如果没找到按钮，可以选择跳过点击，或者尝试其他方法关闭窗口
-                print("警告：在 '确认另存为' 窗口中未找到 '否(N)' 按钮。")
-                # 也许直接发送 ESC 更安全？
-                break # 没找到按钮，可能窗口状态不对，退出循环
-
-            # 重新检查窗口是否还在，避免死循环
-            time.sleep(0.1) # 加个小延时
-            hwnd = FindWindow(name="确认另存为")
-
-        handle = FindWindow(name='另存为...')
-        while handle:
-            cancel_buttons = FindWinEx(handle, classname='Button', name='取消')
-            if cancel_buttons:
-                cancelhandle = cancel_buttons[0]
-                try:
-                    win32gui.SendMessage(cancelhandle, win32con.BM_CLICK, 0, 0)
-                    time.sleep(0.1)
-                except Exception as e:
-                    print(f"点击 '取消' 按钮时出错: {e}")
-            else:
-                print("警告：在 '另存为...' 窗口中未找到 '取消' 按钮。")
-                break
-                
-            time.sleep(0.1)
-            handle = FindWindow(name='另存为...')
-        # 关闭图片预览窗口
-        ImageWin = FindWindow(classname='ImagePreviewWnd')
-        while ImageWin:
-            win32gui.SendMessage(ImageWin, win32con.WM_CLOSE, 0, 0)
-            time.sleep(0.1)
-            ImageWin = FindWindow(classname='ImagePreviewWnd')
+        close_save_windows()
 
         if not msg and not at:
             return False
@@ -454,9 +518,15 @@ class ChatWnd(WeChatBase):
                 
             # 使用ShortcutPaste代替SendKeys('{Ctrl}v')
             self.editbox.ShortcutPaste(move=WxParam.MOUSE_MOVE)
-            
+
             # 验证粘贴成功
-            if self.editbox.GetValuePattern().Value.replace('￼', ''):
+            current_value = ''
+            try:
+                current_value = self.editbox.GetValuePattern().Value or ''
+            except Exception as e:
+                wxlog.debug(f"获取输入框内容失败: {e}")
+
+            if current_value.replace('￼', ''):
                 break
             else:
                 # 如果快捷键粘贴失败，尝试右键菜单粘贴
@@ -466,7 +536,11 @@ class ChatWnd(WeChatBase):
                 menu_item = menu.MenuItemControl(Name='粘贴')
                 if menu_item.Exists(0.5):
                     menu_item.Click(simulateMove=False)
-                    if self.editbox.GetValuePattern().Value.replace('￼', ''):
+                    try:
+                        current_value = self.editbox.GetValuePattern().Value or ''
+                    except:
+                        current_value = ''
+                    if current_value.replace('￼', ''):
                         break
         
         # 发送消息
@@ -572,7 +646,7 @@ class ChatWnd(WeChatBase):
             Warnings.lightred('所有文件都无法成功发送', stacklevel=2)
             return False
 
-    def GetAllMessage(self, savepic=False, savefile=False, savevoice=False):
+    def GetAllMessage(self, savepic=False, savefile=False, savevoice=False, parse_links=False):
         '''获取当前窗口中加载的所有聊天记录
         
         Args:
@@ -585,10 +659,10 @@ class ChatWnd(WeChatBase):
         '''
         wxlog.debug(f"获取所有聊天记录：{self.who}")
         MsgItems = self.C_MsgList.GetChildren()
-        msgs = self._getmsgs(MsgItems, savepic, savefile, savevoice)
+        msgs = self._getmsgs(MsgItems, savepic, savefile, savevoice, parse_links)
         return msgs
     
-    def GetNewMessage(self, savepic=False, savefile=False, savevoice=False):
+    def GetNewMessage(self, savepic=False, savefile=False, savevoice=False, parse_links=False):
         '''获取当前窗口中加载的新聊天记录
 
         Args:
@@ -640,7 +714,7 @@ class ChatWnd(WeChatBase):
             return []
         
         # 处理新消息
-        newmsgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice)
+        newmsgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice, parse_links)
         
         # 更新已使用的消息ID列表，保留最新的100条以防止列表过长
         self.usedmsgid = now_msgid[-100:]
@@ -792,16 +866,22 @@ class WeChatImage:
         Returns:
             str: 文件保存路径，即savepath
         """
-        
+
         if not savepath:
             savepath = os.path.join(WxParam.DEFALUT_SAVEPATH, f"微信图片_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.png")
         if not os.path.exists(os.path.split(savepath)[0]):
             os.makedirs(os.path.split(savepath)[0])
 
         # 如果文件已经存在，跳过保存过程
+        time.sleep(1)
         if savepath and os.path.exists(savepath):
             wxlog.debug(f"图片已存在: {savepath}, 跳过保存")
             return savepath
+        
+        handle = FindWindow(name='另存为...')
+        if handle:
+            close_save_windows()
+            return False
             
         if self.t_zoom.Exists(maxSearchSeconds=5):
             self.t_save.Click(simulateMove=False)
@@ -828,57 +908,8 @@ class WeChatImage:
         win32gui.SendMessage(edithandle, win32con.WM_SETTEXT, '', str(savepath))
         win32gui.SendMessage(savehandle, win32con.BM_CLICK, 0, 0)
         time.sleep(0.5)
-        # 再次确保图片窗口被关闭
-        handle = FindWindow(name='另存为...')
-        if handle:
-            savehandle = FindWinEx(handle, classname='Button', name='保存(&S)')[0]
-            win32gui.SendMessage(savehandle, win32con.BM_CLICK, 0, 0)
-            time.sleep(0.5)
-        hwnd = FindWindow(name="确认另存为")
-        while hwnd:
-            buttons_found = FindWinEx(hwnd, classname='Button', name='否(&N)')
-            
-            if buttons_found:  # 检查列表是否为空
-                cancelhandle = buttons_found[0] # 如果不为空，才获取第一个元素
-                try:
-                    win32gui.SendMessage(cancelhandle, win32con.BM_CLICK, 0, 0)
-                    time.sleep(0.1) 
-                except Exception as e:
-                    # 处理点击可能发生的异常
-                    print(f"点击 '否(N)' 按钮时出错: {e}")
-                    
-            else:
-                # 如果没找到按钮，可以选择跳过点击，或者尝试其他方法关闭窗口
-                print("警告：在 '确认另存为' 窗口中未找到 '否(N)' 按钮。")
-                # 也许直接发送 ESC 更安全？
-                break # 没找到按钮，可能窗口状态不对，退出循环
-
-            # 重新检查窗口是否还在，避免死循环
-            time.sleep(0.1) # 加个小延时
-            hwnd = FindWindow(name="确认另存为")
-
-        handle = FindWindow(name='另存为...')
-        while handle:
-            cancel_buttons = FindWinEx(handle, classname='Button', name='取消')
-            if cancel_buttons:
-                cancelhandle = cancel_buttons[0]
-                try:
-                    win32gui.SendMessage(cancelhandle, win32con.BM_CLICK, 0, 0)
-                    time.sleep(0.1)
-                except Exception as e:
-                    print(f"点击 '取消' 按钮时出错: {e}")
-            else:
-                print("警告：在 '另存为...' 窗口中未找到 '取消' 按钮。")
-                break
-                
-            time.sleep(0.1)
-            handle = FindWindow(name='另存为...')
-        # 关闭图片预览窗口
-        ImageWin = FindWindow(classname='ImagePreviewWnd')
-        while ImageWin:
-            win32gui.SendMessage(ImageWin, win32con.WM_CLOSE, 0, 0)
-            time.sleep(0.1)
-            ImageWin = FindWindow(classname='ImagePreviewWnd')
+        
+        close_save_windows()
 
         return savepath
         
@@ -1405,4 +1436,52 @@ class LoginWnd:
         qrcode_control = self.UiaAPI.ButtonControl(Name='二维码')
         qrcode = qrcode_control.ScreenShot()
         return qrcode
+
+def close_save_windows(max_retries=3, timeout=10):
+    """关闭所有可能存在的保存相关窗口（支持重试和超时）"""
+    def try_close_window(window_name, button_names, esc_close=True):
+        """尝试关闭指定窗口"""
+        start_time = time.time()
+        retries = 0
+        while time.time() - start_time < timeout and retries < max_retries:
+            handle = FindWindow(name=window_name)
+            if not handle:
+                return True
+
+            # 尝试多种方式查找按钮
+            button_found = None
+            for btn_name in button_names:
+                buttons = FindWinEx(handle, classname='Button', name=btn_name)
+                if buttons:
+                    button_found = buttons[0]
+                    break
+
+            if button_found:
+                try:
+                    win32gui.SendMessage(button_found, win32con.BM_CLICK, 0, 0)
+                    wxlog.debug(f"成功点击 {btn_name} 按钮")
+                    time.sleep(0.3)
+                    if not FindWindow(name=window_name):
+                        return True
+                except Exception as e:
+                    wxlog.warning(f"点击 {btn_name} 按钮失败: {e}")
+
+            # 备用关闭方式：发送ESC或直接关闭窗口
+            if esc_close:
+                try:
+                    win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
+                    wxlog.debug("尝试发送ESC关闭窗口")
+                except Exception as e:
+                    wxlog.warning(f"发送ESC关闭失败: {e}")
+
+            retries += 1
+            time.sleep(0.5)
+
+        wxlog.warning(f"关闭 {window_name} 窗口超时")
+        return False
+
+    # 先处理确认窗口
+    try_close_window("确认另存为", ['否(&N)', '否(N)', 'No'], esc_close=True)
     
+    # 再处理另存为窗口
+    try_close_window("另存为...", ['取消', 'Cancel'], esc_close=True)

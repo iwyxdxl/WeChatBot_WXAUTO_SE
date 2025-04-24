@@ -63,6 +63,7 @@ QUIET_TIME_END = '8:00'
 AVERAGE_TYPING_SPEED = 0.2
 RANDOM_TYPING_SPEED_MIN = 0.05
 RANDOM_TYPING_SPEED_MAX = 0.1
+SEPARATE_ROW_SYMBOLS = True
 
 # 记忆功能
 # 采用综合评分公式：0.6*重要度 - 0.4*(存在时间小时数)
@@ -102,3 +103,14 @@ ONLINE_API_TEMPERATURE = 0.7
 ONLINE_API_MAX_TOKEN = 2000
 SEARCH_DETECTION_PROMPT = '是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等'
 ONLINE_FIXED_PROMPT = ''
+
+# 是否启用自动抓取消息中URL链接内容的功能
+ENABLE_URL_FETCHING = True
+# 网络请求超时时间 (秒)
+REQUESTS_TIMEOUT = 10
+# 抓取网页时使用的 User-Agent，模拟浏览器防止被屏蔽
+# REQUESTS_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+# REQUESTS_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1'
+REQUESTS_USER_AGENT = 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Mobile Safari/537.36'
+# 从网页提取内容的最大字符数，防止上下文过长，影响AI处理效率和成本
+MAX_WEB_CONTENT_LENGTH = 2000
