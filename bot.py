@@ -385,21 +385,14 @@ def get_deepseek_response(message, user_id, store_context=True):
             messages_to_send.append({"role": "user", "content": message})
             logger.info(f"工具调用 (store_context=False)，ID: {user_id}。仅发送提供的消息。")
 
+  
+        
+
         # --- 调用 API ---
         # logger.debug(f"发送给 API 的消息 (ID: {user_id}): {messages_to_send}")  # 可选：调试日志
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=messages_to_send,
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKEN,
-            stream=False
-        )
+        reply = call_chat_api_with_retry(messages_to_send, user_id)
 
-        if not response.choices:
-            logger.error("API 返回了空的选择项。")
-            return "服务响应异常，请稍后再试"  # 服务响应异常
-
-        reply = response.choices[0].message.content.strip()
+    
 
         # --- 如果需要，存储助手回复到上下文中 ---
         if store_context:
@@ -415,26 +408,76 @@ def get_deepseek_response(message, user_id, store_context=True):
                 if len(chat_contexts[user_id]) > context_limit:  # 检查实际限制
                     # 从开头裁剪以保持限制
                     chat_contexts[user_id] = chat_contexts[user_id][-context_limit:]
-
-        logger.info(f"API 回复 (ID: {user_id}): {reply[:100]}...")
         return reply
 
     except Exception as e:
         ErrorImformation = str(e)
         logger.error(f"Chat 调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
-        if "real name verification" in ErrorImformation:
-            logger.error("\033[31m错误：API 服务商反馈请完成实名认证后再使用！\033[0m")
-        elif "rate" in ErrorImformation:
-            logger.error("\033[31m错误：API 服务商反馈当前访问 API 服务频次达到上限，请稍后再试！\033[0m")
-        elif "paid" in ErrorImformation:
-            logger.error("\033[31m错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
-        elif "Api key is invalid" in ErrorImformation:
-            logger.error("\033[31m错误：API 服务商反馈 API KEY 不可用，请检查配置选项！\033[0m")
-        elif "busy" in ErrorImformation:
-            logger.error("\033[31m错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
-        else:
-            logger.error("\033[31m错误：" + str(e) + "\033[0m")
         return "抱歉，我现在有点忙，稍后再聊吧。"
+
+def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
+    """
+    调用 Chat API 并在第一次失败或返回空结果时重试。
+
+    参数:
+        messages_to_send (list): 要发送给 API 的消息列表。
+        user_id (str): 用户或系统组件的标识符。
+        max_retries (int): 最大重试次数。
+
+    返回:
+        str: API 返回的文本回复。
+    """
+    attempt = 0
+    while attempt <= max_retries:
+        try:
+            logger.debug(f"发送给 API 的消息 (ID: {user_id}): {messages_to_send}")
+
+            response = client.chat.completions.create(
+                model=MODEL,
+                messages=messages_to_send,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKEN,
+                stream=False
+            )
+
+            if response.choices:
+                content = response.choices[0].message.content.strip()
+                if content and "[image]" not in content:
+                    return content
+
+            # 记录错误日志
+            logger.error("错误请求消息体:")
+            logger.error(f"{MODEL}")
+            logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+            logger.error("API 返回了空的选择项或内容为空。")
+            logger.error(f"完整响应对象: {response}")
+
+        except Exception as e:
+            logger.error("错误请求消息体:")
+            logger.error(f"{MODEL}")
+            logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+            error_info = str(e)
+            logger.error(f"自动重试：第 {attempt + 1} 次调用失败 (ID: {user_id}) 原因: {error_info}", exc_info=False)
+
+            # 细化错误分类
+            if "real name verification" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈请完成实名认证后再使用！\033[0m")
+            elif "rate limit" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈当前访问 API 服务频次达到上限，请稍后再试！\033[0m")
+            elif "payment required" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
+            elif "Api key is invalid" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈 API KEY 不可用，请检查配置选项！\033[0m")
+            elif "service unavailable" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
+            elif "sensitive words detected" in error_info:
+                logger.error("\033[31m错误：含有敏感词，请联系API服务商！\033[0m")
+            else:
+                logger.error("\033[31m未知错误：" + error_info + "\033[0m")
+
+        attempt += 1
+
+    raise RuntimeError("抱歉，我现在有点忙，稍后再聊吧。")
 
 def message_listener():
     while True:
