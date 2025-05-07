@@ -20,7 +20,7 @@ class WxParam:
     CHAT_IMG_HEIGHT = 117
     DEFALUT_SAVEPATH = os.path.join(os.getcwd(), 'wxauto文件')
     SHORTCUT_SEND = '{Enter}'
-    MOUSE_MOVE = False  # 关键参数：控制是否移动鼠标
+    MOUSE_MOVE = False
     LISTEN_INTERVAL = 1
 
 class WeChatBase:
@@ -297,10 +297,6 @@ class WeChatBase:
 
 
     def _download_file(self, msgitem):
-        # msgitems = self.C_MsgList.GetChildren()
-        # msgs = []
-        # for MsgItem in msgitems:
-        #     msgs.append(self._split(MsgItem))
         
         filecontrol = msgitem.ButtonControl(Name='')
         if not filecontrol.Exists(0.5):
@@ -816,20 +812,26 @@ class ChatWnd(WeChatBase):
             wxlog.error(f"语音通话失败: {e}")
 
 class WeChatImage:
-    def __init__(self, language='cn') -> None:
+    _clsname = 'ImagePreviewWnd'
+
+    def __init__(self, video=False, language='cn') -> None:
+        self._video_mode = video
         self.language = language
-        self.api = uia.WindowControl(ClassName='ImagePreviewWnd', searchDepth=1)
-        MainControl1 = [i for i in self.api.GetChildren() if not i.ClassName][0]
-        self.ToolsBox, self.PhotoBox = MainControl1.GetChildren()
-        
-        # tools按钮
-        self.t_previous = self.ToolsBox.ButtonControl(Name=self._lang('上一张'))
-        self.t_next = self.ToolsBox.ButtonControl(Name=self._lang('下一张'))
-        self.t_zoom = self.ToolsBox.ButtonControl(Name=self._lang('放大'))
-        self.t_translate = self.ToolsBox.ButtonControl(Name=self._lang('翻译'))
-        self.t_ocr = self.ToolsBox.ButtonControl(Name=self._lang('提取文字'))
-        self.t_save = self.ToolsBox.ButtonControl(Name=self._lang('另存为...'))
-        self.t_qrcode = self.ToolsBox.ButtonControl(Name=self._lang('识别图中二维码'))
+        # self.api = uia.WindowControl(ClassName=self._clsname, searchDepth=1)
+        self.hwnd = FindWindow(classname=self._clsname)
+        if self.hwnd:
+            self.api = uia.ControlFromHandle(self.hwnd)
+            MainControl1 = [i for i in self.api.GetChildren() if not i.ClassName][0]
+            self.ToolsBox, self.PhotoBox = MainControl1.GetChildren()
+            
+            # tools按钮
+            self.t_previous = self.ToolsBox.ButtonControl(Name=self._lang('上一张'))
+            self.t_next = self.ToolsBox.ButtonControl(Name=self._lang('下一张'))
+            self.t_zoom = self.ToolsBox.ButtonControl(Name=self._lang('放大'))
+            self.t_translate = self.ToolsBox.ButtonControl(Name=self._lang('翻译'))
+            self.t_ocr = self.ToolsBox.ButtonControl(Name=self._lang('提取文字'))
+            self.t_save = self.api.ButtonControl(Name=self._lang('另存为...'))
+            self.t_qrcode = self.ToolsBox.ButtonControl(Name=self._lang('识别图中二维码'))
 
     def __repr__(self) -> str:
         return f"<wxauto WeChat Image at {hex(id(self))}>"
@@ -838,79 +840,83 @@ class WeChatImage:
         return IMAGE_LANGUAGE[text][self.language]
     
     def _show(self):
-        HWND = FindWindow(classname='ImagePreviewWnd')
+        HWND = FindWindow(classname=self._clsname)
         win32gui.ShowWindow(HWND, 1)
         self.api.SwitchToThisWindow()
+
+    def _exists(self, t=0.1):
+        return self.hwnd != 0
         
-    def OCR(self):
+    def OCR(self, wait=10):
         result = ''
         ctrls = self.PhotoBox.GetChildren()
         if len(ctrls) == 2:
-            self.t_ocr.Click(simulateMove=False)
-        ctrls = self.PhotoBox.GetChildren()
-        if len(ctrls) != 3:
-            Warnings.lightred('获取文字识别失败', stacklevel=2)
-        else:
-            TranslateControl = ctrls[-1]
-            result = TranslateControl.TextControl().Name
+            self.t_ocr.Click(move=WxParam.MOUSE_MOVE, simulateMove=False, return_pos=False)
+        t0 = time.time()
+        while time.time() - t0 < wait:
+            ctrls = self.PhotoBox.GetChildren()
+            if len(ctrls) == 3:
+                TranslateControl = ctrls[-1]
+                result = TranslateControl.TextControl().Name
+                if result:
+                    return result
+            else:
+                self.t_ocr.Click(move=WxParam.MOUSE_MOVE, simulateMove=False, return_pos=False)
+            time.sleep(0.1)
+        Warnings.lightred('获取文字识别失败', stacklevel=2)
         return result
-
     
     def Save(self, savepath='', timeout=10):
-        """保存图片
+        """保存图片/视频
 
         Args:
-            savepath (str): 绝对路径，包括文件名和后缀，例如："D:/Images/微信图片_xxxxxx.jpg"
-            （如果不填，则默认为当前脚本文件夹下，新建一个"微信图片"的文件夹，保存在该文件夹内）
+            savepath (str): 绝对路径，包括文件名和后缀，例如："D:/Images/微信图片_xxxxxx.png"
+            （如果不填，则默认为当前脚本文件夹下，新建一个“微信图片(或视频)”的文件夹，保存在该文件夹内）
+            timeout (int, optional): 保存超时时间，默认10秒
         
         Returns:
             str: 文件保存路径，即savepath
         """
+        t0 = time.time()
+        if WxParam.MOUSE_MOVE:
+            self._show()
 
-        if not savepath:
-            savepath = os.path.join(WxParam.DEFALUT_SAVEPATH, f"微信图片_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.png")
+        if self._video_mode:
+            default_name = f"微信视频_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.mp4"
+        else:
+            default_name = f"微信图片_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}.png"
+        
+        if savepath:
+            if os.path.isdir(savepath):
+                savepath = os.path.join(savepath, default_name)
+        else:
+            savepath = os.path.join(WxParam.DEFALUT_SAVEPATH, default_name)
         if not os.path.exists(os.path.split(savepath)[0]):
             os.makedirs(os.path.split(savepath)[0])
 
-        # 如果文件已经存在，跳过保存过程
-        time.sleep(1)
-        if savepath and os.path.exists(savepath):
-            wxlog.debug(f"图片已存在: {savepath}, 跳过保存")
-            return savepath
-        
-        handle = FindWindow(name='另存为...')
-        if handle:
-            close_save_windows()
-            return False
-            
-        if self.t_zoom.Exists(maxSearchSeconds=5):
-            self.t_save.Click(simulateMove=False)
-        else:
-            raise TimeoutError('下载超时')
-        t0 = time.time()
+        SetClipboardText('')
         while True:
             if time.time() - t0 > timeout:
-                raise TimeoutError('下载超时')
-            handle = FindWindow(name='另存为...')
-            if handle:
-                break
-        t0 = time.time()
-        while True:
-            if time.time() - t0 > timeout:
+                if self.api.Exists(0):
+                    self.api.SendKeys('{Esc}')
                 raise TimeoutError('下载超时')
             try:
-                edithandle = [i for i in GetAllWindowExs(handle) if i[1] == 'Edit' and i[-1]][0][0]
-                savehandle = FindWinEx(handle, classname='Button', name='保存(&S)')[0]
-                if edithandle and savehandle:
-                    break
+                self.api.ButtonControl(Name='更多').Click()
+                menu = self.api.MenuControl(ClassName='CMenuWnd')
+                menu.MenuItemControl(Name='复制').Click()
+                clipboard_data = ReadClipboardData()
+                wxlog.debug(f"读取到剪贴板数据：{clipboard_data}")
+                path = clipboard_data['15'][0]
+                wxlog.debug(f"读取到图片/视频路径：{path}")
+                break
             except:
-                pass
-        win32gui.SendMessage(edithandle, win32con.WM_SETTEXT, '', str(savepath))
-        win32gui.SendMessage(savehandle, win32con.BM_CLICK, 0, 0)
-        time.sleep(0.5)
-        
-        close_save_windows()
-
+                wxlog.debug('获取图片/视频路径失败，重试中...')
+                time.sleep(0.1)
+        shutil.copyfile(path, savepath)
+        SetClipboardText('')
+        if self.api.Exists(0):
+            wxlog.debug("关闭图片窗口")
+            self.api.SendKeys('{Esc}')
         return savepath
         
     def Previous(self):

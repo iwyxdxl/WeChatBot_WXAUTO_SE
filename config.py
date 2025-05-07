@@ -20,6 +20,8 @@ DEEPSEEK_API_KEY = ''
 DEEPSEEK_BASE_URL = 'https://vg.v1api.cc/v1'
 # 硅基流动API的模型
 MODEL = 'deepseek-v3-0324'
+# 用户和AI对话轮数
+MAX_GROUPS = 5
 
 # 如果要使用官方的API
 # DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -97,7 +99,7 @@ USE_VOICE_CALL_FOR_REMINDERS = False
 # 联网API配置
 ENABLE_ONLINE_API = False
 ONLINE_BASE_URL = 'https://vg.v1api.cc/v1'
-ONLINE_MODEL = 'deepseek-r1-searching'
+ONLINE_MODEL = 'net-gpt-4o-mini'
 ONLINE_API_KEY = ''
 ONLINE_API_TEMPERATURE = 0.7
 ONLINE_API_MAX_TOKEN = 2000

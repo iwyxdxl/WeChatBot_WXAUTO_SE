@@ -35,7 +35,6 @@ import datetime
 
 logger = logging.getLogger(__name__)
 
-
 class Updater:
     # GitHub仓库信息
     REPO_OWNER = "iwyxdxl"
@@ -50,6 +49,7 @@ class Updater:
         "emojis",      # 表情包
         "recurring_reminders.json",  # 定时提醒
         "config.py",    # 配置文件(单独处理)
+        "数据备份",  # 数据备份
     ]
 
     # GitHub代理列表
@@ -293,7 +293,7 @@ class Updater:
                 zip_ref.extractall(extract_dir)
             
             extracted_dirs = [d for d in os.listdir(extract_dir) 
-                              if os.path.isdir(os.path.join(extract_dir, d))]
+                            if os.path.isdir(os.path.join(extract_dir, d))]
             if not extracted_dirs:
                 raise Exception("无效的更新包结构")
             
@@ -311,6 +311,10 @@ class Updater:
                         if os.path.exists(dst_file):
                             os.remove(dst_file)
                         shutil.copy2(src_file, dst_file)
+                        
+                        # 特殊处理version.json，确保它被正确复制
+                        if file == 'version.json':
+                            logger.info(f"已更新版本文件: {dst_file}")
             return True, new_dir
         except Exception as e:
             logger.error(f"更新失败: {str(e)}")
@@ -480,13 +484,49 @@ class Updater:
                 if not os.path.exists(current_config) and os.path.exists(new_config):
                     shutil.copy2(new_config, current_config)
                     log_progress("复制新配置文件", True, "已复制新的配置文件")
-                
-            with open(self.version_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'version': update_info['version'],
-                    'last_update': update_info.get('last_update', ''),
-                    'description': update_info.get('description', '')
-                }, f, indent=4, ensure_ascii=False)
+            
+            # 确保更新version.json文件 (添加明确的日志记录)
+            log_progress("更新版本信息文件...")
+            try:
+                with open(self.version_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'version': update_info['version'],
+                        'last_update': update_info.get('last_update', ''),
+                        'description': update_info.get('description', '')
+                    }, f, indent=4, ensure_ascii=False)
+                log_progress("更新版本信息文件", True, f"成功更新到版本 {update_info['version']}")
+            except Exception as e:
+                log_progress("更新版本信息文件", False, f"无法写入版本文件: {str(e)}")
+                logger.error(f"写入版本文件失败: {str(e)}")
+            
+            # 验证版本文件是否已更新
+            log_progress("验证版本文件...")
+            try:
+                if os.path.exists(self.version_file):
+                    with open(self.version_file, 'r', encoding='utf-8') as f:
+                        version_data = json.load(f)
+                        if version_data.get('version') == update_info['version']:
+                            log_progress("验证版本文件", True, "版本文件已正确更新")
+                        else:
+                            log_progress("验证版本文件", False, "版本文件内容不正确，重新写入")
+                            # 重新写入版本文件
+                            with open(self.version_file, 'w', encoding='utf-8') as f:
+                                json.dump({
+                                    'version': update_info['version'],
+                                    'last_update': update_info.get('last_update', ''),
+                                    'description': update_info.get('description', '')
+                                }, f, indent=4, ensure_ascii=False)
+                else:
+                    log_progress("验证版本文件", False, "版本文件不存在，创建新文件")
+                    # 创建版本文件
+                    with open(self.version_file, 'w', encoding='utf-8') as f:
+                        json.dump({
+                            'version': update_info['version'],
+                            'last_update': update_info.get('last_update', ''),
+                            'description': update_info.get('description', '')
+                        }, f, indent=4, ensure_ascii=False)
+            except Exception as e:
+                log_progress("验证版本文件", False, f"验证失败: {str(e)}")
                 
             self.cleanup()
             log_progress("清理临时文件", True)

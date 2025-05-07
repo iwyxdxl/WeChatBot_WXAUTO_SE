@@ -52,11 +52,7 @@ root_dir = os.path.dirname(os.path.abspath(__file__))
 user_queues = {}  # {user_id: {'messages': [], 'last_message_time': 时间戳, ...}}
 queue_lock = threading.Lock()  # 队列访问锁
 chat_contexts = {}  # {user_id: [{'role': 'user', 'content': '...'}, ...]}
-
-# 用户消息队列和聊天上下文管理
-user_queues = {}
-queue_lock = threading.Lock()
-chat_contexts = {}
+CHAT_CONTEXTS_FILE = "chat_contexts.json" # 存储聊天上下文的文件名
 
 # --- REMINDER RELATED GLOBALS ---
 RECURRING_REMINDERS_FILE = "recurring_reminders.json" # 存储重复和长期一次性提醒的文件名
@@ -200,7 +196,7 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 async_http_handler = AsyncHTTPHandler(
     url=f'http://localhost:{PORT}/api/log',
     batch_size=20,  # 一次发送20条日志
-    batch_timeout=3  # 即使不满20条，最多等待3秒也发送
+    batch_timeout=1  # 即使不满20条，最多等待1秒也发送
 )
 async_http_handler.setFormatter(formatter)
 
@@ -325,10 +321,57 @@ def get_user_prompt(user_id):
                 prompt_content = prompt_content.split(memory_marker, 1)[0].strip()
             return prompt_content
              
+# 加载聊天上下文
+def load_chat_contexts():
+    """从文件加载聊天上下文。"""
+    global chat_contexts # 声明我们要修改全局变量
+    try:
+        if os.path.exists(CHAT_CONTEXTS_FILE):
+            with open(CHAT_CONTEXTS_FILE, 'r', encoding='utf-8') as f:
+                loaded_contexts = json.load(f)
+                if isinstance(loaded_contexts, dict):
+                    chat_contexts = loaded_contexts
+                    logger.info(f"成功从 {CHAT_CONTEXTS_FILE} 加载 {len(chat_contexts)} 个用户的聊天上下文。")
+                else:
+                    logger.warning(f"{CHAT_CONTEXTS_FILE} 文件内容格式不正确（非字典），将使用空上下文。")
+                    chat_contexts = {} # 重置为空
+        else:
+            logger.info(f"{CHAT_CONTEXTS_FILE} 未找到，将使用空聊天上下文启动。")
+            chat_contexts = {} # 初始化为空
+    except json.JSONDecodeError:
+        logger.error(f"解析 {CHAT_CONTEXTS_FILE} 失败，文件可能已损坏。将使用空上下文。")
+        # 可以考虑在这里备份损坏的文件
+        # shutil.copy(CHAT_CONTEXTS_FILE, CHAT_CONTEXTS_FILE + ".corrupted")
+        chat_contexts = {} # 重置为空
+    except Exception as e:
+        logger.error(f"加载聊天上下文失败: {e}", exc_info=True)
+        chat_contexts = {} # 出现其他错误也重置为空，保证程序能启动
+
+# 保存聊天上下文
+def save_chat_contexts():
+    """将当前聊天上下文保存到文件。"""
+    global chat_contexts
+    temp_file_path = CHAT_CONTEXTS_FILE + ".tmp"
+    try:
+        # 创建要保存的上下文副本，以防在写入时被其他线程修改
+        # 如果在 queue_lock 保护下调用，则直接使用全局 chat_contexts 即可
+        contexts_to_save = dict(chat_contexts) # 创建浅拷贝
+
+        with open(temp_file_path, 'w', encoding='utf-8') as f:
+            json.dump(contexts_to_save, f, ensure_ascii=False, indent=4)
+        shutil.move(temp_file_path, CHAT_CONTEXTS_FILE) # 原子替换
+        logger.debug(f"聊天上下文已成功保存到 {CHAT_CONTEXTS_FILE}")
+    except Exception as e:
+        logger.error(f"保存聊天上下文到 {CHAT_CONTEXTS_FILE} 失败: {e}", exc_info=True)
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path) # 清理临时文件
+            except OSError:
+                pass # 忽略清理错误
 
 def get_deepseek_response(message, user_id, store_context=True):
     """
-    从 DeepSeek API 获取响应，确保正确的上下文处理。
+    从 DeepSeek API 获取响应，确保正确的上下文处理，并持久化上下文。
 
     参数:
         message (str): 用户的消息或系统提示词（用于工具调用）。
@@ -337,10 +380,9 @@ def get_deepseek_response(message, user_id, store_context=True):
                               对于工具调用（如解析或总结），设置为 False。
     """
     try:
-        logger.info(f"调用 Chat API - ID: {user_id}, 是否存储上下文: {store_context}, 消息: {message}")  # 日志记录消息片段
+        logger.info(f"调用 Chat API - ID: {user_id}, 是否存储上下文: {store_context}, 消息: {message[:100]}...") # 日志记录消息片段
 
         messages_to_send = []
-        MAX_GROUPS = 5  # 最大消息对数（用户+助手）
         context_limit = MAX_GROUPS * 2  # 最大消息总数（不包括系统消息）
 
         if store_context:
@@ -354,7 +396,7 @@ def get_deepseek_response(message, user_id, store_context=True):
                 messages_to_send.append({"role": "system", "content": "你是一个乐于助人的助手。"})
 
             # 2. 管理并检索聊天历史记录
-            with queue_lock:
+            with queue_lock: # 确保对 chat_contexts 的访问是线程安全的
                 if user_id not in chat_contexts:
                     chat_contexts[user_id] = []
 
@@ -377,44 +419,40 @@ def get_deepseek_response(message, user_id, store_context=True):
                 # 如果需要，裁剪持久存储（在助手回复后会再次裁剪）
                 if len(chat_contexts[user_id]) > context_limit + 1:  # +1 因为刚刚添加了用户消息
                     chat_contexts[user_id] = chat_contexts[user_id][-(context_limit + 1):]
+                
+                # 保存上下文到文件
+                save_chat_contexts() # 在用户消息添加后保存一次
 
         else:
             # --- 处理工具调用（如提醒解析、总结） ---
-            # 仅发送提供的消息，通常作为用户提示词发送给 AI
-            # 不包括系统提示或用户聊天上下文中的历史记录
             messages_to_send.append({"role": "user", "content": message})
             logger.info(f"工具调用 (store_context=False)，ID: {user_id}。仅发送提供的消息。")
 
-  
-        
-
         # --- 调用 API ---
-        # logger.debug(f"发送给 API 的消息 (ID: {user_id}): {messages_to_send}")  # 可选：调试日志
         reply = call_chat_api_with_retry(messages_to_send, user_id)
-
-    
 
         # --- 如果需要，存储助手回复到上下文中 ---
         if store_context:
-            with queue_lock:
-                # 确保上下文存在（如果 store_context 为 True，这里应该总是存在）
+            with queue_lock: # 再次获取锁来更新和保存
                 if user_id not in chat_contexts:
-                   chat_contexts[user_id] = []  # 安全初始化
+                   chat_contexts[user_id] = []  # 安全初始化 (理论上此时应已存在)
 
-                # 将助手回复添加到持久存储中
                 chat_contexts[user_id].append({"role": "assistant", "content": reply})
 
-                # 在添加助手回复后对持久上下文进行最终裁剪
-                if len(chat_contexts[user_id]) > context_limit:  # 检查实际限制
-                    # 从开头裁剪以保持限制
+                if len(chat_contexts[user_id]) > context_limit:
                     chat_contexts[user_id] = chat_contexts[user_id][-context_limit:]
+                
+                # 保存上下文到文件
+                save_chat_contexts() # 在助手回复添加后再次保存
         return reply
 
     except Exception as e:
-        ErrorImformation = str(e)
         logger.error(f"Chat 调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
+    except Exception as e:
+        logger.error(f"Chat 调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
+        return "抱歉，我现在有点忙，稍后再聊吧。"
 
 def strip_before_thought_tags(text):
     # 匹配并截取 </thought> 或 </think> 后面的内容
@@ -423,7 +461,6 @@ def strip_before_thought_tags(text):
         return match.group(1)
     else:
         return text
-
 
 def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
     """
@@ -483,7 +520,7 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
             elif "service unavailable" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
             elif "sensitive words detected" in error_info:
-                logger.error("\033[31m错误：含有敏感词，请联系API服务商！\033[0m")
+                logger.error("\033[31m错误：Prompt或消息中含有敏感词，无法生成回复，请联系API服务商！\033[0m")
             else:
                 logger.error("\033[31m未知错误：" + error_info + "\033[0m")
 
@@ -2170,6 +2207,19 @@ def get_online_model_response(query: str, user_id: str) -> Optional[str]:
         logger.error(f"调用在线 API 失败，用户: {user_id}: {e}", exc_info=True)
         return "抱歉，在线搜索功能暂时出错了。"
 
+def monitor_memory_usage():
+    import psutil
+    MEMORY_THRESHOLD = 328  # 内存使用阈值328MB
+    while True:
+        process = psutil.Process(os.getpid())
+        memory_usage = process.memory_info().rss / 1024 / 1024  # MB
+        logger.info(f"当前内存使用: {memory_usage:.2f} MB")
+        if memory_usage > MEMORY_THRESHOLD:
+            logger.warning(f"内存使用超过阈值 ({MEMORY_THRESHOLD} MB)，执行垃圾回收")
+            import gc
+            gc.collect()
+        time.sleep(600)
+
 def main():
     try:
         # --- 启动前检查 ---
@@ -2185,6 +2235,10 @@ def main():
         # 确保临时目录存在
         memory_temp_dir = os.path.join(root_dir, MEMORY_TEMP_DIR)
         os.makedirs(memory_temp_dir, exist_ok=True)
+
+        # 加载聊天上下文
+        logger.info("正在加载聊天上下文...")
+        load_chat_contexts() # 调用加载函数
 
         if ENABLE_REMINDERS:
              logger.info("提醒功能已启用。")
@@ -2239,15 +2293,14 @@ def main():
         else:
              logger.info("记忆功能已禁用。")
 
-        # --- 修改: 线程名称更新 ---
+        # 检查重复和长期一次性提醒
         if ENABLE_REMINDERS:
-            # 这个线程现在检查重复和长期一次性提醒
             reminder_checker_thread = threading.Thread(target=recurring_reminder_checker, name="ReminderChecker")
             reminder_checker_thread.daemon = True
             reminder_checker_thread.start()
             logger.info("提醒检查线程（重复和长期一次性）已启动。")
 
-        # ... (其他线程启动，如自动消息) ...
+        # 自动消息
         if ENABLE_AUTO_MESSAGE:
             auto_message_thread = threading.Thread(target=check_user_timeouts, name="AutoMessageChecker")
             auto_message_thread.daemon = True
@@ -2255,6 +2308,12 @@ def main():
             logger.info("主动消息检查线程已启动。")
 
         logger.info("\033[32mBOT已成功启动并运行中...\033[0m")
+
+        # 启动内存使用监控线程
+        monitor_memory_usage_thread = threading.Thread(target=monitor_memory_usage, name="MemoryUsageMonitor")
+        monitor_memory_usage_thread.daemon = True
+        monitor_memory_usage_thread.start()
+        logger.info("内存使用监控线程已启动。")
 
         while True:
             time.sleep(60)

@@ -585,7 +585,6 @@
                         { value: "gpt-4", text: "gpt-4 *" },
                         { value: "gpt-4-turbo", text: "gpt-4-turbo *" },
                         { value: "gemini-2.0-pro-exp-02-05", text: "gemini-2.0-pro-exp-02-05 *" },
-                        { value: "grok-3", text: "grok-3 *" },
                         { value: "other", text: "其它" }
                     ];
                 } else {
@@ -1379,7 +1378,7 @@
     <div id="config-alert" class="success-alert" style="display:none;"></div>
     
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-        <h1>WeChatBot配置编辑器 v3.15</h1>
+        <h1>WeChatBot配置编辑器 v3.16</h1>
         <div>
             <button id="botButton" class="nav-button">Start Bot</button>
             <a href="{{ url_for('prompt_list') }}" class="nav-button" id="promptManagement">Prompt管理</a>
@@ -1462,8 +1461,7 @@
                     <option value="gpt-4" {% if config.MODEL == 'gpt-4' %}selected{% endif %}>gpt-4 *</option>
                     <option value="gpt-4-turbo" {% if config.MODEL == 'gpt-4-turbo' %}selected{% endif %}>gpt-4-turbo *</option>
                     <option value="gemini-2.0-pro-exp-02-05" {% if config.MODEL == 'gemini-2.0-pro-exp-02-05' %}selected{% endif %}>gemini-2.0-pro-exp-02-05 *</option>
-                    <option value="grok-3" {% if config.MODEL == 'grok-3' %}selected{% endif %}>grok-3 *</option>
-                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','gemini-2.0-flash-thinking-exp-1219','gemini-2.5-pro-exp-03-25','deepseek-v3-0324','doubao-1-5-pro-32k-250115','doubao-pro-256k-241115','doubao-1-5-lite-32k-250115','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05','grok-3'] %}selected{% endif %}>其它</option>
+                    <option value="other" {% if config.MODEL not in ['deepseek-ai/DeepSeek-V3','deepseek-ai/DeepSeek-R1','Pro/deepseek-ai/DeepSeek-V3','Pro/deepseek-ai/DeepSeek-R1','deepseek-chat','deepseek-reasoner','gpt-3.5-turbo','gpt-4o','gpt-4o-mini','gemini-2.0-flash-exp','gemini-2.0-flash-thinking-exp-1219','gemini-2.5-pro-exp-03-25','deepseek-v3-0324','doubao-1-5-pro-32k-250115','doubao-pro-256k-241115','doubao-1-5-lite-32k-250115','deepseek-r1-searching','claude-3-5-haiku-20241022','chatgpt-4o-latest','claude-3-5-sonnet-20241022','claude-3-7-sonnet-20250219','claude-3-opus-20240229','gpt-4','gpt-4-turbo','gemini-2.0-pro-exp-02-05'] %}selected{% endif %}>其它</option>
                 </select>
                 <input type="text" id="customModel"
                     placeholder="请输入自定义模型名称"
@@ -1723,10 +1721,16 @@
             </div>
 
             <div class="form-group">
-                <label>聊天记录临时存放目录:</label>
+                <label>聊天记录临时存放目录 (用于生成记忆总结):</label>
                 <input type="text" name="MEMORY_TEMP_DIR" value="{{ config.MEMORY_TEMP_DIR }}">
             </div>
 
+            <div class="form-group">
+                <label>用户与AI的对话上下文轮数 (保存在 <code>chat_contexts.json</code>):</label>
+                <input type="number" step="1" name="MAX_GROUPS" value="{{ config.MAX_GROUPS }}">
+                <small>设置每次上传给AI的历史对话轮数，数值越大，AI记忆的上下文越多，但可能增加消耗。</small>
+            </div>
+            
             <div class="form-group">
                 <label><b>允许AI读取Prompt当中的记忆片段</b></label>
                 <div class="switch">
