@@ -52,5 +52,5 @@
 2. QQ 2025128651
 
 # 声明
-- 本项目基于 [KouriChat](https://github.com/KouriChat/KouriChat) 修改(原My-Dream-Moments项目)，遵循 **GNU GPL-3.0 或更高版本** 许可证，原项目版权归属：umaru (2025)。。
+- 本项目基于 [KouriChat](https://github.com/KouriChat/KouriChat) 修改(原My-Dream-Moments项目)，遵循 **GNU GPL-3.0 或更高版本** 许可证，原项目版权归属：umaru (2025)。
 - 本项目使用了 [wxauto](https://github.com/cluic/wxauto) 代码用于微信自动化控制。
