@@ -415,6 +415,16 @@ def get_deepseek_response(message, user_id, store_context=True):
         logger.error(f"Chat 调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
+
+def strip_before_thought_tags(text):
+    # 匹配并截取 </thought> 或 </think> 后面的内容
+    match = re.search(r'(?:</thought>|</think>)([\s\S]*)', text)
+    if match:
+        return match.group(1)
+    else:
+        return text
+
+
 def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
     """
     调用 Chat API 并在第一次失败或返回空结果时重试。
@@ -443,7 +453,9 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
             if response.choices:
                 content = response.choices[0].message.content.strip()
                 if content and "[image]" not in content:
-                    return content
+                    filtered_content = strip_before_thought_tags(content)
+                    if filtered_content:
+                        return filtered_content
 
             # 记录错误日志
             logger.error("错误请求消息体:")
