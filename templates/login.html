@@ -2,101 +2,127 @@
 <html>
 <head>
     <title>登录 - WeChatBot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-----------------------------------------------------------------------
+- Copyright (C) 2025, iwyxdxl
+- Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+-
+- This file is part of WeChatBot.
+- WeChatBot is free software: you can redistribute it and/or modify
+- it under the terms of the GNU General Public License as published by
+- the Free Software Foundation, either version 3 of the License, or
+- (at your option) any later version.
+-
+- WeChatBot is distributed in the hope that it will be useful,
+- but WITHOUT ANY WARRANTY; without even the implied warranty of
+- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+- GNU General Public License for more details.
+-
+- You should have received a copy of the GNU General Public License
+- along with WeChatBot.  If not, see <http://www.gnu.org/licenses/>.
+------------------------------------------------------------------------>
     <style>
-        body { 
+        body {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
-            max-width: 800px; 
-            margin: 20px auto; 
-            padding: 20px;
-            background-color: #f5f5f5;
+            margin: 0;
+            background-color: #f7f8fc;
             font-family: Arial, sans-serif;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .header {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 40px;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
         }
         h1 {
             color: #2c3e50;
-            font-size: 2.2em;
+            font-size: 1.8em;
             text-align: center;
-            margin: 20px 0;
+            margin: 0 0 10px 0;
         }
         .login-container {
             background: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin: 0 auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             width: 100%;
             max-width: 400px;
-            /* 过渡效果 */
+            box-sizing: border-box;
             transition: transform 0.2s, box-shadow 0.2s;
         }
         .login-container:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
         }
-        .error { 
+        .error {
             color: #f44336;
             padding: 10px;
             background: #ffe6e6;
-            border-radius: 6px;
-            margin-bottom: 20px;
+            border-radius: 4px;
+            margin-bottom: 15px;
             text-align: center;
+            font-size: 0.9em;
         }
         input[type="password"] {
             width: 100%;
             padding: 12px;
-            margin: 10px 0;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
             box-sizing: border-box;
+            font-size: 16px;
         }
         input[type="password"]:focus {
             border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
             outline: none;
         }
         .btn {
             background-color: #4caf50;
             color: white;
-            padding: 12px 24px;
+            padding: 12px 20px;
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
+            font-weight: bold;
             transition: background-color 0.3s;
             width: 100%;
-            margin-top: 15px;
+            margin-top: 10px;
+            box-sizing: border-box;
         }
         .btn:hover {
             background-color: #45a049;
         }
-        /* 法律声明：仅切换文字使用绿色，其余部分保持与页面一致 */
         .legal-notice {
-            margin-top: 40px;
-            padding: 10px 20px;
-            background-color: #f5f5f5; /* 与页面整体背景一致 */
-            border-top: 2px solid #dee2e6;
+            margin-top: 30px;
+            padding: 15px 20px;
+            background-color: #f7f8fc;
+            border-top: 1px solid #e0e0e0;
             text-align: center;
-            font-size: 0.9em;
+            font-size: 0.85em;
             color: #6c757d;
-            line-height: 1.6;
+            line-height: 1.5;
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
         }
         .legal-notice .legal-toggle {
             cursor: pointer;
-            color: #4caf50; /* 切换文字设为绿色 */
+            color: #4caf50;
             font-weight: bold;
             margin-bottom: 10px;
+            display: inline-block;
         }
         .legal-notice .legal-content {
             display: none;
             text-align: left;
+            font-size: 0.95em;
         }
         .legal-notice .legal-content a {
             color: #4caf50;
@@ -104,6 +130,27 @@
         }
         .legal-notice .legal-content a:hover {
             text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.6em;
+            }
+            .login-container {
+                padding: 20px;
+            }
+            input[type="password"] {
+                padding: 10px;
+                font-size: 15px;
+            }
+            .btn {
+                padding: 10px 18px;
+                font-size: 15px;
+            }
+            .legal-notice {
+                font-size: 0.8em;
+                padding: 10px 15px;
+            }
         }
     </style>
 </head>
@@ -118,8 +165,8 @@
         {% endif %}
 
         <form method="POST">
-            <input type="password" 
-                   name="password" 
+            <input type="password"
+                   name="password"
                    placeholder="请输入访问密码"
                    required>
             <button type="submit" class="btn">立即登录</button>

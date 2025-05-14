@@ -32,6 +32,7 @@ import logging
 from typing import Tuple
 import sys
 import datetime
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +351,6 @@ class Updater:
     def prompt_update(self, update_info: dict) -> bool:
         """提示用户是否更新"""
         print(self.format_version_info(self.get_current_version(), update_info))
-        print("\033[31m重要提醒:更新前请务必备份自己的config.py、recurring_reminders.json、prompts和emojis!!! \033[0m")
         
         while True:
             choice = input("\n是否现在更新?\n输入'y'更新 / 输入'n'取消更新并继续启动: ").lower().strip()
@@ -531,6 +531,18 @@ class Updater:
             self.cleanup()
             log_progress("清理临时文件", True)
             log_progress("更新完成", True, "请重启程序以应用更新")
+
+            if success:
+                print("\n" + "="*50)
+                print("\033[32m\n更新成功!请关闭此窗口并重新运行Run.bat以应用更新。\n\033[0m")
+
+                print("="*50 + "\n")
+                # 使用while循环阻止程序退出,直到用户手动关闭窗口
+                while True:
+                    try:
+                        time.sleep(1)
+                    except KeyboardInterrupt:
+                        continue
 
             return {'success': True, 'output': '\n'.join(progress)}
 

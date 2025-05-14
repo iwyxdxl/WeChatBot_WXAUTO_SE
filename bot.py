@@ -10,6 +10,7 @@
 # For any further details regarding the license, please refer to the LICENSE file.
 # ***********************************************************************
 
+import sys
 import base64
 import requests
 import logging
@@ -67,7 +68,7 @@ timer_lock = threading.Lock()
 next_timer_id = 0
 
 class AsyncHTTPHandler(logging.Handler):
-    def __init__(self, url, retry_attempts=3, timeout=3, max_queue_size=1000, batch_size=10, batch_timeout=5):
+    def __init__(self, url, retry_attempts=3, timeout=3, max_queue_size=1000, batch_size=20, batch_timeout=5):
         """
         初始化异步 HTTP 日志处理器。
 
@@ -90,6 +91,19 @@ class AsyncHTTPHandler(logging.Handler):
         self.dropped_logs_count = 0  # 添加一个计数器来跟踪被丢弃的日志数量
         self.batch_size = batch_size  # 批处理大小
         self.batch_timeout = batch_timeout  # 批处理超时时间
+        
+        # 新增: 断路器相关属性
+        self.consecutive_failures = 0  # 跟踪连续失败次数
+        self.circuit_breaker_open = False  # 断路器状态
+        self.circuit_breaker_reset_time = None  # 断路器重置时间
+        self.CIRCUIT_BREAKER_THRESHOLD = 5  # 触发断路器的连续失败次数
+        self.CIRCUIT_BREAKER_RESET_TIMEOUT = 60  # 断路器重置时间（秒）
+        
+        # 新增: HTTP请求统计
+        self.total_requests = 0
+        self.failed_requests = 0
+        self.last_success_time = time.time()
+        
         # 后台线程用于处理日志队列
         self.worker = threading.Thread(target=self._process_queue, daemon=True)
         self.worker.start()
@@ -113,6 +127,21 @@ class AsyncHTTPHandler(logging.Handler):
         except Exception:
             # 处理其他可能的格式化或放入队列前的错误
             self.handleError(record)
+
+    def _should_attempt_send(self):
+        """检查断路器是否开启，决定是否尝试发送"""
+        if not self.circuit_breaker_open:
+            return True
+        
+        now = time.time()
+        if self.circuit_breaker_reset_time and now >= self.circuit_breaker_reset_time:
+            # 重置断路器
+            logging.info("日志发送断路器重置，恢复尝试发送")
+            self.circuit_breaker_open = False
+            self.consecutive_failures = 0
+            return True
+        
+        return False
 
     def _process_queue(self):
         """
@@ -144,12 +173,31 @@ class AsyncHTTPHandler(logging.Handler):
                 
                 # 如果达到批量大小或超时，且有日志要发送
                 if (batch_size_reached or batch_timeout_reached) and batch:
-                    self._send_batch(batch, headers)
-                    batch = []  # 清空批处理列表
-                    last_batch_time = current_time  # 重置超时计时器
+                    # 新增: 检查断路器状态
+                    if self._should_attempt_send():
+                        success = self._send_batch(batch, headers)
+                        if success:
+                            self.consecutive_failures = 0  # 重置失败计数
+                            self.last_success_time = time.time()
+                        else:
+                            self.consecutive_failures += 1
+                            self.failed_requests += 1
+                            if self.consecutive_failures >= self.CIRCUIT_BREAKER_THRESHOLD:
+                                # 打开断路器
+                                self.circuit_breaker_open = True
+                                self.circuit_breaker_reset_time = time.time() + self.CIRCUIT_BREAKER_RESET_TIMEOUT
+                                logging.warning(f"日志发送连续失败 {self.consecutive_failures} 次，断路器开启 {self.CIRCUIT_BREAKER_RESET_TIMEOUT} 秒")
+                    else:
+                        # 断路器开启，暂时不发送
+                        reset_remaining = self.circuit_breaker_reset_time - time.time() if self.circuit_breaker_reset_time else 0
+                        logging.debug(f"断路器开启状态，暂不发送 {len(batch)} 条日志，将在 {reset_remaining:.1f} 秒后尝试恢复")
+                    
+                    batch = []  # 无论是否发送成功，都清空批次
+                    last_batch_time = current_time  # 重置批处理时间
             
             except Exception as e:
                 # 出错时清空当前批次，避免卡住
+                logging.error(f"日志处理队列异常: {str(e)}", exc_info=True)
                 batch = []
                 last_batch_time = time.time()
                 time.sleep(1)  # 出错后暂停一下，避免CPU占用过高
@@ -159,8 +207,19 @@ class AsyncHTTPHandler(logging.Handler):
             self._send_batch(batch, headers)
 
     def _send_batch(self, batch, headers):
-        """发送一批日志记录"""
-        data = {'logs': batch}  # 发送格式改为包含多条日志的列表
+        """
+        发送一批日志记录，使用改进的重试策略
+        
+        返回:
+            bool: 是否成功发送
+        """
+        data = {'logs': batch}
+        
+        # 改进1: 使用固定的最大重试延迟上限
+        MAX_RETRY_DELAY = 2.0  # 最大重试延迟（秒）
+        BASE_DELAY = 0.5       # 基础延迟（秒）
+        
+        self.total_requests += 1
         
         for attempt in range(self.retry_attempts):
             try:
@@ -171,22 +230,65 @@ class AsyncHTTPHandler(logging.Handler):
                     timeout=self.timeout
                 )
                 resp.raise_for_status()  # 检查 HTTP 错误状态码
-                # 发送成功，记录日志数量
-                logger.debug(f"成功批量发送 {len(batch)} 条日志")
-                break
+                # 成功发送，记录日志数量
+                if attempt > 0:
+                    logging.info(f"在第 {attempt+1} 次尝试后成功发送 {len(batch)} 条日志")
+                else:
+                    logging.debug(f"成功批量发送 {len(batch)} 条日志")
+                return True  # 成功返回
             except requests.exceptions.RequestException as e:
-                # 如果不是最后一次尝试，稍作等待后重试
+                # 改进2: 根据错误类型区分处理
+                if isinstance(e, requests.exceptions.Timeout):
+                    logging.warning(f"日志发送超时 (尝试 {attempt+1}/{self.retry_attempts})")
+                    delay = min(BASE_DELAY, MAX_RETRY_DELAY)  # 对超时使用较短的固定延迟
+                elif isinstance(e, requests.exceptions.ConnectionError):
+                    logging.warning(f"日志发送连接错误 (尝试 {attempt+1}/{self.retry_attempts}): {e}")
+                    delay = min(BASE_DELAY * (1.5 ** attempt), MAX_RETRY_DELAY)  # 有限的指数退避
+                else:
+                    logging.warning(f"日志发送失败 (尝试 {attempt+1}/{self.retry_attempts}): {e}")
+                    delay = min(BASE_DELAY * (1.5 ** attempt), MAX_RETRY_DELAY)  # 有限的指数退避
+                
+                # 最后一次尝试不需要等待
                 if attempt < self.retry_attempts - 1:
-                    time.sleep(1 * (attempt + 1))  # 等待时间随重试次数增加
+                    time.sleep(delay)
+        
+        # 改进3: 所有重试都失败，记录警告并返回失败状态
+        downtime = time.time() - self.last_success_time
+        logging.error(f"发送日志批次失败，已达到最大重试次数 ({self.retry_attempts})，丢弃 {len(batch)} 条日志 (连续失败: {self.consecutive_failures+1}, 持续时间: {downtime:.1f}秒)")
+        return False  # 返回失败状态
     
+    def get_stats(self):
+        """返回日志处理器的统计信息"""
+        return {
+            'queue_size': self.log_queue.qsize(),
+            'queue_capacity': self.log_queue.maxsize,
+            'dropped_logs': self.dropped_logs_count,
+            'total_requests': self.total_requests,
+            'failed_requests': self.failed_requests,
+            'circuit_breaker_status': 'open' if self.circuit_breaker_open else 'closed',
+            'consecutive_failures': self.consecutive_failures
+        }
+
     def close(self):
         """
         停止工作线程并等待队列处理完成（或超时）。
         """
         if not self.log_queue.empty():
-            pass  # 等待队列任务完成
+            logging.info(f"关闭日志处理器，还有 {self.log_queue.qsize()} 条日志待处理")
+            try:
+                # 尝试最多等待30秒处理剩余日志
+                self.log_queue.join(timeout=30)
+            except:
+                pass
+        
         self._stop_event.set()
         self.worker.join(timeout=self.timeout * self.retry_attempts + 5)  # 等待一个合理的时间
+        
+        if self.worker.is_alive():
+            logging.warning("日志处理线程未能正常退出")
+        else:
+            logging.info("日志处理线程已正常退出")
+        
         super().close()
 
 # 创建日志格式器
@@ -222,6 +324,10 @@ emoji_timer_lock = threading.Lock()
 can_send_messages = True
 is_sending_message = False
 
+# --- 定时重启相关全局变量 ---
+program_start_time = 0.0 # 程序启动时间戳
+last_received_message_timestamp = 0.0 # 最后一次活动（收到/处理消息）的时间戳
+
 # 初始化OpenAI客户端
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -256,6 +362,7 @@ def check_user_timeouts():
     """
     检查用户是否超时未活动，并将主动消息加入队列以触发联网检查流程。
     """
+    global last_received_message_timestamp # 引用全局变量
     if ENABLE_AUTO_MESSAGE:
         while True:
             current_epoch_time = time.time()
@@ -283,6 +390,9 @@ def check_user_timeouts():
                             else:
                                 user_queues[user]['messages'].append(auto_content)
                                 user_queues[user]['last_message_time'] = time.time()
+
+                        # 更新全局的最后消息活动时间戳，因为机器人主动发消息也算一种活动
+                        last_received_message_timestamp = time.time()
 
                         # 重置计时器（不触发 on_user_message）
                         reset_user_timer(user)
@@ -380,6 +490,9 @@ def get_deepseek_response(message, user_id, store_context=True):
                               对于工具调用（如解析或总结），设置为 False。
     """
     try:
+        # 每次调用都重新加载聊天上下文，以应对文件被外部修改的情况
+        load_chat_contexts()
+        
         logger.info(f"调用 Chat API - ID: {user_id}, 是否存储上下文: {store_context}, 消息: {message[:100]}...") # 日志记录消息片段
 
         messages_to_send = []
@@ -450,9 +563,6 @@ def get_deepseek_response(message, user_id, store_context=True):
         logger.error(f"Chat 调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
         return "抱歉，我现在有点忙，稍后再聊吧。"
 
-    except Exception as e:
-        logger.error(f"Chat 调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
-        return "抱歉，我现在有点忙，稍后再聊吧。"
 
 def strip_before_thought_tags(text):
     # 匹配并截取 </thought> 或 </think> 后面的内容
@@ -532,47 +642,118 @@ def message_listener():
     while True:
         try:
             if wx is None:
+                logger.info("微信接口对象为空，尝试重新初始化。")
                 wx = WeChat()
                 for user_name in user_names:
                     wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
+                logger.info("微信接口重新初始化并添加监听用户完成。")
                     
             msgs = wx.GetListenMessage()
             for chat in msgs:
-                who = chat.who
+                who = chat.who 
                 one_msgs = msgs.get(chat)
                 for msg in one_msgs:
                     msgtype = msg.type
-                    content = msg.content
-                    logger.info(f'【{who}】：{content}')
-                    if not content:
+                    original_content = msg.content
+                    sender = msg.sender  
+                    logger.info(f'收到来自聊天窗口 "{who}" 中用户 "{sender}" 的原始消息 (类型: {msgtype}): {original_content[:100]}')
+                    
+                    if not original_content:
+                        logger.debug("消息内容为空，已忽略。")
                         continue
-                    if msgtype != 'friend':
-                        logger.debug(f"非好友消息，忽略! 消息类型: {msgtype}")
+                    
+                    if msgtype != 'friend': 
+                        logger.debug(f"消息类型为 '{msgtype}' 而非 'friend' (用户文本消息)，已忽略。")
                         continue
-                    if who == msg.sender:
-                        if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
-                            handle_emoji_message(msg, who)
+
+                    should_process_this_message = False
+                    content_for_handler = original_content 
+                    is_group_chat = (who != sender)
+
+                    if not is_group_chat: 
+                        if who == sender and who in user_names:
+                            should_process_this_message = True
+                            logger.info(f"收到来自监听列表用户 {who} 的个人私聊消息，准备处理。")
                         else:
-                            handle_wxauto_message(msg, who)
-                    elif ACCEPT_ALL_GROUP_CHAT_MESSAGES:
-                        if not msg.content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
-                            msg.content = "[群聊消息-" +"发送者:"+ msg.sender + "]:" + msg.content
-                        if '[动画表情]' in content and ENABLE_EMOJI_RECOGNITION:
-                            handle_emoji_message(msg, who)
-                        else:
-                            handle_wxauto_message(msg, who)
-                    elif ROBOT_WX_NAME != '' and (bool(re.search(f'@{ROBOT_WX_NAME}\u2005', msg.content))):  
-                        # 处理群聊信息，只有@当前机器人才会处理
-                        msg.content = re.sub(f'@{ROBOT_WX_NAME}\u2005', '', content).strip()
-                        msg.content = "[群聊消息-" +"发送者:"+ msg.sender + "]:" + msg.content
-                        handle_wxauto_message(msg, who)
-                    else:
-                        logger.debug(f"非需要处理消息: {content}")   
+                            logger.debug(f"收到来自用户 {sender} (聊天窗口 {who}) 的个人私聊消息，但用户 {who} 不在监听列表或发送者与聊天窗口不符，已忽略。")
+                    else: 
+                        processed_group_content = original_content 
+                        at_triggered = False
+                        keyword_triggered = False
+
+                        if not ACCEPT_ALL_GROUP_CHAT_MESSAGES and ENABLE_GROUP_AT_REPLY and ROBOT_WX_NAME:
+                            temp_content_after_at_check = processed_group_content
+                            
+                            unicode_at_pattern = f'@{re.escape(ROBOT_WX_NAME)}\u2005'
+                            space_at_pattern = f'@{re.escape(ROBOT_WX_NAME)} '
+                            exact_at_string = f'@{re.escape(ROBOT_WX_NAME)}'
+                            
+                            if re.search(unicode_at_pattern, processed_group_content):
+                                at_triggered = True
+                                temp_content_after_at_check = re.sub(unicode_at_pattern, '', processed_group_content, 1).strip()
+                            elif re.search(space_at_pattern, processed_group_content):
+                                at_triggered = True
+                                temp_content_after_at_check = re.sub(space_at_pattern, '', processed_group_content, 1).strip()
+                            elif processed_group_content.strip() == exact_at_string:
+                                at_triggered = True
+                                temp_content_after_at_check = ''
+                                
+                            if at_triggered:
+                                logger.info(f"群聊 '{who}' 中检测到 @机器人。")
+                                processed_group_content = temp_content_after_at_check
+
+                        if ENABLE_GROUP_KEYWORD_REPLY:
+                            if any(keyword in processed_group_content for keyword in GROUP_KEYWORD_LIST):
+                                keyword_triggered = True
+                                logger.info(f"群聊 '{who}' 中检测到关键词。")
                         
+                        basic_trigger_met = ACCEPT_ALL_GROUP_CHAT_MESSAGES or at_triggered or keyword_triggered
+
+                        if basic_trigger_met:
+                            if not ACCEPT_ALL_GROUP_CHAT_MESSAGES:
+                                if at_triggered and keyword_triggered:
+                                    logger.info(f"群聊 '{who}' 消息因 @机器人 和关键词触发基本处理条件。")
+                                elif at_triggered:
+                                    logger.info(f"群聊 '{who}' 消息因 @机器人 触发基本处理条件。")
+                                elif keyword_triggered:
+                                    logger.info(f"群聊 '{who}' 消息因关键词触发基本处理条件。")
+                            else:
+                                logger.info(f"群聊 '{who}' 消息符合全局接收条件，触发基本处理条件。")
+
+                            if keyword_triggered and GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY:
+                                should_process_this_message = True
+                                logger.info(f"群聊 '{who}' 消息因触发关键词且配置为忽略回复概率，将进行处理。")
+                            elif random.randint(1, 100) <= GROUP_CHAT_RESPONSE_PROBABILITY:
+                                should_process_this_message = True
+                                logger.info(f"群聊 '{who}' 消息满足基本触发条件并通过总回复概率 {GROUP_CHAT_RESPONSE_PROBABILITY}%，将进行处理。")
+                            else:
+                                should_process_this_message = False
+                                logger.info(f"群聊 '{who}' 消息满足基本触发条件，但未通过总回复概率 {GROUP_CHAT_RESPONSE_PROBABILITY}%，将忽略。")
+                        else:
+                            should_process_this_message = False
+                            logger.info(f"群聊 '{who}' 消息 (发送者: {sender}) 未满足任何基本触发条件（全局、@、关键词），将忽略。")
+                        
+                        if should_process_this_message:
+                            if not processed_group_content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                                content_for_handler = f"[群聊消息-来自群'{who}'-发送者:{sender}]:{processed_group_content}"
+                            else:
+                                content_for_handler = processed_group_content
+                            
+                            if not content_for_handler and at_triggered and not keyword_triggered: 
+                                logger.info(f"群聊 '{who}' 中单独 @机器人，处理后内容为空，仍将传递给后续处理器。")
+                    
+                    if should_process_this_message:
+                        msg.content = content_for_handler 
+                        logger.info(f'最终准备处理消息 from chat "{who}" by sender "{sender}": {msg.content[:100]}')
+                        is_animation_emoji_in_original = '[动画表情]' in original_content
+                        if is_animation_emoji_in_original and ENABLE_EMOJI_RECOGNITION:
+                            handle_emoji_message(msg, who) 
+                        else:
+                            handle_wxauto_message(msg, who)   
         except Exception as e:
-            logger.error(f"Message: {str(e)}")
-            logger.error("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若命令窗口收不到消息，请将微信聊天框置于最前台！ \033[0m")
-            wx = None
+            logger.error(f"消息监听器发生错误: {str(e)}", exc_info=True)
+            logger.error("\033[31m重要提示：请不要关闭程序打开的微信聊天框！若命令窗口收不到消息，请将微信聊天框置于最前台！\033[0m")
+            wx = None 
         time.sleep(wait)
 
 def recognize_image_with_moonshot(image_path, is_emoji=False):
@@ -587,7 +768,7 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
         'Authorization': f'Bearer {MOONSHOT_API_KEY}',
         'Content-Type': 'application/json'
     }
-    text_prompt = "请用中文描述这个图片" if not is_emoji else "请用中文描述这个聊天窗口的最后一张表情包"
+    text_prompt = "请用中文描述这张图片的主要内容或主题。不要使用'这是'、'这张'等开头，直接描述。如果有文字，请包含在描述中。" if not is_emoji else "请用中文简洁地描述这个聊天窗口最后一张表情包所表达的情绪、含义或内容。如果表情包含文字，请一并描述。注意：1. 只描述表情包本身，不要添加其他内容 2. 不要出现'这是'、'这个'等词语"
     data = {
         "model": MOONSHOT_MODEL,
         "messages": [
@@ -608,8 +789,8 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
         recognized_text = result['choices'][0]['message']['content']
         if is_emoji:
             # 如果recognized_text包含“最后一张表情包是”，只保留后面的文本
-            if "最后一张表情包是" in recognized_text:
-                recognized_text = recognized_text.split("最后一张表情包是", 1)[1].strip()
+            if "最后一张表情包" in recognized_text:
+                recognized_text = recognized_text.split("最后一张表情包", 1)[1].strip()
             recognized_text = "发送了表情包：" + recognized_text
         else :
             recognized_text = "发送了图片：" + recognized_text
@@ -734,7 +915,9 @@ def handle_wxauto_message(msg, who):
     处理来自Wxauto的消息，包括可能的提醒、图片/表情、链接内容获取和常规聊天。
     """
     global can_send_messages # 引用全局变量以控制发送状态
+    global last_received_message_timestamp # 引用全局变量以更新活动时间
     try:
+        last_received_message_timestamp = time.time()
         username = who
         # 获取原始消息内容
         original_content = getattr(msg, 'content', None) or getattr(msg, 'text', None)
@@ -985,10 +1168,7 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
 
         # --- 文本消息处理 ---
         reply = remove_timestamps(reply)
-        if SEPARATE_ROW_SYMBOLS:
-            parts = [p.strip() for p in re.split(r'\\|\n', reply) if p.strip()]
-        else:
-            parts = [p.strip() for p in re.split(r'\\', reply) if p.strip()]
+        parts = split_message_with_context(reply)
 
         if not parts:
             logger.warning(f"回复消息在分割/清理后为空，无法发送给 {user_id}。")
@@ -1035,6 +1215,78 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
     finally:
         is_sending_message = False
 
+def split_message_with_context(text):
+    """
+    将消息文本分割为多个部分，处理换行符和转义字符。
+    处理文本中的换行符和转义字符，并根据配置决定是否分割。
+    """
+    result_parts = []
+    if SEPARATE_ROW_SYMBOLS:
+        main_parts = re.split(r'(?:\\{3,}|\n)', text)
+    else:
+        main_parts = re.split(r'\\{3,}', text)
+    for part in main_parts:
+        part = part.strip()
+        if not part:
+            continue
+        segments = []
+        last_end = 0
+        for match in re.finditer(r'\\', part):
+            pos = match.start()
+            should_split_at_current_pos = False
+            advance_by = 1
+            if pos + 1 < len(part) and part[pos + 1] == 'n':
+                should_split_at_current_pos = True
+                advance_by = 2
+            else:
+                prev_char = part[pos - 1] if pos > 0 else ''
+                is_last_char_in_part = (pos == len(part) - 1)
+                next_char = ''
+                if not is_last_char_in_part:
+                    next_char = part[pos + 1]
+                if not is_last_char_in_part and \
+                   re.match(r'[a-zA-Z0-9]', next_char) and \
+                   (re.match(r'[a-zA-Z0-9]', prev_char) if prev_char else True):
+                    should_split_at_current_pos = True
+                else:
+                    is_in_emoticon = False
+                    i = pos - 1
+                    while i >= 0 and i > pos - 10:
+                        if part[i] in '({[（【｛':
+                            is_in_emoticon = True
+                            break
+                        if part[i].isalnum() and i < pos - 1:
+                            break
+                        i -= 1
+                    if not is_last_char_in_part and not is_in_emoticon:
+                        _found_forward_emoticon_char = False
+                        j = pos + 1
+                        while j < len(part) and j < pos + 10:
+                            if part[j] in ')}]）】｝':
+                                _found_forward_emoticon_char = True
+                                break
+                            if part[j].isalnum() and j > pos + 1:
+                                break
+                            j += 1
+                        if _found_forward_emoticon_char:
+                            is_in_emoticon = True
+                    if not is_in_emoticon:
+                        should_split_at_current_pos = True
+            if should_split_at_current_pos:
+                segment_to_add = part[last_end:pos].strip()
+                if segment_to_add:
+                    segments.append(segment_to_add)
+                last_end = pos + advance_by
+        if last_end < len(part):
+            final_segment = part[last_end:].strip()
+            if final_segment:
+                segments.append(final_segment)
+        if segments:
+            result_parts.extend(segments)
+        elif not segments and part:
+            result_parts.append(part)
+    return [p for p in result_parts if p]
+
 def remove_timestamps(text):
     """
     移除文本中所有[YYYY-MM-DD (Weekday) HH:MM(:SS)]格式的时间戳
@@ -1049,25 +1301,26 @@ def remove_timestamps(text):
     timestamp_pattern = r'''
         \[                # 起始方括号
         \d{4}             # 年份：4位数字
-        -(0[1-9]|1[0-2])  # 月份：01-12
-        -(0[1-9]|[12]\d|3[01]) # 日期：01-31
+        -(?:0[1-9]|1[0-2])  # 月份：01-12 (使用非捕获组)
+        -(?:0[1-9]|[12]\d|3[01]) # 日期：01-31 (使用非捕获组)
         (?:\s[A-Za-z]+)?  # 可选的星期部分
         \s                # 日期与时间之间的空格
         (?:2[0-3]|[01]\d) # 小时：00-23
         :[0-5]\d          # 分钟：00-59
-        (?::[0-5]\d)?     # 可选的秒数：00-59括号
+        (?::[0-5]\d)?     # 可选的秒数
+        \]                # 匹配结束方括号  <--- 修正点
     '''
-    
-    # 使用正则标志：
-    # 1. re.VERBOSE 允许模式中的注释和空格
-    # 2. re.MULTILINE 跨行匹配
-    # 3. 替换时自动处理前后空格
-    return re.sub(
+    # 替换时间戳为空格
+    text_no_timestamps = re.sub(
         pattern = timestamp_pattern,
-        repl = lambda m: ' ',  # 统一替换为单个空格
+        repl = ' ',  # 统一替换为单个空格 (lambda m: ' ' 与 ' ' 等效)
         string = text,
-        flags = re.X | re.M
-    ).strip()  # 最后统一清理首尾空格
+        flags = re.X | re.M # re.X 等同于 re.VERBOSE
+    )
+    # 清理可能产生的连续空格，将其合并为单个空格
+    cleaned_text = re.sub(r'\s+', ' ', text_no_timestamps)
+    # 最后统一清理首尾空格
+    return cleaned_text.strip()
 
 def is_emoji_request(text: str) -> Optional[str]:
     """使用AI判断消息情绪并返回对应的表情文件夹名称"""
@@ -1155,19 +1408,13 @@ def capture_and_save_screenshot(who):
         wx_chat.ChatWith(who)
         chat_window = pyautogui.getWindowsWithTitle(who)[0]
         
-        # # 确保窗口被前置和激活
-        # if not chat_window.isActive:
-        #     chat_window.activate()
-        # if not chat_window.isMaximized:
-        #     chat_window.maximize()
-        
         # 获取窗口的坐标和大小
         x, y, width, height = chat_window.left, chat_window.top, chat_window.width, chat_window.height
 
         time.sleep(wait)
 
         # 截取指定窗口区域的屏幕
-        screenshot = pyautogui.screenshot(region=(x, y, width, height))
+        screenshot = pyautogui.screenshot(region=(x, y, int(width/2), height))
         screenshot.save(screenshot_path)
         logger.info(f'已保存截图: {screenshot_path}')
         return screenshot_path
@@ -2220,6 +2467,147 @@ def monitor_memory_usage():
             gc.collect()
         time.sleep(600)
 
+def scheduled_restart_checker():
+    """
+    定时检查是否需要重启程序。
+    重启条件：
+    1. 已达到RESTART_INTERVAL_HOURS的运行时间
+    2. 在RESTART_INACTIVITY_MINUTES内没有活动，或活动结束后又等待了RESTART_INACTIVITY_MINUTES
+    3. 没有正在进行的短期提醒事件
+    4. 没有即将到来（5分钟内）的长期提醒或每日重复提醒事件
+    """
+    global program_start_time, last_received_message_timestamp # 引用全局变量
+
+    if not ENABLE_SCHEDULED_RESTART:
+        logger.info("定时重启功能已禁用。")
+        return
+
+    logger.info(f"定时重启功能已启用。重启间隔: {RESTART_INTERVAL_HOURS} 小时，不活跃期: {RESTART_INACTIVITY_MINUTES} 分钟。")
+
+    restart_interval_seconds = RESTART_INTERVAL_HOURS * 3600
+    inactivity_seconds = RESTART_INACTIVITY_MINUTES * 60
+
+    if restart_interval_seconds <= 0:
+        logger.error("重启间隔时间必须大于0，定时重启功能将不会启动。")
+        return
+    
+    # 初始化下一次检查重启的时间点
+    next_restart_time = program_start_time + restart_interval_seconds
+    restart_pending = False  # 标记是否处于待重启状态（已达到间隔时间但在等待不活跃期）
+
+    while True:
+        current_time = time.time()
+        time_since_last_activity = current_time - last_received_message_timestamp
+        
+        # 准备重启的三个条件检查
+        interval_reached = current_time >= next_restart_time or restart_pending
+        inactive_enough = time_since_last_activity >= inactivity_seconds
+        
+        # 只有在准备重启时才检查提醒事件，避免不必要的检查
+        if interval_reached and inactive_enough:
+            # 检查是否有正在进行的短期提醒
+            has_active_short_reminders = False
+            with timer_lock:
+                if active_timers:
+                    logger.info(f"当前有 {len(active_timers)} 个短期提醒进行中，等待它们完成后再重启。")
+                    has_active_short_reminders = True
+            
+            # 检查是否有即将到来的提醒（5分钟内）
+            has_upcoming_reminders = False
+            now = datetime.now()
+            five_min_later = now + dt.timedelta(minutes=5)
+            
+            with recurring_reminder_lock:
+                for reminder in recurring_reminders:
+                    target_dt = None
+                    
+                    # 处理长期一次性提醒
+                    if reminder.get('reminder_type') == 'one-off':
+                        try:
+                            target_dt = datetime.strptime(reminder.get('target_datetime_str'), '%Y-%m-%d %H:%M')
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    # 处理每日重复提醒 - 需要结合当前日期计算今天的触发时间
+                    elif reminder.get('reminder_type') == 'recurring':
+                        try:
+                            time_str = reminder.get('time_str')
+                            if time_str:
+                                # 解析时间字符串获取小时和分钟
+                                reminder_time = datetime.strptime(time_str, '%H:%M').time()
+                                # 结合当前日期构建完整的目标时间
+                                target_dt = datetime.combine(now.date(), reminder_time)
+                                
+                                # 如果今天的触发时间已过，检查明天的触发时间是否在5分钟内
+                                # (极少情况：如果定时检查恰好在23:55-00:00之间，且有0:00-0:05的提醒)
+                                if target_dt < now:
+                                    target_dt = datetime.combine(now.date() + dt.timedelta(days=1), reminder_time)
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    # 检查目标时间是否在5分钟内
+                    if target_dt and now <= target_dt <= five_min_later:
+                        reminder_type = "长期一次性" if reminder.get('reminder_type') == 'one-off' else "每日重复"
+                        display_time = target_dt.strftime('%Y-%m-%d %H:%M') if reminder.get('reminder_type') == 'one-off' else target_dt.strftime('%H:%M')
+                        logger.info(f"检测到5分钟内即将执行的{reminder_type}提醒，延迟重启。提醒时间: {display_time}")
+                        has_upcoming_reminders = True
+                        break
+            
+            # 如果没有提醒阻碍，则可以重启
+            if not has_active_short_reminders and not has_upcoming_reminders:
+                logger.warning(f"满足重启条件：已运行约 {(current_time - program_start_time)/3600:.2f} 小时，已持续 {time_since_last_activity/60:.1f} 分钟无活动，且没有即将执行的提醒。准备重启程序...")
+                try:
+                    # --- 执行重启前的清理操作 ---
+                    logger.info("定时重启前：保存聊天上下文...")
+                    with queue_lock: # 确保在保存时上下文和队列不被修改
+                        save_chat_contexts()
+                    
+                    if ENABLE_REMINDERS:
+                        logger.info("定时重启前：保存提醒列表...")
+                        with recurring_reminder_lock: # 确保提醒列表的线程安全
+                            save_recurring_reminders()
+                    
+                    # 关闭异步HTTP日志处理器
+                    if 'async_http_handler' in globals() and isinstance(async_http_handler, AsyncHTTPHandler):
+                        logger.info("定时重启前：关闭异步HTTP日志处理器...")
+                        async_http_handler.close()
+                    
+                    logger.info("定时重启前：执行最终临时文件清理...")
+                    clean_up_temp_files()
+                    
+                    logger.info("正在执行重启...")
+                    # 替换当前进程为新启动的 Python 脚本实例
+                    os.execv(sys.executable, ['python'] + sys.argv)
+                except Exception as e:
+                    logger.error(f"执行重启操作时发生错误: {e}", exc_info=True)
+                    # 如果重启失败，推迟下一次检查，避免短时间内连续尝试
+                    restart_pending = False
+                    next_restart_time = current_time + restart_interval_seconds 
+                    logger.info(f"重启失败，下一次重启检查时间推迟到: {datetime.fromtimestamp(next_restart_time).strftime('%Y-%m-%d %H:%M:%S')}")
+            elif has_upcoming_reminders:
+                # 有提醒即将执行，延长10分钟后再检查
+                logger.info(f"由于5分钟内有提醒将执行，延长重启时间10分钟。")
+                next_restart_time = current_time + 600  # 延长10分钟
+                restart_pending = True  # 保持待重启状态
+            else:
+                # 有短期提醒正在进行，稍后再检查
+                logger.info(f"由于有短期提醒正在进行，将在下一轮检查是否可以重启。")
+                restart_pending = True  # 保持待重启状态
+        elif interval_reached and not inactive_enough:
+            # 已达到间隔时间但最近有活动，设置待重启状态
+            if not restart_pending:
+                logger.info(f"已达到重启间隔({RESTART_INTERVAL_HOURS}小时)，但最近 {time_since_last_activity/60:.1f} 分钟内有活动，将在 {RESTART_INACTIVITY_MINUTES} 分钟无活动后重启。")
+                restart_pending = True
+            # 不更新next_restart_time，因为我们现在是等待不活跃期
+        elif current_time >= next_restart_time and not restart_pending:
+            # 第一次达到重启时间点
+            logger.info(f"已达到计划重启检查点 ({RESTART_INTERVAL_HOURS}小时)。距离上次活动: {time_since_last_activity/60:.1f}分钟 (不活跃阈值: {RESTART_INACTIVITY_MINUTES}分钟)。")
+            restart_pending = True  # 进入待重启状态
+        
+        # 每分钟检查一次条件
+        time.sleep(60)
+
+
 def main():
     try:
         # --- 启动前检查 ---
@@ -2284,6 +2672,16 @@ def main():
         checker_thread.daemon = True
         checker_thread.start()
         logger.info("非活跃用户检查与消息处理线程已启动。")
+
+         # 启动定时重启检查线程 (如果启用)
+        global program_start_time, last_received_message_timestamp
+        program_start_time = time.time()
+        last_received_message_timestamp = time.time()
+        if ENABLE_SCHEDULED_RESTART:
+            restart_checker_thread = threading.Thread(target=scheduled_restart_checker, name="ScheduledRestartChecker")
+            restart_checker_thread.daemon = True # 设置为守护线程，主程序退出时它也会退出
+            restart_checker_thread.start()
+            logger.info("定时重启检查线程已启动。")
 
         if ENABLE_MEMORY:
             memory_thread = threading.Thread(target=memory_manager, name="MemoryManager")

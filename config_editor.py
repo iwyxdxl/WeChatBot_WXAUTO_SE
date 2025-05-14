@@ -45,6 +45,21 @@ bot_process = None
 # 全局日志队列
 log_queue = Queue()
 
+CHAT_CONTEXTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_contexts.json')
+CHAT_CONTEXTS_LOCK_FILE = CHAT_CONTEXTS_FILE + '.lock'
+
+def get_chat_context_users():
+    """从 chat_contexts.json 读取用户列表 (即顶级键)"""
+    if not os.path.exists(CHAT_CONTEXTS_FILE):
+        return []
+    try:
+        with open(CHAT_CONTEXTS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return list(data.keys())
+    except (json.JSONDecodeError, IOError) as e:
+        app.logger.error(f"读取 chat_contexts.json 失败: {e}")
+        return []
+
 # 新增登录相关路由
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -122,72 +137,148 @@ def bot_status():
     return {"status": status}
 
 @app.route('/submit_config', methods=['POST'])
+@login_required
 def submit_config():
     global bot_process
-    # 如果 bot 正在运行，则不允许保存配置
     if bot_process and bot_process.poll() is None:
         return jsonify({'error': '程序正在运行，请先停止再保存配置'}), 400
-
     try:
-        # 空表单校验
         if not request.form:
-            return jsonify({'error': 'Empty form submission'}), 400
+            return jsonify({'error': '空的表单提交'}), 400
         
-        config = parse_config()
-        new_values = {}
+        current_config_before_update = parse_config()
+        old_listen_list_map = {item[0]: item[1] for item in current_config_before_update.get('LISTEN_LIST', [])}
 
-        # 处理二维数组：微信昵称与对应Prompt配置
-        nicknames = request.form.getlist('nickname')
-        prompt_files = request.form.getlist('prompt_file')
-        new_values['LISTEN_LIST'] = [
-            [nick.strip(), pf.strip()] 
-            for nick, pf in zip(nicknames, prompt_files) 
-            if nick.strip() and pf.strip()
-        ]
+        new_values_for_config_py = {}
 
-        # 处理布尔字段
+        nicknames_from_form = request.form.getlist('nickname')
+        prompt_files_from_form = request.form.getlist('prompt_file')
+        
+        processed_listen_list = []
+        if nicknames_from_form and prompt_files_from_form and len(nicknames_from_form) == len(prompt_files_from_form):
+            for nick, pf in zip(nicknames_from_form, prompt_files_from_form):
+                nick_stripped = nick.strip()
+                pf_stripped = pf.strip()
+                if nick_stripped and pf_stripped: 
+                    processed_listen_list.append([nick_stripped, pf_stripped])
+        new_values_for_config_py['LISTEN_LIST'] = processed_listen_list
+        
+        new_listen_list_map = {item[0]: item[1] for item in processed_listen_list}
+        
+        users_whose_prompt_changed = []
+        for nickname, new_prompt in new_listen_list_map.items():
+            if nickname in old_listen_list_map and old_listen_list_map[nickname] != new_prompt:
+                users_whose_prompt_changed.append(nickname)
+
         boolean_fields = [
-            'ENABLE_IMAGE_RECOGNITION', 
-            'ENABLE_EMOJI_RECOGNITION',
-            'ENABLE_EMOJI_SENDING',
-            'ENABLE_AUTO_MESSAGE', 
-            'ENABLE_MEMORY',
-            'UPLOAD_MEMORY_TO_AI',
-            'ENABLE_LOGIN_PASSWORD',
-            'ENABLE_REMINDERS',
-            'ALLOW_REMINDERS_IN_QUIET_TIME',
-            'USE_VOICE_CALL_FOR_REMINDERS',
-            'ENABLE_ONLINE_API',
-            'SEPARATE_ROW_SYMBOLS',
+            'ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION',
+            'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY',
+            'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
+            'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
+            'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
+            'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY'
         ]
         for field in boolean_fields:
-            new_values[field] = field in request.form  # 直接判断是否存在
+            new_values_for_config_py[field] = field in request.form
 
-        # 处理其他字段，并根据原有配置进行类型转换
-        for key in request.form:
-            if key in ['listen_list', *boolean_fields]:
-                continue
-            value = request.form[key].strip()
-            if key in config:
-                if isinstance(config[key], bool):
-                    new_values[key] = value.lower() in ('on', 'true', '1', 'yes')
-                # 对主动消息触发时间强制按浮点数处理，避免小数输入出错
-                elif key in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS"]:
-                    new_values[key] = float(value) if value else 0.0
-                elif isinstance(config[key], int):
-                    new_values[key] = int(value) if value else 0
-                elif isinstance(config[key], float):
-                    new_values[key] = float(value) if value else 0.0
+        for key_from_form in request.form:
+            if key_from_form in ['nickname', 'prompt_file'] or key_from_form in boolean_fields:
+                continue 
+
+            value_from_form = request.form[key_from_form].strip()
+            
+            if key_from_form == 'GROUP_KEYWORD_LIST':
+                if value_from_form:
+                    normalized_value = re.sub(r'，|\s+', ',', value_from_form)
+                    keywords_list = [kw.strip() for kw in normalized_value.split(',') if kw.strip()]
+                    new_values_for_config_py[key_from_form] = keywords_list
                 else:
-                    new_values[key] = value
-            else:
-                new_values[key] = value  # 处理新增配置项
+                    new_values_for_config_py[key_from_form] = []
+                continue
 
-        update_config(new_values)
-        return '', 204
+            if key_from_form in current_config_before_update:
+                original_type_source = current_config_before_update[key_from_form]
+                if isinstance(original_type_source, bool):
+                    new_values_for_config_py[key_from_form] = (value_from_form.lower() == 'true')
+                elif key_from_form in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS", "AVERAGE_TYPING_SPEED", "RANDOM_TYPING_SPEED_MIN", "RANDOM_TYPING_SPEED_MAX", "TEMPERATURE", "MOONSHOT_TEMPERATURE", "ONLINE_API_TEMPERATURE", "RESTART_INTERVAL_HOURS"]: 
+                    try:
+                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
+                    except ValueError: 
+                        new_values_for_config_py[key_from_form] = original_type_source 
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+                elif isinstance(original_type_source, int) or key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "RESTART_INACTIVITY_MINUTES"]:
+                    try:
+                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
+                    except ValueError:
+                        new_values_for_config_py[key_from_form] = original_type_source
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。")
+                elif isinstance(original_type_source, float):
+                     try:
+                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
+                     except ValueError:
+                        new_values_for_config_py[key_from_form] = original_type_source
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+                elif isinstance(original_type_source, list):
+                    try:
+                        evaluated_list = ast.literal_eval(value_from_form)
+                        if isinstance(evaluated_list, list):
+                            new_values_for_config_py[key_from_form] = evaluated_list
+                        else:
+                            new_values_for_config_py[key_from_form] = original_type_source
+                            app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 解析后不是列表，已保留旧值。")
+                    except:
+                        new_values_for_config_py[key_from_form] = original_type_source
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法解析为列表，已保留旧值。")
+                else: 
+                    new_values_for_config_py[key_from_form] = value_from_form
+            else: 
+                if key_from_form == "GROUP_CHAT_RESPONSE_PROBABILITY":
+                    try:
+                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
+                    except ValueError:
+                        new_values_for_config_py[key_from_form] = 100
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值100。")
+                elif key_from_form == "RESTART_INACTIVITY_MINUTES":
+                     try:
+                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 15
+                     except ValueError:
+                        new_values_for_config_py[key_from_form] = 15 
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值15。")
+
+                elif key_from_form == "RESTART_INTERVAL_HOURS":
+                     try:
+                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 2.0
+                     except ValueError:
+                        new_values_for_config_py[key_from_form] = 2.0
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已设为默认值2.0。")
+                else:
+                    new_values_for_config_py[key_from_form] = value_from_form
+        
+        update_config(new_values_for_config_py)
+
+        if users_whose_prompt_changed:
+            with FileLock(CHAT_CONTEXTS_LOCK_FILE):
+                try:
+                    if os.path.exists(CHAT_CONTEXTS_FILE):
+                        with open(CHAT_CONTEXTS_FILE, 'r+', encoding='utf-8') as f:
+                            chat_data = json.load(f)
+                            modified_chat_data = False
+                            for user_to_clear in users_whose_prompt_changed:
+                                if user_to_clear in chat_data:
+                                    del chat_data[user_to_clear]
+                                    modified_chat_data = True
+                                    app.logger.info(f"因Prompt文件变更，用户 '{user_to_clear}' 的聊天上下文已清除。")
+                            if modified_chat_data:
+                                f.seek(0)
+                                json.dump(chat_data, f, ensure_ascii=False, indent=4)
+                                f.truncate()
+                except (json.JSONDecodeError, IOError) as e:
+                    app.logger.error(f"清除因Prompt变更导致的聊天上下文时出错: {e}")
+                    
+        return '', 204 
     except Exception as e:
         app.logger.error(f"配置保存失败: {str(e)}")
-        return str(e), 500
+        return jsonify({'error': f'配置保存失败: {str(e)}'}), 500
 
 def stop_bot_process():
     global bot_process
@@ -275,9 +366,121 @@ def update_config(new_values):
             # 捕获并记录异常，以便排查问题
             raise Exception(f"更新配置文件失败: {e}")
 
+@app.route('/quick_start', methods=['GET', 'POST'])
+@login_required
+def quick_start():
+    if request.method == 'POST':
+        try:
+            config = parse_config()
+            new_values = {}
+
+            api_provider = request.form.get('quick_start_api_provider', 'weapis')
+            api_key = request.form.get('quick_start_api_key', '').strip()
+
+            keys_to_clear_for_non_weapis = [
+                'MOONSHOT_API_KEY', 'ONLINE_API_KEY',
+                'MOONSHOT_BASE_URL', 'ONLINE_BASE_URL',
+                'MOONSHOT_MODEL', 'ONLINE_MODEL'
+            ]
+
+            if api_provider == 'weapis':
+                if api_key:
+                    new_values['DEEPSEEK_API_KEY'] = api_key
+                    new_values['MOONSHOT_API_KEY'] = api_key
+                    new_values['ONLINE_API_KEY'] = api_key
+                new_values['DEEPSEEK_BASE_URL'] = 'https://vg.v1api.cc/v1'
+                new_values['MOONSHOT_BASE_URL'] = 'https://vg.v1api.cc/v1'
+                new_values['ONLINE_BASE_URL'] = 'https://vg.v1api.cc/v1'
+                new_values['MOONSHOT_MODEL'] = 'gpt-4o'
+                new_values['ONLINE_MODEL'] = 'net-gpt-4o-mini'
+                if not config.get('MODEL','').strip():
+                    new_values['MODEL'] = 'deepseek-ai/DeepSeek-V3'
+                new_values['ENABLE_ONLINE_API'] = 'ENABLE_ONLINE_API' in request.form
+            
+            else:
+                if api_provider == 'siliconflow':
+                    new_values['DEEPSEEK_BASE_URL'] = 'https://api.siliconflow.cn/v1/'
+                elif api_provider == 'deepseek_official':
+                    new_values['DEEPSEEK_BASE_URL'] = 'https://api.deepseek.com'
+                elif api_provider == 'other':
+                    custom_base_url = request.form.get('quick_start_custom_base_url', '').strip()
+                    if custom_base_url:
+                        new_values['DEEPSEEK_BASE_URL'] = custom_base_url
+                    else:
+                        new_values['DEEPSEEK_BASE_URL'] = ""
+                
+                if api_key:
+                    new_values['DEEPSEEK_API_KEY'] = api_key
+                
+                for key_to_clear in keys_to_clear_for_non_weapis:
+                    new_values[key_to_clear] = "" 
+                new_values['ENABLE_ONLINE_API'] = False
+
+            nicknames = request.form.getlist('nickname')
+            prompt_files_form = request.form.getlist('prompt_file')
+            new_values['LISTEN_LIST'] = [
+                [nick.strip(), pf.strip()]
+                for nick, pf in zip(nicknames, prompt_files_form)
+                if nick.strip() and pf.strip()
+            ]
+            new_values['ENABLE_AUTO_MESSAGE'] = 'ENABLE_AUTO_MESSAGE' in request.form
+            
+            update_config(new_values)
+            return redirect(url_for('index'))
+        except Exception as e:
+            app.logger.error(f"快速配置保存错误: {e}")
+            return redirect(url_for('quick_start'))
+
+    try:
+        config = parse_config()
+        prompt_files_dir = 'prompts'
+        if not os.path.exists(prompt_files_dir):
+            os.makedirs(prompt_files_dir)
+        prompt_files_list = [f[:-3] for f in os.listdir(prompt_files_dir) if f.endswith('.md')]
+        
+        current_api_provider = 'weapis'
+        current_custom_base_url = ''
+        
+        deepseek_url = config.get('DEEPSEEK_BASE_URL', '')
+        
+        is_weapis_setup = (
+            deepseek_url == 'https://vg.v1api.cc/v1' and
+            config.get('MOONSHOT_BASE_URL') == 'https://vg.v1api.cc/v1' and
+            config.get('ONLINE_BASE_URL') == 'https://vg.v1api.cc/v1'
+        )
+
+        if is_weapis_setup:
+            current_api_provider = 'weapis'
+        elif deepseek_url == 'https://api.siliconflow.cn/v1/':
+            current_api_provider = 'siliconflow'
+        elif deepseek_url == 'https://api.deepseek.com':
+            current_api_provider = 'deepseek_official'
+        elif deepseek_url and deepseek_url != 'https://vg.v1api.cc/v1': 
+            current_api_provider = 'other'
+            current_custom_base_url = deepseek_url
+
+        return render_template('quick_start.html',
+                               config=config,
+                               prompt_files=prompt_files_list,
+                               current_api_provider=current_api_provider,
+                               current_custom_base_url=current_custom_base_url)
+    except Exception as e:
+        app.logger.error(f"加载快速配置页面错误: {e}")
+        return "加载快速配置页面错误，请检查日志。"
+
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
+    # 在处理 POST 或渲染模板之前检查 API KEY
+    current_config_check = parse_config()
+    # 检查是否从 quick_start 页面明确跳过
+    was_skipped = request.args.get('skipped') == 'true'
+
+    if not current_config_check.get('DEEPSEEK_API_KEY', '').strip():
+        # 只有当不是明确跳过，并且是GET请求时，才重定向到 quick_start
+        if request.method == 'GET' and not was_skipped:
+             return redirect(url_for('quick_start'))
+
     if request.method == 'POST':
         try:
             config = parse_config()
@@ -293,55 +496,94 @@ def index():
             ]
 
             # 处理其他字段
-            submitted_fields = set(request.form.keys()) - {'listen_list'}
-            for var in submitted_fields:
-                if var not in config:
-                    continue  # 忽略无效字段
-                value = request.form[var].strip()
-                if isinstance(config[var], bool):
-                    new_values[var] = value.lower() in ('on', 'true', '1', 'yes')
-                elif isinstance(config[var], int):
-                    new_values[var] = int(value) if value else 0
-                elif isinstance(config[var], float):
-                    new_values[var] = float(value) if value else 0.0
-                else:
-                    new_values[var] = value
+            submitted_fields = set(request.form.keys()) - {'listen_list'} # listen_list 已处理
+            # 修正: submitted_fields应为 {'nickname', 'prompt_file'}
+            submitted_fields = set(request.form.keys()) - {'nickname', 'prompt_file'}
 
-            # 明确处理布尔类型字段（如果未提交）
-            for var in ['ENABLE_IMAGE_RECOGNITION', 
-                        'ENABLE_EMOJI_RECOGNITION', 
-                        'ENABLE_EMOJI_SENDING',
-                        'ENABLE_AUTO_MESSAGE', 
-                        'ENABLE_MEMORY', 
-                        'UPLOAD_MEMORY_TO_AI',
-                        'ENABLE_LOGIN_PASSWORD'
-                        'ENABLE_REMINDERS',
-                        'ALLOW_REMINDERS_IN_QUIET_TIME',
-                        'USE_VOICE_CALL_FOR_REMINDERS',
-                        'ENABLE_ONLINE_API',
-                        'SEPARATE_ROW_SYMBOLS',
-                        ]:
-                if var not in submitted_fields:
-                    new_values[var] = False
+            for var in submitted_fields:
+                if var not in config and not var.startswith('temp_'): # 忽略不存在于config中的字段, 但保留temp_字段
+                    # 如果是 quick_start_api_key 这样的临时字段，则忽略
+                    if var == 'quick_start_api_key':
+                        continue
+                    # 对于其他未知字段，可以打印警告或跳过
+                    app.logger.warning(f"表单中存在未知配置项: {var}, 已忽略。")
+                    continue
+                
+                original_value = config.get(var) # 获取原始值及其类型
+                value_from_form = request.form[var].strip()
+
+                if var.startswith('temp_'): # 处理 temp_ 前缀的字段，它们决定最终字段的值
+                    final_field_name = var.replace('temp_', '')
+                    if final_field_name in config: # 确保最终字段名在配置中存在
+                        # 这部分逻辑通常在前端JS处理好，后端直接取最终字段
+                        # 但为保险起见，这里也处理下
+                        # 假设最终字段已由JS写入隐藏input，如 DEEPSEEK_BASE_URL
+                        # 这里仅作示例，实际应依赖js将正确的值填入如DEEPSEEK_BASE_URL的name中
+                        pass # 依赖js，后端直接用 DEEPSEEK_BASE_URL 等
+                    continue # temp_ 字段本身不直接写入配置
+
+                # 类型转换逻辑 (与 submit_config 中类似，可以提取为辅助函数)
+                if isinstance(original_value, bool):
+                    new_values[var] = value_from_form.lower() in ('on', 'true', '1', 'yes')
+                elif isinstance(original_value, int):
+                    try:
+                        new_values[var] = int(value_from_form) if value_from_form else 0
+                    except ValueError:
+                        new_values[var] = original_value # 保留旧值
+                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。")
+                elif isinstance(original_value, float):
+                    try:
+                        new_values[var] = float(value_from_form) if value_from_form else 0.0
+                    except ValueError:
+                        new_values[var] = original_value # 保留旧值
+                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+
+                elif original_value is None and value_from_form: # 如果原配置中某项不存在 (None), 但表单提交了值
+                     # 尝试推断类型或默认为字符串
+                    try:
+                        new_values[var] = ast.literal_eval(value_from_form)
+                    except:
+                        new_values[var] = value_from_form
+                else: # 默认为字符串
+                    new_values[var] = value_from_form
+            
+            # 再次检查布尔字段，确保未勾选时为 False
+            boolean_fields_from_editor = [
+                'ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION',
+                'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY',
+                'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
+                'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
+                'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
+                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY'
+            ]
+            for field in boolean_fields_from_editor:
+                 # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
+                if field in request.form or field not in new_values: # 如果在表单中，或尚未设置
+                    new_values[field] = field in request.form # 统一处理，在表单中出现即为True
 
             update_config(new_values)
-            return redirect(url_for('index'))
+            return redirect(url_for('index')) # 保存后重定向到自身以刷新GET请求
         except Exception as e:
-            # 记录错误信息到日志或者异常捕捉信号
-            app.logger.error(f"Error saving configuration: {e}")
-            # 返回一个错误页面或提示信息
-            return "Configuration save failed. Please check your inputs."
+            app.logger.error(f"主配置页保存配置错误: {e}")
+            # 渲染错误信息，或重定向到GET并带上错误提示
+            return f"保存配置失败: {str(e)}"
 
+    # GET 请求
     try:
-        # 获取prompt文件列表
-        prompt_files = [f[:-3] for f in os.listdir('prompts') if f.endswith('.md')]
-        config = parse_config()
-        return render_template('config_editor.html', 
+        prompt_files_dir = 'prompts'
+        if not os.path.exists(prompt_files_dir):
+            os.makedirs(prompt_files_dir)
+        prompt_files = [f[:-3] for f in os.listdir(prompt_files_dir) if f.endswith('.md')]
+        config = parse_config() # 重新解析以获取最新配置
+        chat_context_users = get_chat_context_users()
+
+        return render_template('config_editor.html',
                              config=config,
-                             prompt_files=prompt_files)
+                             prompt_files=prompt_files,
+                             chat_context_users=chat_context_users)
     except Exception as e:
-        app.logger.error(f"Error loading configuration: {e}")
-        return "Error loading configuration."
+        app.logger.error(f"加载主配置页面错误: {e}")
+        return "加载配置页面错误，请检查日志。"
 
 # 替换secure_filename的汉字过滤逻辑
 def safe_filename(filename):
@@ -351,54 +593,64 @@ def safe_filename(filename):
     filename = filename.replace('../', '_').replace('/', '_')
     return filename
 
-# 新增的prompt管理路由
-@app.route('/prompts')
-@login_required
-def prompt_list():
-    if not os.path.exists('prompts'):
-        os.makedirs('prompts')
-    files = [f for f in os.listdir('prompts') if f.endswith('.md')]
-    return render_template('prompts.html', files=files)
-
 @app.route('/edit_prompt/<filename>', methods=['GET', 'POST'])
 @login_required
 def edit_prompt(filename):
     safe_dir = os.path.abspath('prompts')
-    filepath = os.path.join(safe_dir, filename)
+    # 从path中移除.md后缀，如果存在的话，因为safe_filename会处理
+    if filename.endswith('.md'):
+        filename_no_ext = filename[:-3]
+    else:
+        filename_no_ext = filename
     
+    # 使用 safe_filename 处理，并确保.md后缀
+    # 注意：前端JS在调用此接口时，filename参数应该是包含.md的
+    # 所以这里的safe_filename应该针对传入的filename
+    processed_filename = safe_filename(filename) 
+    filepath = os.path.join(safe_dir, processed_filename)
+
     if request.method == 'POST':
         content = request.form.get('content', '')
-        new_filename = request.form.get('filename', '').strip()
-        
-        # 文件名安全处理
-        if not new_filename.endswith('.md'):
-            new_filename += '.md'
-        new_filename = safe_filename(new_filename)
-        new_filepath = os.path.join(safe_dir, new_filename)
-        
+        new_filename_from_form = request.form.get('filename', '').strip()
+
+        if not new_filename_from_form.endswith('.md'):
+            new_filename_from_form += '.md'
+        new_filename_safe = safe_filename(new_filename_from_form)
+        new_filepath = os.path.join(safe_dir, new_filename_safe)
+
         try:
-            # 重命名文件
-            if new_filename != filename and os.path.exists(new_filepath):
-                return "文件名已存在"
-            if new_filename != filename:
+            # 如果文件名改变了
+            if new_filename_safe != processed_filename:
+                if os.path.exists(new_filepath):
+                    return "新文件名已存在", 400 # 返回错误状态码
+                # 检查旧文件是否存在
+                if not os.path.exists(filepath):
+                     return "原文件不存在，无法重命名", 404
                 os.rename(filepath, new_filepath)
-                filepath = new_filepath
-                
+                filepath = new_filepath # 更新filepath为新路径，以便写入内容
+            
             # 写入内容
             with open(filepath, 'w', encoding='utf-8', newline='') as f:
                 f.write(content)
-            return redirect(url_for('prompt_list'))
+            # 修改后，不需要重定向到 prompt_list，前端会刷新或处理
+            return jsonify({'status': 'success', 'message': 'Prompt已保存'}), 200
         except Exception as e:
-            return f"保存失败: {str(e)}"
+            app.logger.error(f"保存Prompt失败: {str(e)}")
+            return f"保存失败: {str(e)}", 500
 
+    # GET 请求部分: 返回JSON数据
     try:
+        if not os.path.exists(filepath): # 确保文件存在
+            return jsonify({'error': '文件不存在'}), 404
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
-        return render_template('edit_prompt.html', 
-                             filename=filename,
-                             content=content)
+        # 返回JSON，而不是渲染模板
+        return jsonify({'filename': processed_filename, 'content': content})
     except FileNotFoundError:
-        return "文件不存在"
+        return jsonify({'error': '文件不存在'}), 404
+    except Exception as e:
+        app.logger.error(f"读取Prompt失败: {str(e)}")
+        return jsonify({'error': f'读取Prompt失败: {str(e)}'}), 500
 
 @app.route('/create_prompt', methods=['GET', 'POST'])
 @login_required
@@ -408,24 +660,28 @@ def create_prompt():
         content = request.form.get('content', '')
         
         if not filename:
-            return "文件名不能为空"
+            return "文件名不能为空", 400 # 返回错误状态码
             
         if not filename.endswith('.md'):
             filename += '.md'
-        filename = safe_filename(filename)
+        filename = safe_filename(filename) # 应用安全文件名处理
         
         filepath = os.path.join('prompts', filename)
         if os.path.exists(filepath):
-            return "文件已存在"
+            return "文件已存在", 409 # 409 Conflict 更合适
             
         try:
+            if not os.path.exists('prompts'): # 确保目录存在
+                os.makedirs('prompts')
             with open(filepath, 'w', encoding='utf-8', newline='') as f:
                 f.write(content)
-            return redirect(url_for('prompt_list'))
+            # 返回成功JSON，而不是重定向
+            return jsonify({'status': 'success', 'message': 'Prompt已创建'}), 201 # 201 Created
         except Exception as e:
-            return f"创建失败: {str(e)}"
-            
-    return render_template('create_prompt.html')
+            app.logger.error(f"创建Prompt失败: {str(e)}")
+            return f"创建失败: {str(e)}", 500
+    
+    return "此端点用于POST创建Prompt，或GET请求已被整合处理。", 405 # Method Not Allowed for GET
 
 @app.route('/delete_prompt/<filename>', methods=['POST'])
 @login_required
@@ -748,7 +1004,153 @@ def receive_bot_log():
     except Exception as e:
         app.logger.error(f"日志接收失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/get_chat_context_users', methods=['GET'])
+@login_required
+def api_get_chat_context_users():
+    users = get_chat_context_users()
+    return jsonify({'users': users})
+
+@app.route('/clear_chat_context/<username>', methods=['POST'])
+@login_required
+def clear_chat_context(username):
+    """清除指定用户的聊天上下文"""
+    if not os.path.exists(CHAT_CONTEXTS_FILE):
+        return jsonify({'status': 'error', 'message': '聊天上下文文件不存在'}), 404
+
+    with FileLock(CHAT_CONTEXTS_LOCK_FILE):
+        try:
+            with open(CHAT_CONTEXTS_FILE, 'r+', encoding='utf-8') as f:
+                data = json.load(f)
+                if username in data:
+                    del data[username]
+                    f.seek(0) # 回到文件开头
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+                    f.truncate() # 删除剩余内容
+                    return jsonify({'status': 'success', 'message': f"用户 '{username}' 的聊天上下文已清除"})
+                else:
+                    return jsonify({'status': 'error', 'message': f"用户 '{username}' 未找到"}), 404
+        except (json.JSONDecodeError, IOError) as e:
+            app.logger.error(f"处理 chat_contexts.json 失败: {e}")
+            return jsonify({'status': 'error', 'message': '处理聊天上下文文件失败'}), 500
+
+def get_default_config():
+    return {
+        "LISTEN_LIST": [['微信名1', '角色1']],
+        "DEEPSEEK_API_KEY": '',
+        "DEEPSEEK_BASE_URL": 'https://vg.v1api.cc/v1',
+        "MODEL": 'deepseek-v3-0324',
+        "MAX_GROUPS": 5,
+        "MAX_TOKEN": 2000,
+        "TEMPERATURE": 1.1,
+        "MOONSHOT_API_KEY": '',
+        "MOONSHOT_BASE_URL": 'https://vg.v1api.cc/v1',
+        "MOONSHOT_MODEL": 'gpt-4o',
+        "MOONSHOT_TEMPERATURE": 0.8,
+        "ENABLE_IMAGE_RECOGNITION": True,
+        "ENABLE_EMOJI_RECOGNITION": True,
+        "QUEUE_WAITING_TIME": 7,
+        "EMOJI_DIR": 'emojis',
+        "ENABLE_EMOJI_SENDING": True,
+        "EMOJI_SENDING_PROBABILITY": 25,
+        "AUTO_MESSAGE": '请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么',
+        "ENABLE_AUTO_MESSAGE": True,
+        "MIN_COUNTDOWN_HOURS": 1.0,
+        "MAX_COUNTDOWN_HOURS": 2.0,
+        "QUIET_TIME_START": '22:00',
+        "QUIET_TIME_END": '8:00',
+        "AVERAGE_TYPING_SPEED": 0.2,
+        "RANDOM_TYPING_SPEED_MIN": 0.05,
+        "RANDOM_TYPING_SPEED_MAX": 0.1,
+        "SEPARATE_ROW_SYMBOLS": True,
+        "ENABLE_MEMORY": True,
+        "MEMORY_TEMP_DIR": 'Memory_Temp',
+        "MAX_MESSAGE_LOG_ENTRIES": 30,
+        "MAX_MEMORY_NUMBER": 50,
+        "UPLOAD_MEMORY_TO_AI": True,
+        "ACCEPT_ALL_GROUP_CHAT_MESSAGES": False,
+        "ENABLE_GROUP_AT_REPLY": True,
+        "ENABLE_GROUP_KEYWORD_REPLY": False,
+        "GROUP_KEYWORD_LIST": ['你好', '机器人', '在吗'],
+        "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+        "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": True,
+        "ENABLE_LOGIN_PASSWORD": False,
+        "LOGIN_PASSWORD": '123456',
+        "PORT": 5000,
+        "ENABLE_REMINDERS": True,
+        "ALLOW_REMINDERS_IN_QUIET_TIME": True,
+        "USE_VOICE_CALL_FOR_REMINDERS": False,
+        "ENABLE_ONLINE_API": False,
+        "ONLINE_BASE_URL": 'https://vg.v1api.cc/v1',
+        "ONLINE_MODEL": 'net-gpt-4o-mini',
+        "ONLINE_API_KEY": '',
+        "ONLINE_API_TEMPERATURE": 0.7,
+        "ONLINE_API_MAX_TOKEN": 2000,
+        "SEARCH_DETECTION_PROMPT": '是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等',
+        "ONLINE_FIXED_PROMPT": '',
+        "ENABLE_URL_FETCHING": True,
+        "REQUESTS_TIMEOUT": 10,
+        "REQUESTS_USER_AGENT": 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Mobile Safari/537.36',
+        "MAX_WEB_CONTENT_LENGTH": 2000,
+        "ENABLE_SCHEDULED_RESTART": True,
+        "RESTART_INTERVAL_HOURS": 2.0,
+        "RESTART_INACTIVITY_MINUTES": 15
+    }
+
+def validate_config():
+    """验证config.py配置完整性，若有缺失项则自动补充默认值"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, 'config.py')
     
+    try:
+        # 如果配置文件不存在，直接创建完整配置
+        if not os.path.exists(config_path):
+            print(f"配置文件不存在，正在创建新配置文件: {config_path}")
+            with open(config_path, 'w', encoding='utf-8') as f:
+                f.write("# -*- coding: utf-8 -*-\n\n")
+                f.write("# 自动生成的配置文件\n\n")
+                
+                for key, value in get_default_config().items():
+                    f.write(f"{key} = {repr(value)}\n")
+            print("已创建新的配置文件")
+            return True
+        
+        # 尝试解析当前配置
+        current_config = parse_config()
+        default_config = get_default_config()
+        
+        # 记录缺少的配置项
+        missing_keys = []
+        # 构建需要更新的配置字典
+        updates_needed = {}
+        
+        # 检查每个默认配置项是否存在
+        for key, default_value in default_config.items():
+            if key not in current_config:
+                missing_keys.append(key)
+                updates_needed[key] = default_value
+        
+        # 如果存在缺失项，更新配置文件
+        if missing_keys:
+            print(f"检测到{len(missing_keys)}个缺失的配置项: {', '.join(missing_keys)}")
+            print("正在自动补充默认值...")
+            
+            # 直接修改文件，添加缺失的配置项
+            with open(config_path, 'a', encoding='utf-8') as f:
+                f.write("\n# 自动补充的配置项\n")
+                for key in missing_keys:
+                    f.write(f"{key} = {repr(default_config[key])}\n")
+            
+            print("配置文件已更新完成")
+            return True  # 配置已更新
+        
+        print("配置文件验证完成，所有配置项齐全")
+        return False  # 配置无需更新
+        
+    except Exception as e:
+        print(f"验证配置文件时出错: {str(e)}")
+        return False
+
 def kill_process_using_port(port):
     """
     检查指定端口是否被占用，如果被占用则结束占用的进程
@@ -772,7 +1174,7 @@ if __name__ == '__main__':
     class BotStatusFilter(logging.Filter):
         def filter(self, record):
             # 如果日志消息中包含以下日志，则返回 False（不记录）
-            if '/bot_status' in record.getMessage() or '/api/log' in record.getMessage() or '/save_all_reminders' in record.getMessage() or '/get_all_reminders' in record.getMessage():
+            if '/bot_status' in record.getMessage() or '/api/log' in record.getMessage() or '/save_all_reminders' in record.getMessage() or '/get_all_reminders' in record.getMessage() or '/api/get_chat_context_users' in record.getMessage():
                 return False
             return True
 
@@ -780,7 +1182,10 @@ if __name__ == '__main__':
     werkzeug_logger = logging.getLogger('werkzeug')
     werkzeug_logger.addFilter(BotStatusFilter())
 
-    # 新增配置文件存在检查
+    # 验证配置文件完整性
+    validate_config()
+
+    # 配置文件存在检查
     config_path = os.path.join(os.path.dirname(__file__), 'config.py')
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"核心配置文件缺失: {config_path}")

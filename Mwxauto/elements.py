@@ -281,8 +281,6 @@ class WeChatBase:
         # 确保保存目录存在
         if not os.path.exists(WxParam.DEFALUT_SAVEPATH):
             os.makedirs(WxParam.DEFALUT_SAVEPATH)
-        
-        close_save_windows()
 
         self._show()
         imgcontrol = msgitem.ButtonControl(Name='')
@@ -340,6 +338,7 @@ class WeChatBase:
         return savepath
 
     def _get_voice_text(self, msgitem):
+        time.sleep(2)# 等待语音消息加载完成
         if msgitem.GetProgenyControl(8, 4):
             return msgitem.GetProgenyControl(8, 4).Name
         voicecontrol = msgitem.ButtonControl(Name='')
@@ -469,8 +468,6 @@ class ChatWnd(WeChatBase):
             background (bool, optional): 是否在后台发送，默认True
         """
         wxlog.debug(f"发送消息：{self.who} --> {msg}")
-        
-        close_save_windows()
 
         if not msg and not at:
             return False
@@ -1442,52 +1439,3 @@ class LoginWnd:
         qrcode_control = self.UiaAPI.ButtonControl(Name='二维码')
         qrcode = qrcode_control.ScreenShot()
         return qrcode
-
-def close_save_windows(max_retries=3, timeout=10):
-    """关闭所有可能存在的保存相关窗口（支持重试和超时）"""
-    def try_close_window(window_name, button_names, esc_close=True):
-        """尝试关闭指定窗口"""
-        start_time = time.time()
-        retries = 0
-        while time.time() - start_time < timeout and retries < max_retries:
-            handle = FindWindow(name=window_name)
-            if not handle:
-                return True
-
-            # 尝试多种方式查找按钮
-            button_found = None
-            for btn_name in button_names:
-                buttons = FindWinEx(handle, classname='Button', name=btn_name)
-                if buttons:
-                    button_found = buttons[0]
-                    break
-
-            if button_found:
-                try:
-                    win32gui.SendMessage(button_found, win32con.BM_CLICK, 0, 0)
-                    wxlog.debug(f"成功点击 {btn_name} 按钮")
-                    time.sleep(0.3)
-                    if not FindWindow(name=window_name):
-                        return True
-                except Exception as e:
-                    wxlog.warning(f"点击 {btn_name} 按钮失败: {e}")
-
-            # 备用关闭方式：发送ESC或直接关闭窗口
-            if esc_close:
-                try:
-                    win32gui.PostMessage(handle, win32con.WM_CLOSE, 0, 0)
-                    wxlog.debug("尝试发送ESC关闭窗口")
-                except Exception as e:
-                    wxlog.warning(f"发送ESC关闭失败: {e}")
-
-            retries += 1
-            time.sleep(0.5)
-
-        wxlog.warning(f"关闭 {window_name} 窗口超时")
-        return False
-
-    # 先处理确认窗口
-    try_close_window("确认另存为", ['否(&N)', '否(N)', 'No'], esc_close=True)
-    
-    # 再处理另存为窗口
-    try_close_window("另存为...", ['取消', 'Cancel'], esc_close=True)
