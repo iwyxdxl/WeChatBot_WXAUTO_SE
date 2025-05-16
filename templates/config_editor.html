@@ -675,8 +675,8 @@
 
                 if (apiUrl === 'https://vg.v1api.cc/v1') {
                     options = [
-                        { value: 'deepseek-r1-searching', text: 'deepseek-r1-searching' },
                         { value: 'net-gpt-4o-mini', text: 'net-gpt-4o-mini (推荐)' },
+                        { value: 'deepseek-r1-searching', text: 'deepseek-r1-searching' },
                         { value: 'other', text: '其它' }
                     ];
                 } else {
@@ -776,27 +776,25 @@
                     ];
                 } else if (apiUrl === 'https://vg.v1api.cc/v1') {
                     options = [                
-                        { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (推荐)" },
+                        { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (1226版本，推荐)" },
                         { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
                         { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },
-                        { value: "gemini-2.5-flash", text: "gemini-2.5-flash (推荐)" },     
-                        { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219" },
-                        { value: "gemini-2.0-pro-exp-02-05", text: "gemini-2.0-pro-exp-02-05" },
-                        { value: "gemini-2.5-pro-exp-03-25", text: "gemini-2.5-pro-exp-03-25" },
-                        { value: "doubao-1-5-pro-32k-250115", text: "豆包 doubao-1-5-pro-32k-250115" },
+                        { value: "gemini-2.5-pro-exp-03-25", text: "gemini-2.5-pro-exp-03-25 * (推荐，体验感更好)" },
+                        { value: "claude-3-7-sonnet-20250219", text: "claude-3-7-sonnet-20250219 * (推荐)" },
                         { value: "doubao-pro-256k-241115", text: "豆包 doubao-pro-256k-241115" },
-                        { value: "doubao-1-5-lite-32k-250115", text: "豆包 doubao-1-5-lite-32k-250115" },
                         { value: "deepseek-ai/DeepSeek-R1", text: "deepseek-ai/DeepSeek-R1" },
                         { value: "deepseek-r1-searching", text: "deepseek-r1-searching (带联网功能)" },
-                        { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" }, { value: "gpt-4o", text: "gpt-4o" },
-                        { value: "gpt-4o-mini", text: "gpt-4o-mini" },
-                        { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
-                        { value: "chatgpt-4o-latest", text: "chatgpt-4o-latest *" },
                         { value: "claude-3-5-sonnet-20241022", text: "claude-3-5-sonnet-20241022 *" },
-                        { value: "claude-3-7-sonnet-20250219", text: "claude-3-7-sonnet-20250219 *" },
-                        { value: "claude-3-opus-20240229", text: "claude-3-opus-20240229 *" },
-                        { value: "gpt-4", text: "gpt-4 *" }, 
-                        { value: "gpt-4-turbo", text: "gpt-4-turbo *" },
+                        { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
+                        { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219" },
+                        { value: "gemini-2.5-flash", text: "gemini-2.5-flash" },
+                        { value: "gemini-2.5-pro-05-06", text: "gemini-2.5-pro-05-06 *" },
+                        { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" }, 
+                        { value: "o4-mini", text: "o4-mini" },
+                        { value: "gpt-4o", text: "gpt-4o *" },
+                        { value: "gpt-4.1", text: "gpt-4.1 *" },
+                        { value: "gpt-4o-mini", text: "gpt-4o-mini" },
+                        { value: "gpt-4.1-mini", text: "gpt-4.1-mini" },   
                         { value: "other", text: "其它" }
                     ];
                 } else {
@@ -1918,7 +1916,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.17</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.18</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>

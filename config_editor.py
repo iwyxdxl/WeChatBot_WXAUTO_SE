@@ -48,6 +48,10 @@ log_queue = Queue()
 CHAT_CONTEXTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_contexts.json')
 CHAT_CONTEXTS_LOCK_FILE = CHAT_CONTEXTS_FILE + '.lock'
 
+last_heartbeat_time = 0  # 上次收到心跳的时间戳
+HEARTBEAT_TIMEOUT = 15   # 心跳超时阈值（秒），应大于 bot.py 的 HEARTBEAT_INTERVAL
+current_bot_pid = None
+
 def get_chat_context_users():
     """从 chat_contexts.json 读取用户列表 (即顶级键)"""
     if not os.path.exists(CHAT_CONTEXTS_FILE):
@@ -60,10 +64,8 @@ def get_chat_context_users():
         app.logger.error(f"读取 chat_contexts.json 失败: {e}")
         return []
 
-# 新增登录相关路由
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # 如果禁用密码则直接跳转
     config = parse_config()
     if not config.get('ENABLE_LOGIN_PASSWORD', False):
         return redirect(url_for('index'))
@@ -86,7 +88,7 @@ def logout():
     return redirect(url_for('login'))
 
 def login_required(f):
-    @wraps(f)  # 新增装饰器
+    @wraps(f)
     def decorated_function(*args, **kwargs):
         config = parse_config()
         if config.get('ENABLE_LOGIN_PASSWORD', False):
@@ -101,7 +103,6 @@ def start_bot():
     if bot_process is None or bot_process.poll() is not None:
         bot_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # 优先检查bot.py
         bot_py = os.path.join(bot_dir, 'bot.py')
         bot_exe = os.path.join(bot_dir, 'bot.exe')
         
@@ -112,7 +113,6 @@ def start_bot():
         else:
             return {'error': 'No bot executable found'}, 404
 
-        # Windows需要CREATE_NEW_PROCESS_GROUP
         creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
         bot_process = subprocess.Popen(
             cmd,
@@ -120,21 +120,74 @@ def start_bot():
         )
     return {'status': 'started'}, 200
 
-    
 @app.route('/stop_bot', methods=['POST'])
 def stop_bot():
-    global bot_process
-    if bot_process is None:
+    global bot_process, last_heartbeat_time, current_bot_pid
+    # 检查状态时，也考虑 current_bot_pid 是否指示有活跃进程
+    is_considered_running = False
+    if bot_process and bot_process.poll() is None:
+        is_considered_running = True
+    elif (time.time() - last_heartbeat_time) < HEARTBEAT_TIMEOUT and current_bot_pid is not None:
+        try:
+            if psutil.pid_exists(current_bot_pid): # 确保PID对应的进程还存在
+                 is_considered_running = True
+        except Exception: # psutil.pid_exists 可能会抛出异常，例如权限问题
+            pass
+
+    if not is_considered_running:
+        app.logger.info("尝试停止机器人，但根据进程对象和心跳判断，机器人似乎已停止。")
+        # 即使如此，也调用stop_bot_process来清理状态
+        stop_bot_process(pid_to_kill=current_bot_pid if current_bot_pid else (bot_process.pid if bot_process else None))
         return {'status': 'stopped'}, 200
     else:
-        stop_bot_process()
+        pid_from_flask_process = bot_process.pid if bot_process else None
+        # 优先使用 current_bot_pid，因为它更可能是最新的
+        # 如果 current_bot_pid 和 flask 记录的 pid 不同，且 flask 的 pid 进程也存在，都尝试杀掉
+        pids_to_attempt_kill = set()
+        if current_bot_pid:
+            pids_to_attempt_kill.add(current_bot_pid)
+        if pid_from_flask_process:
+            pids_to_attempt_kill.add(pid_from_flask_process)
+
+        app.logger.info(f"准备停止机器人，目标PID(s): {pids_to_attempt_kill}")
+        for pid in pids_to_attempt_kill:
+            stop_bot_process(pid_to_kill=pid) # 传入要杀死的PID
+
+        # 最终状态由 stop_bot_process 设置 current_bot_pid 和 last_heartbeat_time
         return {'status': 'stopped'}, 200
     
 @app.route('/bot_status')
 def bot_status():
-    global bot_process
-    status = "running" if bot_process and bot_process.poll() is None else "stopped"
-    return {"status": status}
+    global bot_process, last_heartbeat_time, current_bot_pid
+    
+    process_alive_via_flask_obj = bot_process is not None and bot_process.poll() is None
+    heartbeat_is_recent = (time.time() - last_heartbeat_time) < HEARTBEAT_TIMEOUT
+    
+    # 新增：检查 current_bot_pid 对应的进程是否实际存活
+    process_alive_via_current_pid = False
+    if current_bot_pid is not None:
+        try:
+            if psutil.pid_exists(current_bot_pid):
+                process_alive_via_current_pid = True 
+        except psutil.Error:
+            pass
+
+    current_status = "stopped"
+
+    if process_alive_via_flask_obj:
+        current_status = "running"
+        # app.logger.debug("Bot status: running (Flask process object active)")
+    elif heartbeat_is_recent and process_alive_via_current_pid: # 优先检查通过PID确认的存活
+        current_status = "running"
+        # app.logger.debug(f"Bot status: running (Recent heartbeat AND PID {current_bot_pid} exists. Last heartbeat: {time.time() - last_heartbeat_time:.1f}s ago)")
+    elif heartbeat_is_recent and not process_alive_via_current_pid and current_bot_pid is not None:
+        # 心跳最近，但PID不存在了，可能是机器人刚崩溃但心跳消息还在路上，或者PID记录过时
+        app.logger.warning(f"Bot status: Heartbeat recent, but PID {current_bot_pid} does not exist. Marking as stopped for now. Last heartbeat: {time.time() - last_heartbeat_time:.1f}s ago")
+        current_status = "stopped" # 倾向于保守
+    elif heartbeat_is_recent : # 心跳最近，但没有 current_bot_pid 信息 (例如 bot.py 未发送PID)
+        current_status = "running" # 保持原逻辑：心跳最近则认为运行
+
+    return {"status": current_status}
 
 @app.route('/submit_config', methods=['POST'])
 @login_required
@@ -280,22 +333,86 @@ def submit_config():
         app.logger.error(f"配置保存失败: {str(e)}")
         return jsonify({'error': f'配置保存失败: {str(e)}'}), 500
 
-def stop_bot_process():
-    global bot_process
-    if bot_process is not None:
+def stop_bot_process(pid_to_kill=None):
+    global bot_process, last_heartbeat_time, current_bot_pid
+    
+    process_killed_successfully = False
+
+    if pid_to_kill:
         try:
-            bot_psutil = psutil.Process(bot_process.pid)
-            bot_psutil.terminate()  # 发送 SIGTERM
-            bot_psutil.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            bot_psutil.kill()
-        finally:
-            print("Bot process stopped.")
-            bot_process = None
+            if psutil.pid_exists(pid_to_kill):
+                bot_psutil = psutil.Process(pid_to_kill)
+                app.logger.info(f"尝试终止PID为 {pid_to_kill} 的机器人进程...")
+                bot_psutil.terminate()
+                bot_psutil.wait(timeout=5) # 等待进程终止
+                app.logger.info(f"通过 terminate 成功停止了PID {pid_to_kill}。")
+                process_killed_successfully = True
+            else:
+                app.logger.info(f"PID {pid_to_kill} 指定的进程不存在。")
+                process_killed_successfully = True # 认为已停止
+        except psutil.NoSuchProcess:
+            app.logger.info(f"尝试终止PID {pid_to_kill} 时，进程已不存在。")
+            process_killed_successfully = True # 认为已停止
+        except psutil.TimeoutExpired: # psutil.TimeoutExpired
+            app.logger.warning(f"Terminate PID {pid_to_kill} 超时，尝试 kill。")
+            try:
+                if psutil.pid_exists(pid_to_kill): # 再次确认存在
+                    bot_psutil_kill = psutil.Process(pid_to_kill)
+                    bot_psutil_kill.kill()
+                    bot_psutil_kill.wait(timeout=3)
+                    app.logger.info(f"通过 kill 成功停止了PID {pid_to_kill}。")
+                    process_killed_successfully = True
+            except psutil.NoSuchProcess:
+                 app.logger.info(f"尝试 kill PID {pid_to_kill} 时，进程已不存在。")
+                 process_killed_successfully = True
+            except Exception as e_kill:
+                app.logger.error(f"Kill PID {pid_to_kill} 失败: {e_kill}")
+        except Exception as e:
+            app.logger.error(f"停止PID {pid_to_kill} 时发生错误: {e}")
+
+    # 如果被杀死的PID是Flask自己启动的进程，则清空bot_process
+    if bot_process and pid_to_kill == bot_process.pid and process_killed_successfully:
+        app.logger.info(f"清空 Flask 维护的 bot_process 对象 (原PID: {bot_process.pid})。")
+        bot_process = None
+    
+    # 如果被杀死的PID是当前记录的机器人PID，则清空current_bot_pid
+    if current_bot_pid and pid_to_kill == current_bot_pid and process_killed_successfully:
+        app.logger.info(f"清空 current_bot_pid (原PID: {current_bot_pid})。")
+        current_bot_pid = None
+
+    last_heartbeat_time = 0
+    if not current_bot_pid and not bot_process: # 确保如果所有已知进程句柄都清了，才彻底标记
+        app.logger.info("所有已知的机器人进程句柄均已清理。重置心跳时间。")
+    elif current_bot_pid:
+        app.logger.warning(f"调用 stop_bot_process 后，current_bot_pid ({current_bot_pid}) 仍有值。可能存在未完全停止的实例或状态不同步。但心跳已重置。")
+
+@app.route('/bot_heartbeat', methods=['POST'])
+def bot_heartbeat():
+    global last_heartbeat_time, current_bot_pid
+    try:
+        last_heartbeat_time = time.time()
+        data = request.get_json()
+        
+        if data and 'pid' in data:
+            received_pid = data.get('pid')
+            if received_pid and isinstance(received_pid, int):
+                if current_bot_pid != received_pid:
+                    app.logger.info(f"Bot PID updated via heartbeat: old={current_bot_pid}, new={received_pid}")
+                    current_bot_pid = received_pid
+            else:
+                app.logger.warning(f"Received heartbeat with invalid PID: {received_pid}")
+        else:
+            app.logger.debug("Received heartbeat without PID information.")
+
+        return jsonify({'status': 'heartbeat_received'}), 200
+    except Exception as e:
+        app.logger.error(f"Error processing heartbeat: {e}")
+        current_bot_pid = None
+        return jsonify({'error': 'Failed to process heartbeat'}), 500
 
 def parse_config():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, 'config.py')  # 修正路径
+    config_path = os.path.join(script_dir, 'config.py')
     config = {}
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -1173,8 +1290,14 @@ def kill_process_using_port(port):
 if __name__ == '__main__':
     class BotStatusFilter(logging.Filter):
         def filter(self, record):
+            msg = record.getMessage()
             # 如果日志消息中包含以下日志，则返回 False（不记录）
-            if '/bot_status' in record.getMessage() or '/api/log' in record.getMessage() or '/save_all_reminders' in record.getMessage() or '/get_all_reminders' in record.getMessage() or '/api/get_chat_context_users' in record.getMessage():
+            if '/bot_status' in msg or \
+               '/api/log' in msg or \
+               '/save_all_reminders' in msg or \
+               '/get_all_reminders' in msg or \
+               '/api/get_chat_context_users' in msg or \
+               '/bot_heartbeat' in msg:
                 return False
             return True
 

@@ -55,6 +55,10 @@ queue_lock = threading.Lock()  # 队列访问锁
 chat_contexts = {}  # {user_id: [{'role': 'user', 'content': '...'}, ...]}
 CHAT_CONTEXTS_FILE = "chat_contexts.json" # 存储聊天上下文的文件名
 
+# 心跳相关全局变量
+HEARTBEAT_INTERVAL = 5  # 秒
+FLASK_SERVER_URL_BASE = f'http://localhost:{PORT}' # 使用从config导入的PORT
+
 # --- REMINDER RELATED GLOBALS ---
 RECURRING_REMINDERS_FILE = "recurring_reminders.json" # 存储重复和长期一次性提醒的文件名
 # recurring_reminders 结构:
@@ -639,6 +643,7 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
     raise RuntimeError("抱歉，我现在有点忙，稍后再聊吧。")
 
 def message_listener():
+    global wx
     while True:
         try:
             if wx is None:
@@ -1786,15 +1791,20 @@ D) **非提醒请求**：例如 "今天天气怎么样?", "取消提醒"。
 """
         # --- 3. 调用 AI 进行解析和分类 ---
         logger.info(f"向AI发送提醒解析请求（区分时长），用户: {user_id}，内容: '{message_content}'")
-        # 使用特定的 user_id 前缀区分此 AI 调用
-        response = get_deepseek_response(parsing_prompt, user_id="reminder_parser_classifier_v2_" + user_id, store_context=False) # 解析过程不存储上下文
-        logger.debug(f"AI提醒解析原始响应 (分类器 v2): {response}")
+        ai_raw_response = get_deepseek_response(parsing_prompt, user_id="reminder_parser_classifier_v2_" + user_id, store_context=False)
+        logger.debug(f"AI提醒解析原始响应 (分类器 v2): {ai_raw_response}")
+
+        # 使用新的清理函数处理AI的原始响应
+        cleaned_ai_output_str = extract_last_json_or_null(ai_raw_response)
+        logger.debug(f"AI响应清理并提取后内容: '{cleaned_ai_output_str}'")
+        response = cleaned_ai_output_str
 
         # --- 4. 解析 AI 的响应 ---
-        if response is None or response.strip().lower() == 'null':
-            logger.info(f"AI 未在用户 '{user_id}' 的消息中检测到有效的提醒请求 (分类器 v2): '{message_content}' (AI响应: {response})")
+        # 修改判断条件，使用清理后的结果
+        if cleaned_ai_output_str is None or cleaned_ai_output_str == "null": # "null" 是AI明确表示非提醒的方式
+            logger.info(f"AI 未在用户 '{user_id}' 的消息中检测到有效的提醒请求 (清理后结果为 None 或 'null')。原始AI响应: '{ai_raw_response}'")
             return False
-
+        
         try:
             response_cleaned = re.sub(r"```json\n?|\n?```", "", response).strip()
             reminder_data = json.loads(response_cleaned)
@@ -1982,6 +1992,53 @@ D) **非提醒请求**：例如 "今天天气怎么样?", "取消提醒"。
         fallback = "哎呀，好像内部出了点小问题，暂时没法帮你设置提醒了，非常抱歉！要不稍等一下再试试看？"
         send_error_reply(user_id, error_prompt, fallback, f"通用处理错误 ({type(e).__name__})")
         return False
+
+def extract_last_json_or_null(ai_response_text: str) -> str | None:
+    """
+    从AI的原始响应文本中清理并提取最后一个有效的JSON对象字符串或字面量 "null"。
+
+    Args:
+        ai_response_text: AI返回的原始文本。
+
+    Returns:
+        如果找到有效的JSON对象，则返回其字符串形式。
+        如果AI明确返回 "null" (清理后)，则返回字符串 "null"。
+        如果没有找到有效的JSON或 "null"，则返回 None。
+    """
+    if ai_response_text is None:
+        return None
+
+    # 步骤 1: 移除常见的Markdown代码块标记，并去除首尾空格
+    # 这个正则表达式会移除 ```json\n, ```json, \n```, ```
+    processed_text = re.sub(r"```json\n?|\n?```", "", ai_response_text).strip()
+
+    # 步骤 2: 检查清理后的文本是否完全是 "null" (不区分大小写)
+    # 这是AI指示非提醒请求的明确信号
+    if processed_text.lower() == 'null':
+        return "null" # 返回字面量字符串 "null"
+
+    # 步骤 3: 查找所有看起来像JSON对象的子字符串
+    # re.DOTALL 使得 '.' 可以匹配换行符
+    # 这个正则表达式会找到所有以 '{' 开头并以 '}' 结尾的非重叠子串
+    json_candidates = re.findall(r'\{.*?\}', processed_text, re.DOTALL)
+
+    if not json_candidates:
+        # 没有找到任何类似JSON的结构，并且它也不是 "null"
+        return None
+
+    # 步骤 4: 从后往前尝试解析每个候选JSON字符串
+    for candidate_str in reversed(json_candidates):
+        try:
+            # 尝试解析以验证它是否是有效的JSON
+            json.loads(candidate_str)
+            # 如果成功解析，说明这是最后一个有效的JSON对象字符串
+            return candidate_str
+        except json.JSONDecodeError:
+            # 解析失败，继续尝试前一个候选者
+            continue
+
+    # 如果所有候选者都解析失败
+    return None
 
 def format_delay_approx(delay_seconds, target_dt):
     """将延迟秒数格式化为用户友好的大致时间描述。"""
@@ -2235,7 +2292,6 @@ def save_recurring_reminders():
 def recurring_reminder_checker():
     """后台线程函数，每分钟检查是否有到期的重复或长期一次性提醒。"""
     last_checked_minute_str = None # 记录上次检查的 YYYY-MM-DD HH:MM
-    logger.info("提醒检查线程（重复和长期一次性）已启动。")
     while True:
         try:
             now = datetime.now()
@@ -2607,7 +2663,35 @@ def scheduled_restart_checker():
         # 每分钟检查一次条件
         time.sleep(60)
 
+# 新增：发送心跳的函数
+def send_heartbeat():
+    """向Flask后端发送心跳信号"""
+    heartbeat_url = f"{FLASK_SERVER_URL_BASE}/bot_heartbeat"
+    payload = {
+        'status': 'alive',
+        'pid': os.getpid() # 发送当前进程PID，方便调试
+    }
+    try:
+        response = requests.post(heartbeat_url, json=payload, timeout=5)
+        if response.status_code == 200:
+            logger.debug(f"心跳发送成功至 {heartbeat_url} (PID: {os.getpid()})")
+        else:
+            logger.warning(f"发送心跳失败，状态码: {response.status_code} (PID: {os.getpid()})")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"发送心跳时发生网络错误: {e} (PID: {os.getpid()})")
+    except Exception as e:
+        logger.error(f"发送心跳时发生未知错误: {e} (PID: {os.getpid()})")
 
+
+# 新增：心跳线程函数
+def heartbeat_thread_func():
+    """心跳线程，定期发送心跳"""
+    logger.info(f"机器人心跳线程启动 (PID: {os.getpid()})，每 {HEARTBEAT_INTERVAL} 秒发送一次心跳。")
+    while True:
+        send_heartbeat()
+        time.sleep(HEARTBEAT_INTERVAL)
+
+# 修改 main 函数
 def main():
     try:
         # --- 启动前检查 ---
@@ -2704,6 +2788,10 @@ def main():
             auto_message_thread.daemon = True
             auto_message_thread.start()
             logger.info("主动消息检查线程已启动。")
+        
+        # 启动心跳线程
+        heartbeat_th = threading.Thread(target=heartbeat_thread_func, name="BotHeartbeatThread", daemon=True)
+        heartbeat_th.start()
 
         logger.info("\033[32mBOT已成功启动并运行中...\033[0m")
 
