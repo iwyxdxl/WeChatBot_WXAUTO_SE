@@ -101,6 +101,14 @@ def login_required(f):
 def start_bot():
     global bot_process
     if bot_process is None or bot_process.poll() is not None:
+        # 如果目录下存在 user_timers.json 则删除
+        user_timers_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'user_timers.json')
+        if os.path.exists(user_timers_path):
+            try:
+                os.remove(user_timers_path)
+            except Exception as e:
+                app.logger.warning(f"重置主动消息定时器失败: {e}")
+
         bot_dir = os.path.dirname(os.path.abspath(__file__))
         
         bot_py = os.path.join(bot_dir, 'bot.py')
@@ -229,7 +237,7 @@ def submit_config():
             'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
             'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
-            'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY'
+            'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES'
         ]
         for field in boolean_fields:
             new_values_for_config_py[field] = field in request.form
@@ -671,7 +679,7 @@ def index():
                 'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
                 'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
-                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY'
+                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES'
             ]
             for field in boolean_fields_from_editor:
                  # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
@@ -1211,7 +1219,8 @@ def get_default_config():
         "MAX_WEB_CONTENT_LENGTH": 2000,
         "ENABLE_SCHEDULED_RESTART": True,
         "RESTART_INTERVAL_HOURS": 2.0,
-        "RESTART_INACTIVITY_MINUTES": 15
+        "RESTART_INACTIVITY_MINUTES": 15,
+        "REMOVE_PARENTHESES": False
     }
 
 def validate_config():

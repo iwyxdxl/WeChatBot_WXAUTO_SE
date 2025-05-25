@@ -54,6 +54,7 @@ user_queues = {}  # {user_id: {'messages': [], 'last_message_time': 时间戳, .
 queue_lock = threading.Lock()  # 队列访问锁
 chat_contexts = {}  # {user_id: [{'role': 'user', 'content': '...'}, ...]}
 CHAT_CONTEXTS_FILE = "chat_contexts.json" # 存储聊天上下文的文件名
+USER_TIMERS_FILE = "user_timers.json"  # 存储用户计时器状态的文件名
 
 # 心跳相关全局变量
 HEARTBEAT_INTERVAL = 5  # 秒
@@ -1173,6 +1174,8 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
 
         # --- 文本消息处理 ---
         reply = remove_timestamps(reply)
+        if REMOVE_PARENTHESES:
+            reply = remove_parentheses_and_content(reply)
         parts = split_message_with_context(reply)
 
         if not parts:
@@ -1323,9 +1326,22 @@ def remove_timestamps(text):
         flags = re.X | re.M # re.X 等同于 re.VERBOSE
     )
     # 清理可能产生的连续空格，将其合并为单个空格
-    cleaned_text = re.sub(r'\s+', ' ', text_no_timestamps)
+    cleaned_text = re.sub(r'[^\S\r\n]+', ' ', text_no_timestamps)
     # 最后统一清理首尾空格
     return cleaned_text.strip()
+
+def remove_parentheses_and_content(text: str) -> str:
+    """
+    去除文本中中文括号、英文括号及其中的内容。
+    同时去除因移除括号而可能产生的多余空格（例如，连续空格变单个，每行首尾空格去除）。
+    不去除其它符号和换行符。
+    """
+    processed_text = re.sub(r"\(.*?\)|（.*?）", "", text, flags=re.DOTALL)
+    processed_text = re.sub(r" {2,}", " ", processed_text)
+    lines = processed_text.split('\n')
+    stripped_lines = [line.strip(" ") for line in lines]
+    processed_text = "\n".join(stripped_lines)
+    return processed_text
 
 def is_emoji_request(text: str) -> Optional[str]:
     """使用AI判断消息情绪并返回对应的表情文件夹名称"""
@@ -1993,7 +2009,7 @@ D) **非提醒请求**：例如 "今天天气怎么样?", "取消提醒"。
         send_error_reply(user_id, error_prompt, fallback, f"通用处理错误 ({type(e).__name__})")
         return False
 
-def extract_last_json_or_null(ai_response_text: str) -> str | None:
+def extract_last_json_or_null(ai_response_text: str) -> Optional[str]:
     """
     从AI的原始响应文本中清理并提取最后一个有效的JSON对象字符串或字面量 "null"。
 
@@ -2615,12 +2631,17 @@ def scheduled_restart_checker():
                 try:
                     # --- 执行重启前的清理操作 ---
                     logger.info("定时重启前：保存聊天上下文...")
-                    with queue_lock: # 确保在保存时上下文和队列不被修改
+                    with queue_lock:
                         save_chat_contexts()
+                    
+                    # 保存用户计时器状态
+                    if ENABLE_AUTO_MESSAGE:
+                        logger.info("定时重启前：保存用户计时器状态...")
+                        save_user_timers()
                     
                     if ENABLE_REMINDERS:
                         logger.info("定时重启前：保存提醒列表...")
-                        with recurring_reminder_lock: # 确保提醒列表的线程安全
+                        with recurring_reminder_lock:
                             save_recurring_reminders()
                     
                     # 关闭异步HTTP日志处理器
@@ -2663,7 +2684,7 @@ def scheduled_restart_checker():
         # 每分钟检查一次条件
         time.sleep(60)
 
-# 新增：发送心跳的函数
+# 发送心跳的函数
 def send_heartbeat():
     """向Flask后端发送心跳信号"""
     heartbeat_url = f"{FLASK_SERVER_URL_BASE}/bot_heartbeat"
@@ -2683,7 +2704,7 @@ def send_heartbeat():
         logger.error(f"发送心跳时发生未知错误: {e} (PID: {os.getpid()})")
 
 
-# 新增：心跳线程函数
+# 心跳线程函数
 def heartbeat_thread_func():
     """心跳线程，定期发送心跳"""
     logger.info(f"机器人心跳线程启动 (PID: {os.getpid()})，每 {HEARTBEAT_INTERVAL} 秒发送一次心跳。")
@@ -2691,7 +2712,75 @@ def heartbeat_thread_func():
         send_heartbeat()
         time.sleep(HEARTBEAT_INTERVAL)
 
-# 修改 main 函数
+# 保存用户计时器状态的函数
+def save_user_timers():
+    """将用户计时器状态保存到文件"""
+    temp_file_path = USER_TIMERS_FILE + ".tmp"
+    try:
+        timer_data = {
+            'user_timers': dict(user_timers),
+            'user_wait_times': dict(user_wait_times)
+        }
+        with open(temp_file_path, 'w', encoding='utf-8') as f:
+            json.dump(timer_data, f, ensure_ascii=False, indent=4)
+        shutil.move(temp_file_path, USER_TIMERS_FILE)
+        logger.info(f"用户计时器状态已保存到 {USER_TIMERS_FILE}")
+    except Exception as e:
+        logger.error(f"保存用户计时器状态失败: {e}", exc_info=True)
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except OSError:
+                pass
+
+# 加载用户计时器状态的函数
+def load_user_timers():
+    """从文件加载用户计时器状态"""
+    global user_timers, user_wait_times
+    try:
+        if os.path.exists(USER_TIMERS_FILE):
+            with open(USER_TIMERS_FILE, 'r', encoding='utf-8') as f:
+                timer_data = json.load(f)
+                if isinstance(timer_data, dict):
+                    loaded_user_timers = timer_data.get('user_timers', {})
+                    loaded_user_wait_times = timer_data.get('user_wait_times', {})
+                    
+                    # 验证并恢复有效的计时器状态
+                    restored_count = 0
+                    for user in user_names:
+                        if (user in loaded_user_timers and user in loaded_user_wait_times and
+                            isinstance(loaded_user_timers[user], (int, float)) and
+                            isinstance(loaded_user_wait_times[user], (int, float))):
+                            user_timers[user] = loaded_user_timers[user]
+                            user_wait_times[user] = loaded_user_wait_times[user]
+                            restored_count += 1
+                            logger.debug(f"已恢复用户 {user} 的计时器状态")
+                        else:
+                            # 如果没有保存的状态或状态无效，则初始化
+                            reset_user_timer(user)
+                            logger.debug(f"为用户 {user} 重新初始化计时器状态")
+                    
+                    logger.info(f"成功从 {USER_TIMERS_FILE} 恢复 {restored_count} 个用户的计时器状态")
+                else:
+                    logger.warning(f"{USER_TIMERS_FILE} 文件格式不正确，将重新初始化所有计时器")
+                    initialize_all_user_timers()
+        else:
+            logger.info(f"{USER_TIMERS_FILE} 未找到，将初始化所有用户计时器")
+            initialize_all_user_timers()
+    except json.JSONDecodeError:
+        logger.error(f"解析 {USER_TIMERS_FILE} 失败，将重新初始化所有计时器")
+        initialize_all_user_timers()
+    except Exception as e:
+        logger.error(f"加载用户计时器状态失败: {e}", exc_info=True)
+        initialize_all_user_timers()
+
+def initialize_all_user_timers():
+    """初始化所有用户的计时器"""
+    for user in user_names:
+        reset_user_timer(user)
+    logger.info("所有用户计时器已重新初始化")
+
+
 def main():
     try:
         # --- 启动前检查 ---
@@ -2730,18 +2819,11 @@ def main():
             logger.info(f"添加监听用户: {user_name}")
             wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
 
-        # 初始化所有用户的自动消息计时器
-        if ENABLE_AUTO_MESSAGE: # 仅在启用自动消息时才初始化
-            logger.info("为所有监听用户初始化自动消息计时器...")
-            for user in user_names:
-                reset_user_timer(user) # 为每个用户设置初始时间和随机等待时间
-                # 可以选择性地记录初始化的等待时间，方便调试
-                if user in user_wait_times:
-                     initial_wait_hours = user_wait_times[user] / 3600
-                     logger.debug(f"用户 {user} 的初始自动消息等待时间设置为: {initial_wait_hours:.2f} 小时")
-                else:
-                     logger.warning(f"未能为用户 {user} 获取初始化后的等待时间。")
-            logger.info("所有用户自动消息计时器初始化完成。")
+         # 初始化所有用户的自动消息计时器
+        if ENABLE_AUTO_MESSAGE:
+            logger.info("正在加载用户自动消息计时器状态...")
+            load_user_timers()  # 替换原来的初始化代码
+            logger.info("用户自动消息计时器状态加载完成。")
         else:
             logger.info("自动消息功能已禁用，跳过计时器初始化。")
 
@@ -2811,6 +2893,11 @@ def main():
         logger.critical(f"主程序发生严重错误: {str(e)}", exc_info=True)
     finally:
         logger.info("程序准备退出，执行清理操作...")
+
+        # 保存用户计时器状态（如果启用了自动消息）
+        if ENABLE_AUTO_MESSAGE:
+            logger.info("程序退出前：保存用户计时器状态...")
+            save_user_timers()
 
         # 取消活动的短期一次性提醒定时器
         with timer_lock:
