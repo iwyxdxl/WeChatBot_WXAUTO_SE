@@ -19,7 +19,7 @@ import datetime as dt
 import threading
 import time
 import os
-from Mwxauto.wxauto import WeChat
+from wxauto.wxauto import WeChat
 from openai import OpenAI
 import random
 from typing import Optional
@@ -42,7 +42,7 @@ wx = WeChat()
 ROBOT_WX_NAME = wx.A_MyIcon.Name
 # 设置监听列表
 for user_name in user_names:
-    wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
+    wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
 # 持续监听消息，并且收到消息后回复
 wait = 1  # 设置1秒查看一次是否有新消息
 
@@ -651,7 +651,7 @@ def message_listener():
                 logger.info("微信接口对象为空，尝试重新初始化。")
                 wx = WeChat()
                 for user_name in user_names:
-                    wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
+                    wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
                 logger.info("微信接口重新初始化并添加监听用户完成。")
                     
             msgs = wx.GetListenMessage()
@@ -2817,7 +2817,7 @@ def main():
         wx = WeChat()
         for user_name in user_names:
             logger.info(f"添加监听用户: {user_name}")
-            wx.AddListenChat(who=user_name, savepic=True, savevoice=True, parse_links = True)
+            wx.AddListenChat(who=user_name, savepic=True, savevoice=True)
 
          # 初始化所有用户的自动消息计时器
         if ENABLE_AUTO_MESSAGE:

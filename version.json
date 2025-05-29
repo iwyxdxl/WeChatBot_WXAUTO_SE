@@ -1,5 +1,5 @@
 {
-    "version": "3.19",
-    "last_update": "2025-05-25",
-    "description": "\r\n程序自动重启后主动消息时间不再重新计时\r\n修复换行符会被移除的问题\r\n新增强制移除括号及其中内容功能\r\n修复3.18版本在python3.8-3.9无法运行的问题\r\nWeAPIs新增Claude4\r\n\r\n注意:\r\n3.9-3.11版本的更新器存在问题，无法正常完成更新，请使用网盘下载新版本：\r\nhttps://pan.quark.cn/s/6a538446f1b6 \r\n其它版本可以直接输入Y并回车执行自动更新，感谢理解！\r\n"
+    "version": "0.1",
+    "last_update": "2025-05-28",
+    "description": "此版本为修改了wxauto的合规版"
 }

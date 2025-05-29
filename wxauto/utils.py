@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from datetime import datetime, timedelta
 from . import uiautomation as uia
 from PIL import ImageGrab
@@ -49,6 +47,7 @@ def GetVersionByPath(file_path):
     except:
         version = None
     return version
+
 
 def IsRedPixel(uicontrol):
     rect = uicontrol.BoundingRectangle

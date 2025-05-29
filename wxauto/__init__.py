@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from .wxauto import WeChat
 from .utils import *
 

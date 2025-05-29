@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
-
 """
 Author: Cluic
-Modified by: iwyxdxl
+Update: 2024-07-22
+Version: 3.9.11.17.4
 """
 
 from . import uiautomation as uia
@@ -14,102 +13,28 @@ from .color import *
 import time
 import os
 import re
-import threading
-import time
-import traceback
 try:
     from typing import Literal
 except:
     from typing_extensions import Literal
 
-# 统一响应类，提供标准化的返回格式
-class WxResponse(dict):
-    def __init__(self, status: str, msg: str, data: dict = None):
-        super().__init__(status=status, msg=msg, data=data)
-
-    def __str__(self):
-        return str(dict(status=self['status'], message=self['msg'], data=self['data']))
-    
-    def __repr__(self):
-        return self.__str__()
-
-    def __bool__(self):
-        return self.is_success
-    
-    @property
-    def is_success(self):
-        return self['status'] == '成功'
-
-    @classmethod
-    def success(cls, msg=None, data: dict = None):
-        return cls(status="成功", msg=msg, data=data)
-
-    @classmethod
-    def failure(cls, msg: str, data: dict = None):
-        return cls(status="失败", msg=msg, data=data)
-    
-# 监听器基类，实现后台消息监听
-class Listener():
-    def _listener_start(self):
-        wxlog.debug('开始监听')
-        self._listener_is_listening = True
-        self._listener_messages = {}
-        self._lock = threading.Lock()
-        self._listener_stop_event = threading.Event()
-        self._listener_thread = threading.Thread(target=self._listener_listen, daemon=True)
-        self._listener_thread.start()
-
-    def _listener_listen(self):
-        if not hasattr(self, 'listen') or not self.listen:
-            self.listen = {}
-        while not self._listener_stop_event.is_set():
-            try:
-                self._get_listen_messages()
-            except:
-                wxlog.debug(f'监听消息失败：{traceback.format_exc()}')
-            time.sleep(WxParam.LISTEN_INTERVAL)
-
-    def _listener_stop(self):
-        self._listener_is_listening = False
-        self._listener_stop_event.set()
-        self._listener_thread.join()
-
-    def _get_listen_messages(self):
-        temp_listen = self.listen.copy()
-        for who in temp_listen:
-            chat = temp_listen.get(who, None)
-            try:
-                if chat is None or not chat.UiaAPI.Exists(0.1):
-                    continue
-            except:
-                continue
-            with self._lock:
-                msg = chat.GetNewMessage(
-                    savepic=chat.savepic, 
-                    savefile=chat.savefile, 
-                    savevoice=chat.savevoice,
-                    parse_links=chat.parse_links
-                )
-                if msg:
-                    wxlog.debug(f"获取到消息：{msg}")
-                    if chat not in self._listener_messages:
-                        self._listener_messages[chat] = msg
-                    else:
-                        self._listener_messages[chat].extend(msg)
-
-class WeChat(WeChatBase, Listener):
+class WeChat(WeChatBase):
     VERSION: str = '3.9.11.17'
     lastmsgid: str = None
     listen: dict = dict()
     SessionItemList: list = []
 
-    def __init__(self, language='cn', debug=False):
+    def __init__(
+            self, 
+            language: Literal['cn', 'cn_t', 'en'] = 'cn', 
+            debug: bool = False
+        ) -> None:
         """微信UI自动化实例
 
         Args:
             language (str, optional): 微信客户端语言版本, 可选: cn简体中文  cn_t繁体中文  en英文, 默认cn, 即简体中文
         """
-        self.UiaAPI = uia.WindowControl(ClassName='WeChatMainWndForPC', searchDepth=1)
+        self.UiaAPI: uia.WindowControl = uia.WindowControl(ClassName='WeChatMainWndForPC', searchDepth=1)
         set_debug(debug)
         self.language = language
         # self._checkversion()
@@ -117,9 +42,16 @@ class WeChat(WeChatBase, Listener):
         MainControl1 = [i for i in self.UiaAPI.GetChildren() if not i.ClassName][0]
         MainControl2 = MainControl1.GetFirstChildControl()
         # 三个布局，导航栏(A)、聊天列表(B)、聊天框(C)
-        self.NavigationBox, self.SessionBox, self.ChatBox = MainControl2.GetChildren()
+        # _______________
+        # |■|———|    -□×|
+        # | |———|       |
+        # |A| B |   C   |   <--- 微信窗口布局简图示意
+        # | |———|———————|
+        # |=|———|       |
+        # ———————————————
+        self.NavigationBox, self.SessionBox, self.ChatBox  = MainControl2.GetChildren()
         
-        # 初始化导航栏
+        # 初始化导航栏，以A开头 | self.NavigationBox  -->  A_xxx
         self.A_MyIcon = self.NavigationBox.ButtonControl()
         self.A_ChatIcon = self.NavigationBox.ButtonControl(Name=self._lang('聊天'))
         self.A_ContactsIcon = self.NavigationBox.ButtonControl(Name=self._lang('通讯录'))
@@ -139,18 +71,6 @@ class WeChat(WeChatBase, Listener):
         self.nickname = self.A_MyIcon.Name
         msgs_ = self.GetAllMessage()
         self.usedmsgid = [i[-1] for i in msgs_]
-        
-        # 初始化消息队列
-        self._message_queue = []
-        self._file_queue = []
-        self._queue_lock = threading.Lock()
-        self._sender_stop_event = threading.Event()
-        self._sender_thread = threading.Thread(target=self._background_sender, daemon=True)
-        self._sender_thread.start()
-
-        # 启动后台监听线程
-        self._listener_start()
-        
         print(f'初始化成功，获取到已登录窗口：{self.nickname}')
     
     def _checkversion(self):
@@ -261,7 +181,7 @@ class WeChat(WeChatBase, Listener):
         self._show()
         return IsRedPixel(self.A_ChatIcon)
     
-    def GetNextNewMessage(self, savepic=True, savefile=False, savevoice=True, parse_links = False, timeout=10):
+    def GetNextNewMessage(self, savepic=False, savefile=False, savevoice=False, timeout=10):
         """获取下一个新消息"""
         msgs_ = self.GetAllMessage()
         msgids = [i[-1] for i in msgs_]
@@ -286,7 +206,7 @@ class WeChat(WeChatBase, Listener):
             ]
             if NewMsgItems:
                 wxlog.debug('获取当前窗口新消息')
-                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice, parse_links)
+                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice)
                 self.usedmsgid = msgids
                 return {self.CurrentChat(): msgs}
 
@@ -304,7 +224,7 @@ class WeChat(WeChatBase, Listener):
             for session in sessiondict:
                 self.ChatWith(session)
                 NewMsgItems = self.C_MsgList.GetChildren()[-sessiondict[session]:]
-                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice, parse_links)
+                msgs = self._getmsgs(NewMsgItems, savepic, savefile, savevoice)
                 msgs_ = self.GetAllMessage()
                 self.usedmsgid = [i[-1] for i in msgs_]
                 return {session:msgs}
@@ -380,80 +300,40 @@ class WeChat(WeChatBase, Listener):
         sessions = self.SessionBox.ListControl()
         return [SessionElement(i) for i in sessions.GetChildren()]
     
-    def ChatWith(self, who, timeout=3, exact=False):
+    def ChatWith(self, who, timeout=2):
         '''打开某个聊天框
         
         Args:
             who ( str ): 要打开的聊天框好友名;  * 最好完整匹配，不完全匹配只会选取搜索框第一个
-            timeout ( num, optional ): 超时时间，默认3秒
-            exact ( bool, optional ): 是否精确匹配好友名，默认False
-
+            timeout ( num, optional ): 超时时间，默认2秒
+            
         Returns:
             chatname ( str ): 匹配值第一个的完整名字
         '''
-        if WxParam.MOUSE_MOVE:
-            self._show()
+        self._show()
         sessiondict = self.GetSessionList(True)
         if who in list(sessiondict.keys())[:-1]:
-            self.SessionBox.ListItemControl(RegexName=re.escape(who)).Click(move=WxParam.MOUSE_MOVE, simulateMove=False, return_pos=False)
+            self.SessionBox.ListItemControl(RegexName=who).Click(simulateMove=False)
             return who
-        self.UiaAPI.ShortcutSearch(click=False)
-        self.B_Search.Click(move=WxParam.MOUSE_MOVE, simulateMove=False, return_pos=False)
-        self.B_Search.Input(who)
-
-        search_result = self.SessionBox.ListControl(RegexName='.*?IDS_FAV_SEARCH_RESULT.*?')
-        
-        t0 = time.time()
-        while time.time() -t0 < timeout:
-            results = []
-            search_result_items = search_result.GetChildren()
-            highlight_who = re.sub(r'(\s+)', r'</em>\1<em>', who)
-            for search_result_item in search_result_items:
-                if (
-                    search_result_item.ControlTypeName == 'PaneControl'
-                    and search_result_item.TextControl(Name='聊天记录').Exists(0)
-                ) or search_result_item.Name == f'搜索 {who}':
-                    break
-                elif (
-                    search_result_item.ControlTypeName == 'ListItemControl'
-                    and search_result_item.TextControl(Name=f"微信号: <em>{who}</em>").Exists(0)
-                ):
-                    search_result_item.Click()
-                    return search_result_item.Name
-                elif (
-                    search_result_item.ControlTypeName == 'ListItemControl'
-                    and search_result_item.TextControl(Name=f"昵称: <em>{highlight_who}</em>").Exists(0)
-                ):
-                    search_result_item.Click()
-                    return search_result_item.Name
-                elif (
-                    search_result_item.ControlTypeName == 'ListItemControl'
-                    and search_result_item.TextControl(Name=f"群聊名称: <em>{highlight_who}</em>").Exists(0)
-                ):
-                    search_result_item.Click()
-                    return search_result_item.Name
-                elif (
-                    search_result_item.ControlTypeName == 'ListItemControl'
-                    and who == search_result_item.Name
-                ):
-                    search_result_item.Click()
-                    return who
-                elif (
-                    search_result_item.ControlTypeName == 'ListItemControl'
-                    and who in search_result_item.Name
-                ):
-                    results.append(search_result_item)
-            
-        if exact:
-            if search_result.Exists(0):
-                search_result.SendKeys('{Esc}')
-            return None
-        if results:
-            results[0].Click()
-            return results[0].Name
-        
-        if search_result.Exists(0):
-            search_result.SendKeys('{Esc}')
+        else:
+            self.UiaAPI.SendKeys('{Ctrl}f', waitTime=1)
+            self.B_Search.SendKeys(who, waitTime=1.5)
+            target_control = self.SessionBox.TextControl(Name=f"<em>{who}</em>")
+            if target_control.Exists(timeout):
+                wxlog.debug('选择完全匹配项')
+                target_control.Click(simulateMove=False)
+                return who
+            else:
+                search_result_control = self.SessionBox.GetChildren()[1].GetChildren()[1].GetFirstChildControl()
+                if not search_result_control.PaneControl(searchDepth=1).TextControl(RegexName='联系人|群聊').Exists(0.1):
+                    wxlog.debug(f'未找到搜索结果: {who}')
+                    self._refresh()
+                    return False
+                wxlog.debug('选择搜索结果第一个')
+                target_control = search_result_control.Control(RegexName=f'.*{who}.*')
+                chatname = target_control.Name
+                target_control.Click(simulateMove=False)
+                return chatname
     
     def AtAll(self, msg=None, who=None):
         """@所有人
@@ -463,7 +343,7 @@ class WeChat(WeChatBase, Listener):
             msg (str, optional): 要发送的文本消息
         """
         if FindWindow(name=who, classname='ChatWnd'):
-            chat = ChatWnd(who, self, self.language)  # 更新为正确的参数顺序
+            chat = ChatWnd(who, self.language)
             chat.AtAll(msg)
             return None
         
@@ -492,180 +372,81 @@ class WeChat(WeChatBase, Listener):
             else:
                 editbox.SendKeys('{Enter}')
 
-    def SendMsg(self, msg, who=None, clear=True, at=None, background=True):
+    def SendMsg(self, msg, who=None, clear=True, at=None):
         """发送文本消息
 
         Args:
             msg (str): 要发送的文本消息
-            who (str): 要发送给谁，如果为None，则发送到当前聊天页面
-            clear (bool, optional): 是否清除原本的内容
-            at (str|list, optional): 要@的人，可以是一个人或多个人
-            background (bool, optional): 是否在后台发送，默认True
-
-        Returns:
-            WxResponse: 包含发送状态的响应对象
+            who (str): 要发送给谁，如果为None，则发送到当前聊天页面。  *最好完整匹配，优先使用备注
+            clear (bool, optional): 是否清除原本的内容，
+            at (str|list, optional): 要@的人，可以是一个人或多个人，格式为str或list，例如："张三"或["张三", "李四"]
         """
         if FindWindow(name=who, classname='ChatWnd'):
-            chat = ChatWnd(who, self, self.language)  # 更新为正确的参数顺序
-            return chat.SendMsg(msg, at=at, background=background)
-            
+            chat = ChatWnd(who, self.language)
+            chat.SendMsg(msg, at=at)
+            return None
         if not msg and not at:
-            return WxResponse.failure("消息为空，发送失败")
-        
-        # 如果选择后台发送，则加入队列
-        if background:
-            with self._queue_lock:
-                self._message_queue.append({
-                    'msg': msg,
-                    'who': who,
-                    'clear': clear,
-                    'at': at
-                })
-            return WxResponse.success('消息已加入发送队列')
-        else:
-            # 否则直接发送
-            return self._send_message_internal(msg, who, clear, at)        
-
-    def SendTypingText(self, msg, who=None, clear=True, interval_time=0, exact=False):
-        if who and FindWindow(name=who, classname='ChatWnd'):
-            chat = ChatWnd(who, self, self.language)  # 现在参数顺序是正确的
-            return chat.SendTypingText(msg, clear=clear, interval_time=interval_time)
-    
-        if not msg:
-            return WxResponse.failure("消息为空，发送失败")
-        
-        if WxParam.MOUSE_MOVE:
-            self._show()
-            
+            return None
         if who:
             try:
                 editbox = self.ChatBox.EditControl(searchDepth=10)
                 if who in self.CurrentChat() and who in editbox.Name:
                     pass
                 else:
-                    self.ChatWith(who, exact=exact)
-                    editbox = self.ChatBox.EditControl(searchDepth=10)
+                    self.ChatWith(who)
+                    editbox = self.ChatBox.EditControl(Name=who, searchDepth=10)
             except:
-                self.ChatWith(who, exact=exact)
-                editbox = self.ChatBox.EditControl(searchDepth=10)
+                self.ChatWith(who)
+                editbox = self.ChatBox.EditControl(Name=who, searchDepth=10)
         else:
             editbox = self.ChatBox.EditControl(searchDepth=10)
-
         if clear:
-            editbox.ShortcutSelectAll(move=WxParam.MOUSE_MOVE)
-
-        def _at(name):
-            """处理@某人的功能"""
-            for char in name.replace(' ', ''):
-                editbox.SendKeys(char)
-                if interval_time > 0:
-                    time.sleep(interval_time)
-                    
-            atwnd = self.UiaAPI.PaneControl(ClassName='ChatContactMenu')
-            if atwnd.Exists(maxSearchSeconds=0.1):
-                atwnd.ListItemControl(Name=name.replace('@', '')).Click(move=WxParam.MOUSE_MOVE, simulateMove=False, return_pos=False)
-            else:
-                wxlog.debug(f"未找到联系人：{name}")
-
-        # 处理消息中的@标记
-        atlist = re.findall(r'{(@.*?)}', msg)
-        parts = re.split(r'{(@.*?)}', msg)
+            editbox.SendKeys('{Ctrl}a', waitTime=0)
+        self._show()
+        if not editbox.HasKeyboardFocus:
+            editbox.Click(simulateMove=False)
         
-        for i in range(len(parts)):
-            # 发送普通文本
-            if parts[i]:
-                for char in parts[i]:
-                    if char == '\n':
-                        editbox.SendKeys('{Shift}{Enter}')
-                    else:
-                        editbox.SendKeys(char)
-                    if interval_time > 0:
-                        time.sleep(interval_time)
-            
-            # 处理@标记
-            if i < len(atlist):
-                _at(atlist[i])
-        
-        editbox.SendKeys(WxParam.SHORTCUT_SEND)
-        return WxResponse.success("发送成功")
+        if at:
+            if isinstance(at, str):
+                at = [at]
+            for i in at:
+                editbox.SendKeys('@'+i)
+                atwnd = self.UiaAPI.PaneControl(ClassName='ChatContactMenu')
+                if atwnd.Exists(maxSearchSeconds=0.1):
+                    atwnd.SendKeys('{ENTER}')
+                    if msg and not msg.startswith('\n'):
+                        msg = '\n' + msg
 
-
-    def _send_message_internal(self, msg, who=None, clear=True, at=None):
-        """内部消息发送方法"""
-        try:
-            # self._show()
-            if who:
-                try:
-                    editbox = self.ChatBox.EditControl(searchDepth=10)
-                    if who in self.CurrentChat() and who in editbox.Name:
-                        pass
-                    else:
-                        if not self.ChatWith(who):
-                            return WxResponse.failure(f"找不到聊天对象: {who}")
-                        editbox = self.ChatBox.EditControl(Name=who, searchDepth=10)
-                except:
-                    if not self.ChatWith(who):
-                        return WxResponse.failure(f"找不到聊天对象: {who}")
-                    editbox = self.ChatBox.EditControl(Name=who, searchDepth=10)
-            else:
-                editbox = self.ChatBox.EditControl(searchDepth=10)
-                
-            if clear:
-                editbox.SendKeys('{Ctrl}a', waitTime=0)
-                
-            if not editbox.HasKeyboardFocus:
-                editbox.Click(simulateMove=False)
-
-            if at:
-                if isinstance(at, str):
-                    at = [at]
-                for i in at:
-                    editbox.SendKeys('@'+i)
-                    atwnd = self.UiaAPI.PaneControl(ClassName='ChatContactMenu')
-                    if atwnd.Exists(maxSearchSeconds=0.1):
-                        atwnd.SendKeys('{ENTER}')
-                        if msg and not msg.startswith('\n'):
-                            msg = '\n' + msg
-
+        if msg:
             t0 = time.time()
             while True:
                 if time.time() - t0 > 10:
-                    return WxResponse.failure(f'发送消息超时 --> {who} - {msg}')
+                    raise TimeoutError(f'发送消息超时 --> {editbox.Name} - {msg}')
                 SetClipboardText(msg)
                 editbox.SendKeys('{Ctrl}v')
                 if editbox.GetValuePattern().Value:
                     break
-                    
-            editbox.SendKeys('{Enter}')
-            return WxResponse.success("发送成功")
+        editbox.SendKeys('{Enter}')
         
-        except Exception as e:
-            wxlog.debug(f"消息发送异常: {str(e)}\n{traceback.format_exc()}")
-            return WxResponse.failure(f"消息发送异常: {str(e)}")
-
-        
-    def SendFiles(self, filepath, who=None, exact=False, background=True):
-        """向聊天窗口发送文件
+    def SendFiles(self, filepath, who=None):
+        """向当前聊天窗口发送文件
         
         Args:
-            filepath (str|list): 要发送的文件的绝对路径  
-            who (str): 要发送给谁，如果为None，则发送到当前聊天页面
-            exact (bool, optional): 搜索who好友时是否精确匹配，默认False
-            background (bool, optional): 是否在后台发送，默认True
-                
+            filepath (str|list): 要复制文件的绝对路径  
+            who (str): 要发送给谁，如果为None，则发送到当前聊天页面。  *最好完整匹配，优先使用备注
+            
         Returns:
-            WxResponse: 包含发送状态的响应对象
+            bool: 是否成功发送文件
         """
         if FindWindow(name=who, classname='ChatWnd'):
-            chat = ChatWnd(who, self, self.language)  # 更新为正确的参数顺序
-            return chat.SendFiles(filepath, background=background)
-        
-        # 验证文件
+            chat = ChatWnd(who, self.language)
+            chat.SendFiles(filepath)
+            return None
         filelist = []
         if isinstance(filepath, str):
             if not os.path.exists(filepath):
-                wxlog.debug(f'未找到文件：{filepath}，无法成功发送')
-                return WxResponse.failure(f'未找到文件：{filepath}，无法成功发送')
+                Warnings.lightred(f'未找到文件：{filepath}，无法成功发送', stacklevel=2)
+                return False
             else:
                 filelist.append(os.path.realpath(filepath))
         elif isinstance(filepath, (list, tuple, set)):
@@ -673,96 +454,41 @@ class WeChat(WeChatBase, Listener):
                 if os.path.exists(i):
                     filelist.append(i)
                 else:
-                    wxlog.debug(f'未找到文件：{i}')
+                    Warnings.lightred(f'未找到文件：{i}', stacklevel=2)
         else:
-            wxlog.debug(f'filepath参数格式错误：{type(filepath)}，应为str、list、tuple、set格式')
-            return WxResponse.failure(f'filepath参数格式错误：{type(filepath)}，应为str、list、tuple、set格式')
+            Warnings.lightred(f'filepath参数格式错误：{type(filepath)}，应为str、list、tuple、set格式', stacklevel=2)
+            return False
         
-        if not filelist:
-            wxlog.debug('所有文件都无法成功发送')
-            return WxResponse.failure('所有文件都无法成功发送')
-        
-        # 如果选择后台发送，则加入队列
-        if background:
-            with self._queue_lock:
-                self._file_queue.append({
-                    'filepath': filelist,
-                    'who': who,
-                    'exact': exact
-                })
-            return WxResponse.success('文件已加入发送队列')
-        else:
-            # 否则直接发送
-            return self._send_file_internal(filelist, who, exact)
-
-    def _send_file_internal(self, filepath, who=None, exact=False):
-        """内部文件发送方法"""
-        try:
-            # self._show()
+        if filelist:
+            self._show()
             if who:
                 try:
                     if who in self.CurrentChat() and who in self.ChatBox.EditControl(searchDepth=10).Name:
                         pass
                     else:
-                        if not self.ChatWith(who, exact=exact):
-                            return WxResponse.failure(f"找不到聊天对象: {who}")
+                        self.ChatWith(who)
                 except:
-                    if not self.ChatWith(who, exact=exact):
-                        return WxResponse.failure(f"找不到聊天对象: {who}")
-                editbox = self.ChatBox.EditControl()
+                    self.ChatWith(who)
+                editbox = self.ChatBox.EditControl(Name=who)
             else:
                 editbox = self.ChatBox.EditControl()
-                
-            # 选中所有文本并清空输入框
             editbox.SendKeys('{Ctrl}a', waitTime=0)
-            
-            # 设置文件到剪贴板并粘贴
             t0 = time.time()
             while True:
                 if time.time() - t0 > 10:
-                    return WxResponse.failure(f'发送文件超时 --> {filepath}')
-                SetClipboardFiles(filepath)
+                    raise TimeoutError(f'发送文件超时 --> {filelist}')
+                SetClipboardFiles(filelist)
                 time.sleep(0.2)
                 editbox.SendKeys('{Ctrl}v')
-                
-                # 验证粘贴是否成功
-                t1 = time.time()
-                edit_value = None
-                while time.time() - t1 < 5:
-                    try:
-                        edit_value = editbox.GetValuePattern().Value
-                        break
-                    except:
-                        time.sleep(0.1)
-                        
-                if edit_value:
+                if editbox.GetValuePattern().Value:
                     break
+            editbox.SendKeys('{Enter}')
+            return True
+        else:
+            Warnings.lightred('所有文件都无法成功发送', stacklevel=2)
+            return False
             
-            # 发送文件
-            t0 = time.time()
-            while time.time() - t0 < 10:
-                t1 = time.time()
-                edit_value = None
-                while time.time() - t1 < 5:
-                    try:
-                        edit_value = editbox.GetValuePattern().Value
-                        break
-                    except:
-                        time.sleep(0.1)
-                        
-                if not edit_value:
-                    break
-                editbox.SendKeys('{Enter}')
-                time.sleep(0.1)
-                
-            return WxResponse.success('文件发送成功')
-        
-        except Exception as e:
-            wxlog.debug(f"文件发送异常: {str(e)}\n{traceback.format_exc()}")
-            return WxResponse.failure(f"文件发送异常: {str(e)}")
-
-            
-    def GetAllMessage(self, savepic=False, savefile=False, savevoice=False, parse_links = False):
+    def GetAllMessage(self, savepic=False, savefile=False, savevoice=False):
         '''获取当前窗口中加载的所有聊天记录
         
         Args:
@@ -774,7 +500,7 @@ class WeChat(WeChatBase, Listener):
         if not self.C_MsgList.Exists(0.2):
             return []
         MsgItems = self.C_MsgList.GetChildren()
-        msgs = self._getmsgs(MsgItems, savepic, savefile=savefile, savevoice=savevoice, parse_links=parse_links)
+        msgs = self._getmsgs(MsgItems, savepic, savefile=savefile, savevoice=savevoice)
         return msgs
     
     def LoadMoreMessage(self):
@@ -800,54 +526,16 @@ class WeChat(WeChatBase, Listener):
         self.C_MsgList.WheelUp(wheelTimes=1, waitTime=0.1)
         return isload
     
-    def CurrentChat(self, details=False):
-        '''获取当前聊天对象名
-        
-        Args:
-            details (bool): 是否获取聊天对象的详细信息
-            
-        Returns:
-            str|dict: 当前聊天对象名或详细信息'''
-        if not self.C_MsgList.Exists(0):
+    def CurrentChat(self):
+        '''获取当前聊天对象名'''
+        uia.SetGlobalSearchTimeout(1)
+        try:
+            currentname = self.ChatBox.TextControl(searchDepth=15).Name
+            return currentname
+        except:
             return None
-        if details:
-            chat_info = {}
-
-            if self.ChatBox.PaneControl(ClassName='popupshadow').Exists(0):
-                chat_name_control = self.ChatBox.GetProgenyControl(12)
-            else:
-                chat_name_control = self.ChatBox.GetProgenyControl(11)
-            chat_name_control_list = chat_name_control.GetParentControl().GetChildren()
-            chat_name_control_count = len(chat_name_control_list)
-            if chat_name_control_count == 1:
-                if self.ChatBox.ButtonControl(Name='公众号主页').Exists(0):
-                    chat_info['chat_type'] = 'official'
-                else:
-                    chat_info['chat_type'] = 'friend'
-                chat_info['chat_name'] = chat_name_control.Name
-            elif chat_name_control_count >= 2:
-                try:
-                    chat_info['group_member_count'] = int(chat_name_control_list[-1].Name.replace('(', '').replace(')', ''))
-                    chat_info['chat_type'] = 'group'
-                    chat_info['chat_name'] = chat_name_control.Name.replace(chat_name_control_list[-1].Name, '')
-                except:
-                    chat_info['chat_type'] = 'friend'
-                    chat_info['chat_name'] = chat_name_control.Name
-                
-                ori_chat_name_control = chat_name_control.GetParentControl().GetParentControl().TextControl(searchDepth=1)
-                if ori_chat_name_control.Exists(0):
-                    chat_info['chat_remark'] = chat_info['chat_name']
-                    chat_info['chat_name'] = ori_chat_name_control.Name
-            return chat_info
-        else:
-            uia.SetGlobalSearchTimeout(1)
-            try:
-                currentname = self.ChatBox.TextControl(searchDepth=15).Name
-                return currentname
-            except:
-                return None
-            finally:
-                uia.SetGlobalSearchTimeout(10)
+        finally:
+            uia.SetGlobalSearchTimeout(10)
 
     def GetNewFriends(self):
         """获取新的好友申请列表
@@ -871,34 +559,41 @@ class WeChat(WeChatBase, Listener):
         wxlog.debug(f'获取到 {len(AcceptableNewFriendsList)} 条新的好友申请')
         return AcceptableNewFriendsList
     
-    def AddListenChat(self, who, savepic=True, savefile=False, savevoice=True, parse_links = False):
+    def VoiceCall(self, who):
+        '''发起语音通话
+
+        Args:
+            who ( str ): 要发起语音通话的好友名。
+
+        Returns:
+            None
+        '''
+        self._show()
+        if who and FindWindow(name=who, classname='ChatWnd'):
+            chat = ChatWnd(who, self.language)
+            return chat.VoiceCall(who)
+        
+        self.ChatWith(who)
+        self.ChatBox.ButtonControl(Name='语音聊天').Click()
+        return True
+
+    def AddListenChat(self, who, savepic=False, savefile=False, savevoice=False):
         """添加监听对象
         
         Args:
-            who (str|list): 要监听的聊天对象名，可以是字符串或列表
+            who (str): 要监听的聊天对象名
             savepic (bool, optional): 是否自动保存聊天图片，只针对该聊天对象有效
             savefile (bool, optional): 是否自动保存聊天文件，只针对该聊天对象有效
             savevoice (bool, optional): 是否自动保存聊天语音，只针对该聊天对象有效
         """
-        # 支持列表形式的参数
-        if isinstance(who, list):
-            for i in who:
-                self.AddListenChat(i, savepic, savefile, savevoice, parse_links)
-            return None
-            
         exists = uia.WindowControl(searchDepth=1, ClassName='ChatWnd', Name=who).Exists(maxSearchSeconds=0.1)
         if not exists:
-            who = self.ChatWith(who)
+            self.ChatWith(who)
             self.SessionBox.ListItemControl(RegexName=who).DoubleClick(simulateMove=False)
-        
-        self.listen[who] = ChatWnd(who, self, self.language)  # 更新为正确的参数顺序
+        self.listen[who] = ChatWnd(who, self.language)
         self.listen[who].savepic = savepic
         self.listen[who].savefile = savefile
         self.listen[who].savevoice = savevoice
-        self.listen[who].parse_links = parse_links
-        
-        return WxResponse.success(f"添加监听对象 {who} 成功")
-
 
     def GetListenMessage(self, who=None):
         """获取监听对象的新消息
@@ -907,62 +602,19 @@ class WeChat(WeChatBase, Listener):
             who (str, optional): 要获取消息的聊天对象名，如果为None，则获取所有监听对象的消息
 
         Returns:
-            dict: 包含聊天对象和消息的字典
+            str|dict: 如果
         """
-        # 检查指定的单个监听对象
         if who and who in self.listen:
-            chat = self.listen.get(who)
-            exists = uia.WindowControl(searchDepth=1, ClassName='ChatWnd', Name=who).Exists(maxSearchSeconds=0.1)
-            if not exists:
-                self.SessionBox.ListItemControl(RegexName=who).DoubleClick(simulateMove=False)
-                if self.ChatWith(chat_who):
-                    # 重新创建ChatWnd对象
-                    self.listen[chat_who] = ChatWnd(chat_who, self, self.language)
-                    self.listen[chat_who].savepic = chat.savepic
-                    self.listen[chat_who].savefile = chat.savefile
-                    self.listen[chat_who].savevoice = chat.savevoice
-                    self.listen[chat_who].parse_links = chat.parse_links
-                    # 更新引用
-                    chat = self.listen[chat_who]
-                    wxlog.debug(f"已重新打开监听对象`{chat_who}`窗口")
-                else:
-                    wxlog.debug(f"无法重新打开监听对象`{chat_who}`窗口，删除监听")
-                    del self.listen[chat_who]
-                    
-            if chat in self._listener_messages:
-                msgs = self._listener_messages.pop(chat)
-                return {chat: msgs}
-            else:
-                return {}
-        # 处理所有监听对象
-        else:
-            result = {}
-            # 创建副本以避免在迭代时修改字典
-            temp_listen = self.listen.copy()
-            for chat_who, chat in list(temp_listen.items()):
-                exists = uia.WindowControl(searchDepth=1, ClassName='ChatWnd', Name=chat_who).Exists(maxSearchSeconds=0.1)
-                if not exists:
-                    self.SessionBox.ListItemControl(RegexName=who).DoubleClick(simulateMove=False)
-                    if self.ChatWith(chat_who):
-                        # 重新创建ChatWnd对象
-                        self.listen[chat_who] = ChatWnd(chat_who, self, self.language)
-                        self.listen[chat_who].savepic = chat.savepic
-                        self.listen[chat_who].savefile = chat.savefile
-                        self.listen[chat_who].savevoice = chat.savevoice
-                        self.listen[chat_who].parse_links = chat.parse_links
-                        # 更新引用
-                        chat = self.listen[chat_who]
-                        wxlog.debug(f"已重新打开监听对象`{chat_who}`窗口")
-                    else:
-                        wxlog.debug(f"无法重新打开监听对象`{chat_who}`窗口，删除监听")
-                        del self.listen[chat_who]
-                        continue
-                        
-                # 获取该监听对象的消息
-                if chat in self._listener_messages:
-                    result[chat] = self._listener_messages.pop(chat)
-                    
-            return result
+            chat = self.listen[who]
+            msg = chat.GetNewMessage(savepic=chat.savepic, savefile=chat.savefile, savevoice=chat.savevoice)
+            return msg
+        msgs = {}
+        for who in self.listen:
+            chat = self.listen[who]
+            msg = chat.GetNewMessage(savepic=chat.savepic, savefile=chat.savefile, savevoice=chat.savevoice)
+            if msg:
+                msgs[chat] = msg
+        return msgs
 
     def SwitchToContact(self):
         """切换到通讯录页面"""
@@ -973,6 +625,20 @@ class WeChat(WeChatBase, Listener):
         """切换到聊天页面"""
         self._show()
         self.A_ChatIcon.Click(simulateMove=False)
+
+    # def DownloadFiles(self, who, amount=1):
+    #     """切换到聊天文件页面
+        
+    #     Args:
+    #         who (str): 要下载文件的聊天对象名
+    #         amount (int): 要下载的文件数量
+    #     """
+    #     self._show()
+    #     self.A_FilesIcon.Click(simulateMove=False)
+    #     files = WeChatFiles()
+    #     files.ChatWithFile(who)
+    #     files.DownloadFiles(who, amount)
+    #     files.Close()
 
     def GetGroupMembers(self):
         """获取当前聊天群成员
@@ -1096,52 +762,6 @@ class WeChat(WeChatBase, Listener):
             NewFriendsWnd.ButtonControl(Name='确定').Click(simulateMove=False)
         return True
     
-    def VoiceCall(self, who):
-        '''发起语音通话
-
-        Args:
-            who ( str ): 要发起语音通话的好友名。
-
-        Returns:
-            None
-        '''
-        self._show()
-        if who and FindWindow(name=who, classname='ChatWnd'):
-            chat = ChatWnd(who, self, self.language)
-            return chat.VoiceCall(who)
-        
-        self.ChatWith(who)
-        chat_info = self.CurrentChat(details=True)
-        if chat_info['chat_type'] == 'group':
-            wxlog.debug('当前聊天对象是群聊')
-            return False
-        else:
-            self.ChatBox.ButtonControl(Name='语音聊天').Click()
-            return True
-    
-    # 添加后台发送者方法
-    def _background_sender(self):
-        """后台消息和文件发送线程"""
-        while not self._sender_stop_event.is_set():
-            # 处理消息队列
-            with self._queue_lock:
-                if self._message_queue:
-                    item = self._message_queue.pop(0)
-                    self._send_message_internal(**item)
-                
-                # 处理文件队列
-                if self._file_queue:
-                    item = self._file_queue.pop(0)
-                    self._send_file_internal(**item)
-            
-            # 防止CPU占用过高
-            time.sleep(0.5)
-
-    def _stop_sender(self):
-        """停止发送者线程"""
-        self._sender_stop_event.set()
-        self._sender_thread.join()
-
 class WeChatFiles:
     def __init__(self, language='cn') -> None:
         self.language = language
@@ -1166,40 +786,23 @@ class WeChatFiles:
         """
         return SessionItem.Name
 
-    def GetSessionList(self, reset=False, newmessage=False):
-        """获取当前聊天列表中的所有聊天对象
-        
+    def GetSessionList(self, reset=False):
+        """获取当前聊天列表中的所有聊天对象的名字
+
         Args:
             reset (bool): 是否重置SessionItemList
-            newmessage (bool): 是否只获取有新消息的聊天对象
-            
+
         Returns:
-            SessionList (dict): 聊天对象列表，键为聊天对象名，值为新消息条数
+            session_names (list): 对象名称列表
         """
-        self.SessionItem = self.SessionBox.ListItemControl()
+        self.SessionItem = self.SessionBox.ListControl(Name='',searchDepth=3).GetChildren()
         if reset:
             self.SessionItemList = []
-        
-        SessionList = {}
-        for i in range(100):  # 限制最大遍历次数避免无限循环
-            if self.SessionItem.BoundingRectangle.width() != 0:
-                try:
-                    name, amount = self.GetSessionAmont(self.SessionItem)
-                except:
-                    break
-                    
-                if name not in self.SessionItemList:
-                    self.SessionItemList.append(name)
-                if name not in SessionList:
-                    SessionList[name] = amount
-                    
-            self.SessionItem = self.SessionItem.GetNextSiblingControl()
-            if not self.SessionItem:
-                break
-            
-        if newmessage:
-            return {i: SessionList[i] for i in SessionList if SessionList[i] > 0}
-        return SessionList
+        session_names = []
+        for i in range(len(self.SessionItem)):
+            session_names.append(self.GetSessionName(self.SessionItem[i]))
+
+        return session_names
 
     def __repr__(self) -> str:
         return f"<wxauto WeChat Image at {hex(id(self))}>"
@@ -1273,5 +876,3 @@ class WeChatFiles:
     def Close(self):
         self._show()
         self.api.SendKeys('{Esc}')
-
-
