@@ -3,6 +3,55 @@ setlocal enabledelayedexpansion
 chcp 65001 >nul
 
 :: ---------------------------
+:: 检查微信版本
+:: ---------------------------
+:: 依次检测 Weixin 和 WeChat 注册表路径，优先 Weixin
+:: ---------------------------
+set "wxversion="
+rem 优先依次检测 Weixin 和 WeChat 的 DisplayVersion
+for %%K in (
+    "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Weixin"
+    "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\WeChat"
+) do (
+    for /f "tokens=2,*" %%i in ('reg query %%K /v DisplayVersion 2^>nul ^| find "DisplayVersion"') do (
+        set "wxversion=%%j"
+        set "RegPath=%%K"
+        goto :found_wxversion
+    )
+)
+if not defined wxversion (
+    echo ❌ 未检测到微信安装，或无法读取注册表，请确认微信已正确安装。
+    pause
+    exit /b 1
+)
+:found_wxversion
+
+if not defined wxversion (
+    echo ❌ 未能正确获取微信版本号，请确认微信已安装并重试。
+    pause
+    exit /b 1
+)
+
+:: 解析主版本号
+for /f "tokens=1 delims=." %%a in ("!wxversion!") do (
+    set "major=%%a"
+)
+
+:: 只判断主版本
+if !major! lss 3 (
+    echo ❌ 当前微信版本 !wxversion!，请前往[https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe/]升级到3.9及以上版本。
+    pause
+    exit /b 1
+)
+if !major! geq 4 (
+    echo ❌ 当前微信版本 !wxversion!，暂不支持4及以上版本，前往下载合适版本的[https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe]。
+    pause
+    exit /b 1
+)
+
+echo ✅ 微信版本检查通过：!wxversion!
+
+:: ---------------------------
 :: 检查 Python 是否安装
 :: ---------------------------
 python --version >nul 2>&1
