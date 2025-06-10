@@ -1011,17 +1011,6 @@
                 }, 5000);
             }
 
-            // ---- 记录用户当前登录密码与开关状态，用于后续检测 ----
-            let prevLoginPassword = null;
-            let prevLoginEnabled = null;
-            document.addEventListener('DOMContentLoaded', function () {
-                // 初始化时记录
-                const pwdInput = document.querySelector('input[name="LOGIN_PASSWORD"]');
-                const enableLogin = document.querySelector('input[name="ENABLE_LOGIN_PASSWORD"]');
-                prevLoginPassword = pwdInput ? pwdInput.value : "";
-                prevLoginEnabled = enableLogin ? enableLogin.checked : false;
-            });
-
             async function saveConfig() {
                 const form = document.getElementById('configForm');
                 if (!form) {
@@ -1029,27 +1018,6 @@
                     showAlert("表单错误，无法保存配置。", false);
                     return false;
                 }
-
-                // 检测是否在“网页编辑器配置”Tab（section-web-editor）下进行的保存
-                let isWebEditorSectionActive = false;
-                // 如果有内容区激活，且id为section-web-editor则视为该Tab
-                const activePanel = document.querySelector('.content-panel.active-panel');
-                if (activePanel && activePanel.id === 'section-web-editor') {
-                    isWebEditorSectionActive = true;
-                }
-
-                // 仅section-web-editor下才做密码变化检测
-                let loginPasswordChanged = false;
-                if (isWebEditorSectionActive) {
-                    const pwdInput = document.querySelector('input[name="LOGIN_PASSWORD"]');
-                    const enableLogin = document.querySelector('input[name="ENABLE_LOGIN_PASSWORD"]');
-                    const currLoginPassword = pwdInput ? pwdInput.value : "";
-                    const currLoginEnabled = enableLogin ? enableLogin.checked : false;
-                    if (currLoginPassword !== prevLoginPassword || currLoginEnabled !== prevLoginEnabled) {
-                        loginPasswordChanged = true;
-                    }
-                }
-
                 const formData = new FormData(form);
 
                 try {
@@ -1060,23 +1028,6 @@
                     });
                     if (response.status === 204) {
                         showAlert("配置保存成功！", true);
-
-                        // 仅section-web-editor && 有变更时才弹窗
-                        if (isWebEditorSectionActive && loginPasswordChanged) {
-                            setTimeout(function() {
-                                if (confirm("已修改登录密码配置，建议刷新页面以确保安全性和生效，是否立即刷新？")) {
-                                    window.location.reload();
-                                }
-                            }, 600);
-                        }
-                        // 保存之后同步变量
-                        if (isWebEditorSectionActive) {
-                            const pwdInput = document.querySelector('input[name="LOGIN_PASSWORD"]');
-                            const enableLogin = document.querySelector('input[name="ENABLE_LOGIN_PASSWORD"]');
-                            prevLoginPassword = pwdInput ? pwdInput.value : "";
-                            prevLoginEnabled = enableLogin ? enableLogin.checked : false;
-                        }
-
                         return true;
                     } else {
                         const errorData = await response.json().catch(() => ({ detail: "未知错误" }));
@@ -1101,6 +1052,32 @@
                 saveConfigButton.addEventListener('click', async function(e) {
                     e.preventDefault();
                     await saveConfig();
+                });
+            }
+            
+            // 恢复默认配置按钮
+            const resetDefaultConfigBtn = document.getElementById('resetDefaultConfigBtn');
+            if(resetDefaultConfigBtn) {
+                resetDefaultConfigBtn.addEventListener('click', async function() {
+                    if (confirm('确定要恢复所有配置到默认值吗？此操作不可撤销！')) {
+                        try {
+                            const response = await fetch('/reset_default_config', {
+                                method: 'POST',
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            });
+                            
+                            if (response.ok) {
+                                showAlert('配置已恢复到默认值，页面将在3秒后刷新...', true);
+                                setTimeout(() => window.location.reload(), 3000);
+                            } else {
+                                const errorData = await response.json().catch(() => ({ detail: "未知错误" }));
+                                showAlert(`恢复默认配置失败: ${errorData.detail || '请先停止运行程序！'}`, false);
+                            }
+                        } catch (error) {
+                            console.error('恢复默认配置失败:', error);
+                            showAlert('恢复默认配置失败，请检查网络连接或服务器状态！', false);
+                        }
+                    }
                 });
             }
 
@@ -1966,7 +1943,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v0.1</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20beta1</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -2490,6 +2467,10 @@
                     <div class="form-group">
                         <label>网页端口:</label>
                         <input type="number" step="1" name="PORT" value="{{ config.PORT }}">
+                    </div>
+                    <div class="form-group" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                        <button type="button" id="resetDefaultConfigBtn" class="nav-button" style="background-color: #ff5722;">恢复默认配置</button>
+                        <small style="display: block; margin-top: 10px; color: #d32f2f;">警告：此操作将清除所有自定义配置并恢复到程序初始默认值，操作不可撤销！</small>
                     </div>
                 </div>
 

@@ -184,12 +184,9 @@ def bot_status():
 
     if process_alive_via_flask_obj:
         current_status = "running"
-        # app.logger.debug("Bot status: running (Flask process object active)")
     elif heartbeat_is_recent and process_alive_via_current_pid: # 优先检查通过PID确认的存活
         current_status = "running"
-        # app.logger.debug(f"Bot status: running (Recent heartbeat AND PID {current_bot_pid} exists. Last heartbeat: {time.time() - last_heartbeat_time:.1f}s ago)")
     elif heartbeat_is_recent and not process_alive_via_current_pid and current_bot_pid is not None:
-        # 心跳最近，但PID不存在了，可能是机器人刚崩溃但心跳消息还在路上，或者PID记录过时
         app.logger.warning(f"Bot status: Heartbeat recent, but PID {current_bot_pid} does not exist. Marking as stopped for now. Last heartbeat: {time.time() - last_heartbeat_time:.1f}s ago")
         current_status = "stopped" # 倾向于保守
     elif heartbeat_is_recent : # 心跳最近，但没有 current_bot_pid 信息 (例如 bot.py 未发送PID)
@@ -1056,6 +1053,43 @@ def import_config():
         app.logger.error(f"配置导入失败: {str(e)}")
         return jsonify({'error': f'导入失败: {str(e)}'}), 500
 
+@app.route('/reset_default_config', methods=['POST'])
+@login_required
+def reset_default_config():
+    global bot_process
+    if bot_process and bot_process.poll() is None:
+        return jsonify({'error': '程序正在运行，请先停止再恢复默认配置'}), 400
+    
+    try:
+        # 获取默认配置
+        default_config = get_default_config()
+        
+        # 保留当前的端口号和登录密码设置（避免被锁在外）
+        current_config = parse_config()
+        if 'PORT' in current_config:
+            default_config['PORT'] = current_config['PORT']
+        if 'LOGIN_PASSWORD' in current_config:
+            default_config['LOGIN_PASSWORD'] = current_config['LOGIN_PASSWORD']
+        if 'ENABLE_LOGIN_PASSWORD' in current_config:
+            default_config['ENABLE_LOGIN_PASSWORD'] = current_config['ENABLE_LOGIN_PASSWORD']
+        
+        # 更新配置文件
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, 'config.py')
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.write("# -*- coding: utf-8 -*-\n\n")
+            f.write("# 重置为默认配置\n\n")
+            
+            for key, value in default_config.items():
+                f.write(f"{key} = {repr(value)}\n")
+        
+        app.logger.info("配置已恢复到默认值")
+        return jsonify({'message': '配置已恢复到默认值'}), 200
+        
+    except Exception as e:
+        app.logger.error(f"恢复默认配置失败: {e}")
+        return jsonify({'error': f'恢复默认配置失败: {str(e)}'}), 500
 
 class WebLogHandler(logging.Handler):
     def emit(self, record):
