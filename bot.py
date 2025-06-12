@@ -631,7 +631,7 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
             elif "payment required" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
                 break  # 终止循环，不再重试
-            elif "user quota" in error_info or "is not enough" in error_info:
+            elif "user quota" in error_info or "is not enough" in error_info or "UnlimitedQuota" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈，你的余额不足，请先充值再使用! 如有余额，请检查令牌是否为无限额度。\033[0m")
                 break  # 终止循环，不再重试
             elif "Api key is invalid" in error_info:
