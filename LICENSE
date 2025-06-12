@@ -18,29 +18,50 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ------------------------------------------------------------
-## Apache-2.0 Licensed Code
+## Proprietary Licensed Code - wxautox_wechatbot
 
-This project also includes portions of code licensed under the Apache License, Version 2.0. The full license is available at:
+This project includes wxautox_wechatbot, a proprietary library with the following license terms:
 
-    http://www.apache.org/licenses/LICENSE-2.0
+### License Statement for wxautox_wechatbot
+- Copyright (c) 2025 Cluic
 
-### Contributors for Apache-2.0 Licensed Code
-- Copyright of wxauto
-- Copyright 2024, Cluic
+This software (hereinafter referred to as "the Library") is strictly limited to use within the 
+iwyxdxl/WeChatBot_WXAUTO_SE project. Users are not permitted to use the Library for any other 
+projects or purposes without explicit authorization.
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+1. Usage Restrictions:
+The Library may only be used within the iwyxdxl/WeChatBot_WXAUTO_SE project. 
+Unauthorized users or organizations are prohibited from using it for any other projects, 
+software, or services.
 
-    http://www.apache.org/licenses/LICENSE-2.0
+2. Authorized Use:
+With explicit permission from the author, the iwyxdxl/WeChatBot_WXAUTO_SE project may 
+use the Library for commercial purposes and distribute it.
 
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+3. Prohibition on Unauthorized Downloading and Distribution:
+Users and organizations are strictly prohibited from downloading, copying, distributing, or 
+transferring the Library to any other platform or location, including but not limited to third
+party platforms like GitHub, or any other public services.
+The code of this Library may not be used in any unauthorized applications or projects.
+
+4. Copyright Notice:
+All copyrights for this Library are owned by Cluic.
+Unauthorized use may result in legal action.
+
+5. Disclaimer:
+The Library is provided "as-is," and the author is not responsible for any direct or indirect 
+damages or liabilities arising from the use of the Library.
+
+For further licensing or inquiries, please contact: 47749486@qq.com
 
 ------------------------------------------------------------
-## Combining GPL-3.0 and Apache-2.0 Licensed Code
+## Combining GPL-3.0 and Proprietary Licensed Code
 
-When combining code under the GPL-3.0 and Apache-2.0 licenses in the WeChatBot project, you must comply with the terms of both licenses. Please note:
+When combining code under the GPL-3.0 and proprietary licenses in the WeChatBot project, please note:
 
-- The Apache License, Version 2.0 is compatible with the GPL-3.0, but distribution of the combined work must adhere to GPL-3.0 terms.
+- The GPL-3.0 licensed portions of this project must adhere to GPL-3.0 terms.
 - Any modifications made to the GPL-3.0 licensed portions must be released under GPL-3.0.
-- The Apache-2.0 licensed portions remain subject to the Apache License terms.
+- The wxautox_wechatbot library is subject to the proprietary license terms outlined above.
+- The use of wxautox_wechatbot is specifically authorized for this project only.
 
 Please refer to the full text of each license for detailed requirements.

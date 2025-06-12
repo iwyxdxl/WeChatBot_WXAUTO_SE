@@ -6,7 +6,7 @@ Pillow
 typing-extensions
 pyperclip
 pywin32
-openai~=1.61.0
+openai==1.84.0
 pyautogui
 werkzeug
 psutil
@@ -14,3 +14,4 @@ filelock
 requests
 beautifulsoup4
 lxml
+wxautox_wechatbot

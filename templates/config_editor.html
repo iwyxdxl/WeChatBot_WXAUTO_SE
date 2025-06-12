@@ -781,6 +781,7 @@
                         { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },
                         { value: "gemini-2.5-pro-exp-03-25", text: "gemini-2.5-pro-exp-03-25 * (推荐，体验感更好)" },
                         { value: "claude-3-7-sonnet-20250219", text: "claude-3-7-sonnet-20250219 * (推荐)" },
+                        { value: "claude-sonnet-4-20250514", text: "claude-sonnet-4-20250514 *" },
                         { value: "doubao-pro-256k-241115", text: "豆包 doubao-pro-256k-241115" },
                         { value: "deepseek-ai/DeepSeek-R1", text: "deepseek-ai/DeepSeek-R1" },
                         { value: "deepseek-r1-searching", text: "deepseek-r1-searching (带联网功能)" },
@@ -1051,6 +1052,32 @@
                 saveConfigButton.addEventListener('click', async function(e) {
                     e.preventDefault();
                     await saveConfig();
+                });
+            }
+            
+            // 恢复默认配置按钮
+            const resetDefaultConfigBtn = document.getElementById('resetDefaultConfigBtn');
+            if(resetDefaultConfigBtn) {
+                resetDefaultConfigBtn.addEventListener('click', async function() {
+                    if (confirm('确定要恢复所有配置到默认值吗？此操作不可撤销！')) {
+                        try {
+                            const response = await fetch('/reset_default_config', {
+                                method: 'POST',
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            });
+                            
+                            if (response.ok) {
+                                showAlert('配置已恢复到默认值，页面将在3秒后刷新...', true);
+                                setTimeout(() => window.location.reload(), 3000);
+                            } else {
+                                const errorData = await response.json().catch(() => ({ detail: "未知错误" }));
+                                showAlert(`恢复默认配置失败: ${errorData.detail || '请先停止运行程序！'}`, false);
+                            }
+                        } catch (error) {
+                            console.error('恢复默认配置失败:', error);
+                            showAlert('恢复默认配置失败，请检查网络连接或服务器状态！', false);
+                        }
+                    }
                 });
             }
 
@@ -1904,7 +1931,7 @@
 
             if (acceptAllSelect) {
                 acceptAllSelect.addEventListener('change', toggleOptions);
-                toggleOptions(); // Initial check on page load
+                toggleOptions();
             }
         }
     </script>
@@ -1916,7 +1943,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.18</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20beta1</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -2068,6 +2095,17 @@
                         <label>温度 (0-2):</label>
                         <input type="number" step="0.1" name="TEMPERATURE" value="{{ config.TEMPERATURE }}">
                         <small>如果回复出现乱码请将温度调到1.1或0.7以下。温度越高，ai思维越发散，但是温度过高可能导致ai胡言乱语。</small>
+                    </div>             
+                    <div class="form-group">
+                        <div class="switch-item">
+                            <label>强制移除消息中的括号及其内容</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" name="REMOVE_PARENTHESES" {% if config.REMOVE_PARENTHESES %}checked{% endif %}><span class="slider round"></span></label></div>
+                        </div>
+                        <small>
+                            开启后，程序会自动删除AI回复中所有括号及括号内的内容（如心理、动作等描述）。<br>
+                            注意：强制移除括号内容可能导致语义不完整或改变原意，请谨慎使用。<br>
+                            如果不希望AI使用括号描述心理和动作，建议优先通过完善Prompt规范AI输出，仅在无法通过Prompt控制时再开启此选项。
+                        </small>
                     </div>
                 </div>
 
@@ -2076,11 +2114,11 @@
                     <div class="form-group">
                         <div class="switch-container">
                             <div class="switch-item">
-                                <label><b>启用图片识别功能</b></label>
+                                <label>启用图片识别功能</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_IMAGE_RECOGNITION" {% if config.ENABLE_IMAGE_RECOGNITION %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                             <div class="switch-item">
-                                <label><b>启用表情包识别功能</b></label>
+                                <label>启用表情包识别功能</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_EMOJI_RECOGNITION" {% if config.ENABLE_EMOJI_RECOGNITION %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                         </div>
@@ -2120,7 +2158,7 @@
                     <div class="form-group">
                         <div class="switch-container">
                             <div class="switch-item">
-                                <label><b>启用联网搜索功能</b></label>
+                                <label>启用联网搜索功能</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_ONLINE_API" {% if config.ENABLE_ONLINE_API %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                         </div>
@@ -2170,7 +2208,7 @@
                     <h2>主动表情包配置</h2>
                     <div class="form-group">
                          <div class="switch-item">
-                            <label><b>启用主动表情包功能</b></label>
+                            <label>启用主动表情包功能</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_EMOJI_SENDING" {% if config.ENABLE_EMOJI_SENDING %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
@@ -2197,7 +2235,7 @@
                     <div id="conditionalGroupReplyOptions">
                         <div class="form-group" id="groupAtReplyOptionContainer">
                             <div class="switch-item">
-                                <label><b>被@时回复</b></label>
+                                <label>被@时回复</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_GROUP_AT_REPLY" {% if config.ENABLE_GROUP_AT_REPLY %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                             <small>启用后，当机器人在群聊中被@时会作出回应。此选项在“接收所有群聊消息”模式下无效。</small>
@@ -2205,7 +2243,7 @@
 
                         <div class="form-group">
                             <div class="switch-item">
-                                <label><b>关键词触发回复</b></label>
+                                <label>关键词触发回复</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_GROUP_KEYWORD_REPLY" {% if config.ENABLE_GROUP_KEYWORD_REPLY %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                             <small>启用后，当群聊消息包含下方设置的关键词时，机器人会作出回应。</small>
@@ -2229,7 +2267,7 @@
 
                     <div class="form-group">
                         <div class="switch-item">
-                            <label><b>关键词触发时忽略回复概率</b></label>
+                            <label>关键词触发时忽略回复概率</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY" {% if config.GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                         <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的“群聊回复概率”，必定进行回复。此选项优先于“群聊回复概率”。</small>
@@ -2255,7 +2293,7 @@
                     </div>
                     <div class="form-group">
                          <div class="switch-item">
-                            <label><b>以换行符分隔消息</b></label>
+                            <label>以换行符分隔消息</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="SEPARATE_ROW_SYMBOLS" {% if config.SEPARATE_ROW_SYMBOLS %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                         <small>开启后，消息将同时使用换行符和反斜线（\）分隔；关闭时，仅使用反斜线（\）分隔。</small>
@@ -2266,13 +2304,13 @@
                     <h2>记忆功能配置</h2>
                     <div class="form-group">
                         <div class="switch-item">
-                            <label><b>启用记忆记录功能</b></label>
+                            <label>启用记忆记录功能</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_MEMORY" {% if config.ENABLE_MEMORY %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
                     <div class="form-group">
                         <div class="switch-item">
-                            <label><b>允许AI读取Prompt当中的记忆片段</b></label>
+                            <label>允许AI读取Prompt当中的记忆片段</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="UPLOAD_MEMORY_TO_AI" {% if config.UPLOAD_MEMORY_TO_AI %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
@@ -2314,7 +2352,7 @@
                     <h2>主动消息配置</h2>
                     <div class="form-group">
                         <div class="switch-item">
-                            <label><b>启用主动消息功能</b></label>
+                            <label>启用主动消息功能</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_AUTO_MESSAGE" {% if config.ENABLE_AUTO_MESSAGE %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
@@ -2345,7 +2383,7 @@
                     <h2>定时器与提醒配置</h2>
                     <div class="form-group">
                          <div class="switch-item">
-                            <label><b>启用定时器提醒功能</b></label>
+                            <label>启用定时器提醒功能</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_REMINDERS" {% if config.ENABLE_REMINDERS %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
@@ -2358,11 +2396,11 @@
                     <div class="form-group">
                         <div class="switch-container">
                             <div class="switch-item">
-                                <label><b>允许在安静时间内发送提醒</b></label>
+                                <label>允许在安静时间内发送提醒</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ALLOW_REMINDERS_IN_QUIET_TIME" {% if config.ALLOW_REMINDERS_IN_QUIET_TIME %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                             <div class="switch-item">
-                                <label><b>使用语音通话提醒用户 (仅支持私聊)</b></label>
+                                <label>使用语音通话提醒用户 (仅支持私聊)</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="USE_VOICE_CALL_FOR_REMINDERS" {% if config.USE_VOICE_CALL_FOR_REMINDERS %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
                         </div>
@@ -2382,7 +2420,7 @@
 
                     <div class="form-group" style="margin-top: 20px;">
                         <div class="switch-item">
-                            <label for="ENABLE_SCHEDULED_RESTART_checkbox"><b>启用定时重启功能</b></label>
+                            <label for="ENABLE_SCHEDULED_RESTART_checkbox">启用定时重启功能</label>
                             <div class="switch">
                                 <label class="switch-label">
                                     <input type="checkbox" id="ENABLE_SCHEDULED_RESTART_checkbox" name="ENABLE_SCHEDULED_RESTART" {% if config.ENABLE_SCHEDULED_RESTART %}checked{% endif %}>
@@ -2418,7 +2456,7 @@
                     <h2>网页编辑器配置 (修改后下次启动生效)</h2>
                      <div class="form-group">
                         <div class="switch-item">
-                            <label><b>启用密码登录 (若您希望开放端口以便其它设备远程访问配置编辑器则建议启用)</b></label>
+                            <label>启用密码登录 (若您希望开放端口以便其它设备远程访问配置编辑器则建议启用)</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_LOGIN_PASSWORD" {% if config.ENABLE_LOGIN_PASSWORD %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
@@ -2429,6 +2467,10 @@
                     <div class="form-group">
                         <label>网页端口:</label>
                         <input type="number" step="1" name="PORT" value="{{ config.PORT }}">
+                    </div>
+                    <div class="form-group" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                        <button type="button" id="resetDefaultConfigBtn" class="nav-button" style="background-color: #ff5722;">恢复默认配置</button>
+                        <small style="display: block; margin-top: 10px; color: #d32f2f;">警告：此操作将清除所有自定义配置并恢复到程序初始默认值，操作不可撤销！</small>
                     </div>
                 </div>
 
