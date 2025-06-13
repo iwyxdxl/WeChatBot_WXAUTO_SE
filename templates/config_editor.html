@@ -300,6 +300,12 @@
             display: none;
             margin-top: 5px;
         }
+        .assistant-config-visible {
+            display: block;
+        }
+        .assistant-config-hidden {
+            display: none;
+        }
 
         .entry {
             display: grid;
@@ -790,6 +796,7 @@
                         { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219" },
                         { value: "gemini-2.5-flash", text: "gemini-2.5-flash" },
                         { value: "gemini-2.5-pro-05-06", text: "gemini-2.5-pro-05-06 *" },
+                        { value: "gemini-2.5-pro-06-05", text: "gemini-2.5-pro-06-05 *" },
                         { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" }, 
                         { value: "o4-mini", text: "o4-mini" },
                         { value: "gpt-4o", text: "gpt-4o *" },
@@ -961,6 +968,125 @@
             customImageModel.addEventListener('input', () => {
                 finalImageModel.value = customImageModel.value;
             });
+
+            // 辅助模型配置逻辑
+            const enableAssistantModel = document.getElementById('enableAssistantModel');
+            const assistantModelConfig = document.getElementById('assistantModelConfig');
+            const assistantApiProvider = document.getElementById('assistantApiProvider');
+            const customAssistantApiUrl = document.getElementById('customAssistantApiUrl');
+            const finalAssistantApiUrl = document.getElementById('finalAssistantApiUrl');
+            const assistantModelSelect = document.getElementById('assistantModelSelect');
+            const customAssistantModel = document.getElementById('customAssistantModel');
+            const finalAssistantModel = document.getElementById('finalAssistantModel');
+
+            // 辅助模型开关处理
+            enableAssistantModel.addEventListener('change', function() {
+                assistantModelConfig.style.display = this.checked ? 'block' : 'none';
+            });
+
+            function updateAssistantModelOptions() {
+                let options = [];
+                const apiUrl = assistantApiProvider.value;
+                const savedModel = finalAssistantModel.value;
+
+                if (apiUrl === 'https://api.siliconflow.cn/v1/') {
+                    options = [
+                        { value: "Qwen/Qwen2.5-7B-Instruct", text: "硅基通义千问2.5-7B模型 (可用免费额度)" },
+                        { value: "meta-llama/Llama-3.1-8B-Instruct", text: "硅基Llama-3.1-8B模型 (可用免费额度)" },
+                        { value: "deepseek-ai/DeepSeek-V3", text: "硅基DeepSeek V3模型 (可用免费额度)" },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else if (apiUrl === 'https://api.deepseek.com') {
+                    options = [
+                        { value: "deepseek-chat", text: "DeepSeek官方V3模型" },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else if (apiUrl === 'https://vg.v1api.cc/v1') {
+                    options = [
+                        { value: "gpt-4o-mini", text: "gpt-4o-mini (推荐，成本低)" },
+                        { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" },
+                        { value: "deepseek-chat", text: "deepseek-chat" },
+                        { value: "claude-3-haiku-20240307", text: "claude-3-haiku-20240307" },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else {
+                    options = [{ value: 'other', text: '其它' }];
+                }
+
+                assistantModelSelect.innerHTML = '';
+                let modelInOptions = false;
+                options.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.text;
+                    if (opt.value === savedModel) {
+                        o.selected = true;
+                        modelInOptions = true;
+                    }
+                    assistantModelSelect.appendChild(o);
+                });
+
+                if (!modelInOptions && savedModel) {
+                    assistantModelSelect.value = 'other';
+                    customAssistantModel.value = savedModel;
+                } else if (modelInOptions && assistantModelSelect.value !== 'other') {
+                    customAssistantModel.value = '';
+                }
+
+                finalAssistantModel.value = savedModel || (assistantModelSelect.value === 'other' ? customAssistantModel.value : assistantModelSelect.value);
+                assistantModelSelect.dispatchEvent(new Event('change'));
+            }
+
+            // 初始化辅助模型配置
+            if (assistantApiProvider && assistantApiProvider.value === 'other') {
+                customAssistantApiUrl.style.display = 'block';
+            } else if (assistantApiProvider) {
+                customAssistantApiUrl.style.display = 'none';
+                finalAssistantApiUrl.value = assistantApiProvider.value;
+            }
+            if (assistantApiProvider) {
+                updateAssistantModelOptions();
+            }
+            if (assistantModelSelect && assistantModelSelect.value === 'other') {
+                customAssistantModel.style.display = 'block';
+            } else if (customAssistantModel) {
+                customAssistantModel.style.display = 'none';
+            }
+
+            // 辅助模型事件监听
+            if (assistantApiProvider) {
+                assistantApiProvider.addEventListener('change', function() {
+                    if (this.value === 'other') {
+                        customAssistantApiUrl.style.display = 'block';
+                        finalAssistantApiUrl.value = customAssistantApiUrl.value;
+                    } else {
+                        customAssistantApiUrl.style.display = 'none';
+                        finalAssistantApiUrl.value = this.value;
+                    }
+                    updateAssistantModelOptions();
+                });
+            }
+            if (customAssistantApiUrl) {
+                customAssistantApiUrl.addEventListener('input', () => {
+                    finalAssistantApiUrl.value = customAssistantApiUrl.value;
+                });
+            }
+            if (assistantModelSelect) {
+                assistantModelSelect.addEventListener('change', function() {
+                    if (this.value === 'other') {
+                        customAssistantModel.style.display = 'block';
+                        finalAssistantModel.value = customAssistantModel.value;
+                    } else {
+                        customAssistantModel.style.display = 'none';
+                        finalAssistantModel.value = this.value;
+                    }
+                });
+            }
+            if (customAssistantModel) {
+                customAssistantModel.addEventListener('input', () => {
+                    finalAssistantModel.value = customAssistantModel.value;
+                });
+            }
 
             function addEntry() {
                 const container = document.getElementById('listen-list');
@@ -1943,7 +2069,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20beta1</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20beta3</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -2004,6 +2130,7 @@
                     <h2>Prompt管理</h2>
                     <div id="prompt-list-view">
                         <a href="#" class="nav-button" id="createPromptBtn">新建Prompt</a>
+                        <a href="https://role.a3e.top" class="nav-button" target="_blank" style="background-color: #03A9F4; margin-left: 10px;">在线角色库</a>
                         <ul class="file-list" id="prompt-files">
                             {% for file in prompt_files %}
                             <li class="file-item">
@@ -2106,6 +2233,62 @@
                             注意：强制移除括号内容可能导致语义不完整或改变原意，请谨慎使用。<br>
                             如果不希望AI使用括号描述心理和动作，建议优先通过完善Prompt规范AI输出，仅在无法通过Prompt控制时再开启此选项。
                         </small>
+                    </div>
+
+                    <!-- 辅助模型配置部分 -->
+                    <h3 style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">辅助模型配置</h3>
+                    <div class="form-group">
+                        <div class="switch-item">
+                            <label>启用辅助模型功能</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" id="enableAssistantModel" name="ENABLE_ASSISTANT_MODEL" {% if config.ENABLE_ASSISTANT_MODEL %}checked{% endif %}><span class="slider round"></span></label></div>
+                        </div>
+                        <small>
+                            启用后，表情判断、联网检测、提醒解析等功能将使用辅助模型处理，主模型专注于对话生成。<br>
+                            辅助模型通常使用较小且成本更低的模型（如gpt-4o-mini），可提高效率并降低成本。
+                        </small>
+                    </div>
+
+                    <div id="assistantModelConfig" class="{% if config.ENABLE_ASSISTANT_MODEL %}assistant-config-visible{% else %}assistant-config-hidden{% endif %}">
+                        <div class="form-group">
+                            <label>辅助模型API服务商:</label>
+                            <select id="assistantApiProvider" name="temp_ASSISTANT_BASE_URL">
+                                <option value="https://api.siliconflow.cn/v1/" {% if config.ASSISTANT_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
+                                <option value="https://api.deepseek.com" {% if config.ASSISTANT_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
+                                <option value="https://vg.v1api.cc/v1" {% if config.ASSISTANT_BASE_URL == 'https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
+                                <option value="other" {% if config.ASSISTANT_BASE_URL not in ['https://api.siliconflow.cn/v1/', 'https://api.deepseek.com', 'https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
+                            </select>
+                            <input type="text" id="customAssistantApiUrl" placeholder="请输入自定义辅助模型API地址" class="custom-input" {% if config.ASSISTANT_BASE_URL not in ['https://api.siliconflow.cn/v1/', 'https://api.deepseek.com', 'https://vg.v1api.cc/v1'] %} value="{{ config.ASSISTANT_BASE_URL }}" style="display:block;" {% endif %}>
+                            <input type="hidden" id="finalAssistantApiUrl" name="ASSISTANT_BASE_URL" value="{{ config.ASSISTANT_BASE_URL }}">
+                        </div>
+                        <div class="form-group">
+                            <label>辅助模型选择: (推荐使用成本较低的模型)</label>
+                            <select id="assistantModelSelect" name="temp_ASSISTANT_MODEL">
+                            </select>
+                            <input type="text" id="customAssistantModel" placeholder="请输入自定义辅助模型名称" class="custom-input" value="{{ config.ASSISTANT_MODEL if config.ASSISTANT_MODEL not in assistant_popular_models else '' }}">
+                            <input type="hidden" id="finalAssistantModel" name="ASSISTANT_MODEL" value="{{ config.ASSISTANT_MODEL }}">
+                        </div>
+                        <div class="form-group">
+                            <label>辅助模型API Key:</label>
+                            <input type="text" placeholder="sk-xxxxxxxxxx" name="ASSISTANT_API_KEY" value="{{ config.ASSISTANT_API_KEY }}">
+                            <small>可与主模型使用相同的API Key，或使用单独的API Key以分别管理成本。</small>
+                        </div>
+                        <div class="form-group">
+                            <label>辅助模型最大Token:</label>
+                            <input type="number" step="100" name="ASSISTANT_MAX_TOKEN" value="{{ config.ASSISTANT_MAX_TOKEN }}">
+                            <small>辅助模型主要用于判断任务，通常不需要太多Token。</small>
+                        </div>
+                        <div class="form-group">
+                            <label>辅助模型温度 (0-2):</label>
+                            <input type="number" step="0.1" name="ASSISTANT_TEMPERATURE" value="{{ config.ASSISTANT_TEMPERATURE }}">
+                            <small>辅助模型用于判断任务，建议使用较低温度（如0.3）以提高判断准确性。</small>
+                        </div>
+                        <div class="form-group">
+                            <div class="switch-item">
+                                <label>使用辅助模型进行记忆总结</label>
+                                <div class="switch"><label class="switch-label"><input type="checkbox" name="USE_ASSISTANT_FOR_MEMORY_SUMMARY" {% if config.USE_ASSISTANT_FOR_MEMORY_SUMMARY %}checked{% endif %}><span class="slider round"></span></label></div>
+                            </div>
+                            <small>启用后，记忆总结和重要性评估也将使用辅助模型，进一步降低主模型调用成本。</small>
+                        </div>
                     </div>
                 </div>
 
@@ -2377,6 +2560,13 @@
                             <input type="text" name="QUIET_TIME_END" value="{{ config.QUIET_TIME_END }}" placeholder="HH:MM" style="flex:1;">
                         </div>
                     </div>
+                    <div class="form-group">
+                        <div class="switch-item">
+                            <label>忽略群聊主动消息</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" name="IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE" {% if config.IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE %}checked{% endif %}><span class="slider round"></span></label></div>
+                        </div>
+                        <small>启用后，群聊不会收到主动消息，仅私聊会接收主动消息。</small>
+                    </div>
                 </div>
 
                 <div id="section-reminders" class="content-panel">
@@ -2470,7 +2660,7 @@
                     </div>
                     <div class="form-group" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
                         <button type="button" id="resetDefaultConfigBtn" class="nav-button" style="background-color: #ff5722;">恢复默认配置</button>
-                        <small style="display: block; margin-top: 10px; color: #d32f2f;">警告：此操作将清除所有自定义配置并恢复到程序初始默认值，操作不可撤销！</small>
+                        <small style="display: block; margin-top: 10px; color: #d32f2f;">警告：此操作将清除所有自定义配置并恢复到程序初始默认值（登录密码除外），操作不可撤销！</small>
                     </div>
                 </div>
 

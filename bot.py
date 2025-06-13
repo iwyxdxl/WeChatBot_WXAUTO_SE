@@ -33,6 +33,8 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import os
 os.environ["PROJECT_NAME"] = 'iwyxdxl/WeChatBot_WXAUTO_SE'
+from wxautox_wechatbot.param import WxParam
+WxParam.ENABLE_FILE_LOGGER = False
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
@@ -41,6 +43,10 @@ prompt_mapping = {entry[0]: entry[1] for entry in LISTEN_LIST}
 # 获取微信窗口对象
 wx = WeChat()
 ROBOT_WX_NAME = wx.nickname
+
+# 群聊信息缓存
+group_chat_cache = {}  # {user_name: is_group_chat}
+group_cache_lock = threading.Lock()
 
 # 持续监听消息，并且收到消息后回复
 wait = 1  # 设置1秒查看一次是否有新消息
@@ -352,6 +358,93 @@ if ENABLE_ONLINE_API:
         ENABLE_ONLINE_API = False # 初始化失败则禁用该功能
         logger.warning("由于初始化失败，联网搜索功能已被禁用。")
 
+# 初始化辅助模型客户端 (如果启用)
+assistant_client: Optional[OpenAI] = None
+if ENABLE_ASSISTANT_MODEL:
+    try:
+        assistant_client = OpenAI(
+            api_key=ASSISTANT_API_KEY,
+            base_url=ASSISTANT_BASE_URL
+        )
+        logger.info("辅助模型 API 客户端已初始化。")
+    except Exception as e:
+        logger.error(f"初始化辅助模型 API 客户端失败: {e}", exc_info=True)
+        ENABLE_ASSISTANT_MODEL = False # 初始化失败则禁用该功能
+        logger.warning("由于初始化失败，辅助模型功能已被禁用。")
+
+def get_chat_type_info(user_name):
+    """
+    获取指定用户的聊天窗口类型信息（群聊或私聊）
+    
+    Args:
+        user_name (str): 用户昵称
+        
+    Returns:
+        bool: True表示群聊，False表示私聊，None表示未找到或出错
+    """
+    try:
+        # 获取所有聊天窗口
+        chats = wx.GetAllSubWindow()
+        for chat in chats:
+            chat_info = chat.ChatInfo()
+            if chat_info.get('chat_name') == user_name:
+                chat_type = chat_info.get('chat_type')
+                is_group = (chat_type == 'group')
+                logger.info(f"检测到用户 '{user_name}' 的聊天类型: {chat_type} ({'群聊' if is_group else '私聊'})")
+                return is_group
+        
+        logger.warning(f"未找到用户 '{user_name}' 的聊天窗口信息")
+        return None
+        
+    except Exception as e:
+        logger.error(f"获取用户 '{user_name}' 聊天类型时出错: {e}")
+        return None
+
+def update_group_chat_cache():
+    """
+    更新群聊缓存信息
+    """
+    global group_chat_cache
+    
+    try:
+        with group_cache_lock:
+            logger.info("开始更新群聊类型缓存...")
+            for user_name in user_names:
+                chat_type_result = get_chat_type_info(user_name)
+                if chat_type_result is not None:
+                    group_chat_cache[user_name] = chat_type_result
+                    logger.info(f"缓存用户 '{user_name}': {'群聊' if chat_type_result else '私聊'}")
+                else:
+                    logger.warning(f"无法确定用户 '{user_name}' 的聊天类型，将默认处理为私聊")
+                    group_chat_cache[user_name] = False
+            
+            logger.info(f"群聊类型缓存更新完成，共缓存 {len(group_chat_cache)} 个用户信息")
+            
+    except Exception as e:
+        logger.error(f"更新群聊缓存时出错: {e}")
+
+def is_user_group_chat(user_name):
+    """
+    检查指定用户是否为群聊
+    
+    Args:
+        user_name (str): 用户昵称
+        
+    Returns:
+        bool: True表示群聊，False表示私聊
+    """
+    with group_cache_lock:
+        # 如果缓存中没有该用户信息，则实时获取
+        if user_name not in group_chat_cache:
+            chat_type_result = get_chat_type_info(user_name)
+            if chat_type_result is not None:
+                group_chat_cache[user_name] = chat_type_result
+            else:
+                # 如果无法获取，默认为私聊
+                group_chat_cache[user_name] = False
+        
+        return group_chat_cache.get(user_name, False)
+
 def parse_time(time_str):
     try:
         TimeResult = datetime.strptime(time_str, "%H:%M").time()
@@ -377,6 +470,13 @@ def check_user_timeouts():
 
                 if isinstance(last_active, (int, float)) and isinstance(wait_time, (int, float)):
                     if current_epoch_time - last_active >= wait_time and not is_quiet_time():
+                        # 检查是否启用了忽略群聊主动消息的配置
+                        if IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE and is_user_group_chat(user):
+                            logger.info(f"用户 {user} 是群聊且配置为忽略群聊主动消息，跳过发送主动消息")
+                            # 重置计时器以避免频繁检查
+                            reset_user_timer(user)
+                            continue
+                        
                         # 构造主动消息（模拟用户消息格式）
                         formatted_now = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
                         auto_content = f"触发主动发消息：[{formatted_now}] {AUTO_MESSAGE}"
@@ -641,6 +741,105 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
         attempt += 1
 
     raise RuntimeError("抱歉，我现在有点忙，稍后再聊吧。")
+
+def get_assistant_response(message, user_id):
+    """
+    从辅助模型 API 获取响应，专用于判断型任务（表情、联网、提醒解析等）。
+    不存储聊天上下文，仅用于辅助判断。
+
+    参数:
+        message (str): 要发送给辅助模型的消息。
+        user_id (str): 用户或系统组件的标识符。
+
+    返回:
+        str: 辅助模型返回的文本回复。
+    """
+    if not assistant_client:
+        logger.warning(f"辅助模型客户端未初始化，回退使用主模型。用户ID: {user_id}")
+        # 回退到主模型
+        return get_deepseek_response(message, user_id, store_context=False)
+    
+    try:
+        logger.info(f"调用辅助模型 API - ID: {user_id}, 消息: {message[:100]}...")
+        
+        messages_to_send = [{"role": "user", "content": message}]
+        
+        # 调用辅助模型 API
+        reply = call_assistant_api_with_retry(messages_to_send, user_id)
+        
+        return reply
+
+    except Exception as e:
+        logger.error(f"辅助模型调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
+        logger.warning(f"辅助模型调用失败，回退使用主模型。用户ID: {user_id}")
+        # 回退到主模型
+        return get_deepseek_response(message, user_id, store_context=False)
+
+def call_assistant_api_with_retry(messages_to_send, user_id, max_retries=2):
+    """
+    调用辅助模型 API 并在第一次失败或返回空结果时重试。
+
+    参数:
+        messages_to_send (list): 要发送给辅助模型的消息列表。
+        user_id (str): 用户或系统组件的标识符。
+        max_retries (int): 最大重试次数。
+
+    返回:
+        str: 辅助模型返回的文本回复。
+    """
+    attempt = 0
+    while attempt <= max_retries:
+        try:
+            logger.debug(f"发送给辅助模型 API 的消息 (ID: {user_id}): {messages_to_send}")
+
+            response = assistant_client.chat.completions.create(
+                model=ASSISTANT_MODEL,
+                messages=messages_to_send,
+                temperature=ASSISTANT_TEMPERATURE,
+                max_tokens=ASSISTANT_MAX_TOKEN,
+                stream=False
+            )
+
+            if response.choices:
+                content = response.choices[0].message.content.strip()
+                if content and "[image]" not in content:
+                    filtered_content = strip_before_thought_tags(content)
+                    if filtered_content:
+                        return filtered_content
+
+            # 记录错误日志
+            logger.error("辅助模型错误请求消息体:")
+            logger.error(f"{ASSISTANT_MODEL}")
+            logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+            logger.error("辅助模型 API 返回了空的选择项或内容为空。")
+            logger.error(f"完整响应对象: {response}")
+
+        except Exception as e:
+            logger.error("辅助模型错误请求消息体:")
+            logger.error(f"{ASSISTANT_MODEL}")
+            logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+            error_info = str(e)
+            logger.error(f"辅助模型自动重试：第 {attempt + 1} 次调用失败 (ID: {user_id}) 原因: {error_info}", exc_info=False)
+
+            # 细化错误分类
+            if "real name verification" in error_info:
+                logger.error("\033[31m辅助模型错误：API 服务商反馈请完成实名认证后再使用！\033[0m")
+            elif "rate limit" in error_info:
+                logger.error("\033[31m辅助模型错误：API 服务商反馈当前访问 API 服务频次达到上限，请稍后再试！\033[0m")
+            elif "payment required" in error_info:
+                logger.error("\033[31m辅助模型错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
+            elif "Api key is invalid" in error_info:
+                logger.error("\033[31m辅助模型错误：API 服务商反馈 API KEY 不可用，请检查配置选项！\033[0m")
+            elif "service unavailable" in error_info:
+                logger.error("\033[31m辅助模型错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
+            elif "sensitive words detected" in error_info:
+                logger.error("\033[31m辅助模型错误：Prompt或消息中含有敏感词，无法生成回复，请联系API服务商！\033[0m")
+            else:
+                logger.error("\033[31m辅助模型未知错误：" + error_info + "\033[0m")
+
+        attempt += 1
+
+    raise RuntimeError("抱歉，辅助模型现在有点忙，稍后再试吧。")
 
 def keep_alive():
     """
@@ -1155,25 +1354,29 @@ def process_user_messages(user_id):
     merged_message = ' '.join(messages)
     logger.info(f"开始处理用户 '{sender_name}' (ID: {user_id}) 的合并消息: {merged_message[:100]}...")
 
+    # 检查是否为主动消息
+    is_auto_message = "触发主动发消息：" in merged_message
+    
     reply = None
     online_info = None
 
-    # --- 新增：联网搜索逻辑 ---
-    if ENABLE_ONLINE_API:
-        # 1. 检测是否需要联网
-        search_content = needs_online_search(merged_message, user_id)
-        if search_content:
-            # 2. 如果需要，调用在线 API
-            logger.info(f"尝试为用户 {user_id} 执行在线搜索...")
-            merged_message = f"用户原始信息：\n{merged_message}\n\n需要进行联网搜索的信息：\n{search_content}"
-            online_info = get_online_model_response(merged_message, user_id)
+    try:
+        # --- 新增：联网搜索逻辑 ---
+        if ENABLE_ONLINE_API:
+            # 1. 检测是否需要联网
+            search_content = needs_online_search(merged_message, user_id)
+            if search_content:
+                # 2. 如果需要，调用在线 API
+                logger.info(f"尝试为用户 {user_id} 执行在线搜索...")
+                merged_message = f"用户原始信息：\n{merged_message}\n\n需要进行联网搜索的信息：\n{search_content}"
+                online_info = get_online_model_response(merged_message, user_id)
 
-            if online_info:
-                # 3. 如果成功获取在线信息，构建新的提示给主 AI
-                logger.info(f"成功获取在线信息，为用户 {user_id} 准备最终回复...")
-                # 结合用户原始问题、在线信息，让主 AI 生成最终回复
-                # 注意：get_deepseek_response 会自动加载用户的 prompt 文件 (角色设定)
-                final_prompt = f"""
+                if online_info:
+                    # 3. 如果成功获取在线信息，构建新的提示给主 AI
+                    logger.info(f"成功获取在线信息，为用户 {user_id} 准备最终回复...")
+                    # 结合用户原始问题、在线信息，让主 AI 生成最终回复
+                    # 注意：get_deepseek_response 会自动加载用户的 prompt 文件 (角色设定)
+                    final_prompt = f"""
 用户的原始问题是：
 "{merged_message}"
 
@@ -1184,36 +1387,46 @@ def process_user_messages(user_id):
 
 请结合你的角色设定，以自然的方式回答用户的原始问题。请直接给出回答内容，不要提及你是联网搜索的。
 """
-                # 调用主 AI 生成最终回复，存储上下文
-                reply = get_deepseek_response(final_prompt, user_id, store_context=True)
-                # 这里可以考虑如果在线信息是错误消息（如"在线搜索有点忙..."），是否要特殊处理
-                # 当前逻辑是：即使在线搜索返回错误信息，也会让主AI尝试基于这个错误信息来回复
+                    # 调用主 AI 生成最终回复，存储上下文
+                    reply = get_deepseek_response(final_prompt, user_id, store_context=True)
+                    # 这里可以考虑如果在线信息是错误消息（如"在线搜索有点忙..."），是否要特殊处理
+                    # 当前逻辑是：即使在线搜索返回错误信息，也会让主AI尝试基于这个错误信息来回复
 
+                else:
+                    # 在线搜索失败或未返回有效信息
+                    logger.warning(f"在线搜索未能获取有效信息，用户: {user_id}。将按常规流程处理。")
+                    # 这里可以选择发送一个错误提示，或者直接回退到无联网信息的回复
+                    # 当前选择回退：下面会执行常规的 get_deepseek_response
+                    pass # 继续执行下面的常规流程
+
+        # --- 常规回复逻辑 (如果未启用联网、检测不需要联网、或联网失败) ---
+        if reply is None: # 只有在尚未通过联网逻辑生成回复时才执行
+            logger.info(f"为用户 {user_id} 执行常规回复（无联网信息）。")
+            reply = get_deepseek_response(merged_message, user_id, store_context=True)
+
+        # --- 发送最终回复 ---
+        if reply:
+            # 如果回复中包含思考标签（如 Deepseek R1），移除它
+            if "</think>" in reply:
+                reply = reply.split("</think>", 1)[1].strip()
+
+            # 屏蔽记忆片段发送（如果包含）
+            if "## 记忆片段" not in reply:
+                send_reply(user_id, sender_name, username, merged_message, reply)
             else:
-                # 在线搜索失败或未返回有效信息
-                logger.warning(f"在线搜索未能获取有效信息，用户: {user_id}。将按常规流程处理。")
-                # 这里可以选择发送一个错误提示，或者直接回退到无联网信息的回复
-                # 当前选择回退：下面会执行常规的 get_deepseek_response
-                pass # 继续执行下面的常规流程
-
-    # --- 常规回复逻辑 (如果未启用联网、检测不需要联网、或联网失败) ---
-    if reply is None: # 只有在尚未通过联网逻辑生成回复时才执行
-        logger.info(f"为用户 {user_id} 执行常规回复（无联网信息）。")
-        reply = get_deepseek_response(merged_message, user_id, store_context=True)
-
-    # --- 发送最终回复 ---
-    if reply:
-        # 如果回复中包含思考标签（如 Deepseek R1），移除它
-        if "</think>" in reply:
-            reply = reply.split("</think>", 1)[1].strip()
-
-        # 屏蔽记忆片段发送（如果包含）
-        if "## 记忆片段" not in reply:
-            send_reply(user_id, sender_name, username, merged_message, reply)
+                logger.info(f"回复包含记忆片段标记，已屏蔽发送给用户 {user_id}。")
         else:
-            logger.info(f"回复包含记忆片段标记，已屏蔽发送给用户 {user_id}。")
-    else:
-        logger.error(f"未能为用户 {user_id} 生成任何回复。")
+            logger.error(f"未能为用户 {user_id} 生成任何回复。")
+            
+    except Exception as e:
+        if is_auto_message:
+            # 如果是主动消息出错，只记录日志，不发送错误消息给用户
+            logger.error(f"主动消息处理失败 (用户: {user_id}): {str(e)}")
+            logger.info(f"主动消息API调用失败，已静默处理，不发送错误提示给用户 {user_id}")
+        else:
+            # 如果是正常用户消息出错，记录日志并重新抛出异常（保持原有的错误处理逻辑）
+            logger.error(f"用户消息处理失败 (用户: {user_id}): {str(e)}")
+            raise
         
 def send_reply(user_id, sender_name, username, original_merged_message, reply):
     """发送回复消息，可能分段发送，并管理发送标志。"""
@@ -1297,74 +1510,93 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
 
 def split_message_with_context(text):
     """
-    将消息文本分割为多个部分，处理换行符和转义字符。
+    将消息文本分割为多个部分，处理换行符、转义字符和$符号。
     处理文本中的换行符和转义字符，并根据配置决定是否分割。
+    无论配置如何，都会以$作为分隔符分割消息。
+    
+    特别说明：
+    - 每个$都会作为独立分隔符，所以"Hello$World$Python"会分成三部分
+    - 连续的$$会产生空部分，这些会被自动跳过
     """
     result_parts = []
-    if SEPARATE_ROW_SYMBOLS:
-        main_parts = re.split(r'(?:\\{3,}|\n)', text)
-    else:
-        main_parts = re.split(r'\\{3,}', text)
-    for part in main_parts:
-        part = part.strip()
-        if not part:
+    
+    # 首先用$符号分割文本（无论SEPARATE_ROW_SYMBOLS设置如何）
+    # 这会处理多个$的情况，每个$都作为分隔符
+    dollar_parts = re.split(r'\$', text)
+    
+    # 对每个由$分割的部分应用原有的分隔逻辑
+    for dollar_part in dollar_parts:
+        # 跳过空的部分（比如连续的$$之间没有内容的情况）
+        if not dollar_part.strip():
             continue
-        segments = []
-        last_end = 0
-        for match in re.finditer(r'\\', part):
-            pos = match.start()
-            should_split_at_current_pos = False
-            advance_by = 1
-            if pos + 1 < len(part) and part[pos + 1] == 'n':
-                should_split_at_current_pos = True
-                advance_by = 2
-            else:
-                prev_char = part[pos - 1] if pos > 0 else ''
-                is_last_char_in_part = (pos == len(part) - 1)
-                next_char = ''
-                if not is_last_char_in_part:
-                    next_char = part[pos + 1]
-                if not is_last_char_in_part and \
-                   re.match(r'[a-zA-Z0-9]', next_char) and \
-                   (re.match(r'[a-zA-Z0-9]', prev_char) if prev_char else True):
+            
+        # 应用原有的分隔逻辑
+        if SEPARATE_ROW_SYMBOLS:
+            main_parts = re.split(r'(?:\\{3,}|\n)', dollar_part)
+        else:
+            main_parts = re.split(r'\\{3,}', dollar_part)
+            
+        for part in main_parts:
+            part = part.strip()
+            if not part:
+                continue
+            segments = []
+            last_end = 0
+            for match in re.finditer(r'\\', part):
+                pos = match.start()
+                should_split_at_current_pos = False
+                advance_by = 1
+                if pos + 1 < len(part) and part[pos + 1] == 'n':
                     should_split_at_current_pos = True
+                    advance_by = 2
                 else:
-                    is_in_emoticon = False
-                    i = pos - 1
-                    while i >= 0 and i > pos - 10:
-                        if part[i] in '({[（【｛':
-                            is_in_emoticon = True
-                            break
-                        if part[i].isalnum() and i < pos - 1:
-                            break
-                        i -= 1
-                    if not is_last_char_in_part and not is_in_emoticon:
-                        _found_forward_emoticon_char = False
-                        j = pos + 1
-                        while j < len(part) and j < pos + 10:
-                            if part[j] in ')}]）】｝':
-                                _found_forward_emoticon_char = True
-                                break
-                            if part[j].isalnum() and j > pos + 1:
-                                break
-                            j += 1
-                        if _found_forward_emoticon_char:
-                            is_in_emoticon = True
-                    if not is_in_emoticon:
+                    prev_char = part[pos - 1] if pos > 0 else ''
+                    is_last_char_in_part = (pos == len(part) - 1)
+                    next_char = ''
+                    if not is_last_char_in_part:
+                        next_char = part[pos + 1]
+                    if not is_last_char_in_part and \
+                       re.match(r'[a-zA-Z0-9]', next_char) and \
+                       (re.match(r'[a-zA-Z0-9]', prev_char) if prev_char else True):
                         should_split_at_current_pos = True
-            if should_split_at_current_pos:
-                segment_to_add = part[last_end:pos].strip()
-                if segment_to_add:
-                    segments.append(segment_to_add)
-                last_end = pos + advance_by
-        if last_end < len(part):
-            final_segment = part[last_end:].strip()
-            if final_segment:
-                segments.append(final_segment)
-        if segments:
-            result_parts.extend(segments)
-        elif not segments and part:
-            result_parts.append(part)
+                    else:
+                        is_in_emoticon = False
+                        i = pos - 1
+                        while i >= 0 and i > pos - 10:
+                            if part[i] in '({[（【｛':
+                                is_in_emoticon = True
+                                break
+                            if part[i].isalnum() and i < pos - 1:
+                                break
+                            i -= 1
+                        if not is_last_char_in_part and not is_in_emoticon:
+                            _found_forward_emoticon_char = False
+                            j = pos + 1
+                            while j < len(part) and j < pos + 10:
+                                if part[j] in ')}]）】｝':
+                                    _found_forward_emoticon_char = True
+                                    break
+                                if part[j].isalnum() and j > pos + 1:
+                                    break
+                                j += 1
+                            if _found_forward_emoticon_char:
+                                is_in_emoticon = True
+                        if not is_in_emoticon:
+                            should_split_at_current_pos = True
+                if should_split_at_current_pos:
+                    segment_to_add = part[last_end:pos].strip()
+                    if segment_to_add:
+                        segments.append(segment_to_add)
+                    last_end = pos + advance_by
+            if last_end < len(part):
+                final_segment = part[last_end:].strip()
+                if final_segment:
+                    segments.append(final_segment)
+            if segments:
+                result_parts.extend(segments)
+            elif not segments and part:
+                result_parts.append(part)
+                
     return [p for p in result_parts if p]
 
 def remove_timestamps(text):
@@ -1436,12 +1668,16 @@ def is_emoji_request(text: str) -> Optional[str]:
 {text}
 可选的分类有：{', '.join(emoji_categories)}。请直接回复分类名称，不要包含其他内容，注意大小写。若对话未包含明显情绪，请回复None。"""
 
-        # 获取AI判断结果
-        response = get_deepseek_response(prompt, "system", store_context=False).strip()
+        # 根据配置选择使用辅助模型或主模型
+        if ENABLE_ASSISTANT_MODEL:
+            response = get_assistant_response(prompt, "emoji_detection").strip()
+            logger.info(f"辅助模型情绪识别结果: {response}")
+        else:
+            response = get_deepseek_response(prompt, "system", store_context=False).strip()
+            logger.info(f"主模型情绪识别结果: {response}")
         
         # 清洗响应内容
         response = re.sub(r"[^\w\u4e00-\u9fff]", "", response)  # 移除非文字字符
-        logger.info(f"AI情绪识别结果: {response}")
 
         # 验证是否为有效分类
         if response in emoji_categories:
@@ -1581,9 +1817,17 @@ def summarize_and_save(user_id):
         # 修改为使用全部日志内容
         full_logs = '\n'.join(logs)  # 变量名改为更明确的full_logs
         summary_prompt = f"请以{prompt_name}的视角，用中文总结与{user_id}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{full_logs}"
-        summary = get_deepseek_response(summary_prompt, "system", store_context=False)
+        
+        # 根据配置选择使用辅助模型或主模型进行记忆总结
+        if USE_ASSISTANT_FOR_MEMORY_SUMMARY and ENABLE_ASSISTANT_MODEL:
+            logger.info(f"使用辅助模型为用户 {user_id} 生成记忆总结")
+            summary = get_assistant_response(summary_prompt, "memory_summary")
+        else:
+            logger.info(f"使用主模型为用户 {user_id} 生成记忆总结")
+            summary = get_deepseek_response(summary_prompt, "system", store_context=False)
+        
         # 获取总结失败则不进行记忆总结
-        if summary is None or summary == "抱歉，我现在有点忙，稍后再聊吧。":
+        if summary is None or summary == "抱歉，我现在有点忙，稍后再聊吧。" or summary == "抱歉，辅助模型现在有点忙，稍后再试吧。":
             return False
         # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %A %H:%M]或[%Y-%m-%d %H:%M]或[%Y-%m-%d %H:%M:%S]或[%Y-%m-%d %A %H:%M:%S]格式的时间戳
         summary = re.sub(
@@ -1595,7 +1839,14 @@ def summarize_and_save(user_id):
 
         # --- 评估重要性 ---
         importance_prompt = f"为以下记忆的重要性评分（1-5，直接回复数字）：\n{summary}"
-        importance_response = get_deepseek_response(importance_prompt, "system", store_context=False)
+        
+        # 根据配置选择使用辅助模型或主模型进行重要性评估
+        if USE_ASSISTANT_FOR_MEMORY_SUMMARY and ENABLE_ASSISTANT_MODEL:
+            logger.info(f"使用辅助模型为用户 {user_id} 进行重要性评估")
+            importance_response = get_assistant_response(importance_prompt, "memory_importance")
+        else:
+            logger.info(f"使用主模型为用户 {user_id} 进行重要性评估")
+            importance_response = get_deepseek_response(importance_prompt, "system", store_context=False)
         
         # 强化重要性提取逻辑
         importance_match = re.search(r'[1-5]', importance_response)
@@ -1842,9 +2093,15 @@ D) **非提醒请求**：例如 "今天天气怎么样?", "取消提醒"。
 请务必严格遵守输出格式，只返回指定的 JSON 对象或 `null`，不要添加任何解释性文字。
 """
         # --- 3. 调用 AI 进行解析和分类 ---
-        logger.info(f"向AI发送提醒解析请求（区分时长），用户: {user_id}，内容: '{message_content}'")
-        ai_raw_response = get_deepseek_response(parsing_prompt, user_id="reminder_parser_classifier_v2_" + user_id, store_context=False)
-        logger.debug(f"AI提醒解析原始响应 (分类器 v2): {ai_raw_response}")
+        # 根据配置选择使用辅助模型或主模型
+        if ENABLE_ASSISTANT_MODEL:
+            logger.info(f"向辅助模型发送提醒解析请求（区分时长），用户: {user_id}，内容: '{message_content}'")
+            ai_raw_response = get_assistant_response(parsing_prompt, "reminder_parser_classifier_v2_" + user_id)
+            logger.debug(f"辅助模型提醒解析原始响应 (分类器 v2): {ai_raw_response}")
+        else:
+            logger.info(f"向主模型发送提醒解析请求（区分时长），用户: {user_id}，内容: '{message_content}'")
+            ai_raw_response = get_deepseek_response(parsing_prompt, user_id="reminder_parser_classifier_v2_" + user_id, store_context=False)
+            logger.debug(f"主模型提醒解析原始响应 (分类器 v2): {ai_raw_response}")
 
         # 使用新的清理函数处理AI的原始响应
         cleaned_ai_output_str = extract_last_json_or_null(ai_raw_response)
@@ -2489,15 +2746,23 @@ def needs_online_search(message: str, user_id: str) -> Optional[str]:
 请不要添加任何其他解释。
 """
     try:
-        logger.info(f"向主 AI 发送联网检测请求，用户: {user_id}，消息: '{message[:50]}...'")
-        # 调用主 AI 进行判断，不存储上下文
-        response = get_deepseek_response(detection_prompt, user_id=f"online_detection_{user_id}", store_context=False)
+        # 根据配置选择使用辅助模型或主模型
+        if ENABLE_ASSISTANT_MODEL:
+            logger.info(f"向辅助模型发送联网检测请求，用户: {user_id}，消息: '{message[:50]}...'")
+            response = get_assistant_response(detection_prompt, f"online_detection_{user_id}")
+        else:
+            logger.info(f"向主 AI 发送联网检测请求，用户: {user_id}，消息: '{message[:50]}...'")
+            response = get_deepseek_response(detection_prompt, user_id=f"online_detection_{user_id}", store_context=False)
 
         # 清理并判断响应
         cleaned_response = response.strip()
         if "</think>" in cleaned_response:
             cleaned_response = cleaned_response.split("</think>", 1)[1].strip()
-        logger.info(f"联网检测 AI 响应: '{cleaned_response}'")
+        
+        if ENABLE_ASSISTANT_MODEL:
+            logger.info(f"辅助模型联网检测响应: '{cleaned_response}'")
+        else:
+            logger.info(f"主模型联网检测响应: '{cleaned_response}'")
 
         if "不需要联网" in cleaned_response:
             logger.info(f"用户 {user_id} 的消息不需要联网。")
@@ -2860,6 +3125,14 @@ def main():
             logger.info("正在加载用户自动消息计时器状态...")
             load_user_timers()  # 替换原来的初始化代码
             logger.info("用户自动消息计时器状态加载完成。")
+            
+            # 初始化群聊类型缓存
+            if IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE:
+                logger.info("主动消息群聊忽略功能已启用，正在初始化群聊类型缓存...")
+                update_group_chat_cache()
+                logger.info("群聊类型缓存初始化完成。")
+            else:
+                logger.info("主动消息群聊忽略功能已禁用。")
         else:
             logger.info("自动消息功能已禁用，跳过计时器初始化。")
 

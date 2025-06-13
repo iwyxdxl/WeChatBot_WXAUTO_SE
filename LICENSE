@@ -22,35 +22,27 @@ You should have received a copy of the GNU General Public License along with thi
 
 This project includes wxautox_wechatbot, a proprietary library with the following license terms:
 
-### License Statement for wxautox_wechatbot
 - Copyright (c) 2025 Cluic
 
-This software (hereinafter referred to as "the Library") is strictly limited to use within the 
-iwyxdxl/WeChatBot_WXAUTO_SE project. Users are not permitted to use the Library for any other 
-projects or purposes without explicit authorization.
+License Statement:
+This software (hereinafter referred to as "the Library") is strictly limited to use within the iwyxdxl/WeChatBot_WXAUTO_SE project. Users are not permitted to use the Library for any other projects or purposes without explicit authorization.
 
-1. Usage Restrictions:
-The Library may only be used within the iwyxdxl/WeChatBot_WXAUTO_SE project. 
-Unauthorized users or organizations are prohibited from using it for any other projects, 
-software, or services.
+1. **Usage Restrictions**:
+   - The Library may only be used within the iwyxdxl/WeChatBot_WXAUTO_SE project. Unauthorized users or organizations are prohibited from using it for any other projects, software, or services.
 
-2. Authorized Use:
-With explicit permission from the author, the iwyxdxl/WeChatBot_WXAUTO_SE project may 
-use the Library for commercial purposes and distribute it.
+2. **Authorized Use**:
+   - With explicit permission from the author, the iwyxdxl/WeChatBot_WXAUTO_SE project may use the Library for commercial purposes and distribute it.
 
-3. Prohibition on Unauthorized Downloading and Distribution:
-Users and organizations are strictly prohibited from downloading, copying, distributing, or 
-transferring the Library to any other platform or location, including but not limited to third
-party platforms like GitHub, or any other public services.
-The code of this Library may not be used in any unauthorized applications or projects.
+3. **Prohibition on Unauthorized Downloading and Distribution**:
+   - Users and organizations are strictly prohibited from downloading, copying, distributing, or transferring the Library to any other platform or location, including but not limited to third-party platforms like GitHub, or any other public services.
+   - The code of this Library may not be used in any unauthorized applications or projects.
 
-4. Copyright Notice:
-All copyrights for this Library are owned by Cluic.
-Unauthorized use may result in legal action.
+4. **Copyright Notice**:
+   - All copyrights for this Library are owned by Cluic.
+   - Unauthorized use may result in legal action.
 
-5. Disclaimer:
-The Library is provided "as-is," and the author is not responsible for any direct or indirect 
-damages or liabilities arising from the use of the Library.
+5. **Disclaimer**:
+   - The Library is provided "as-is," and the author is not responsible for any direct or indirect damages or liabilities arising from the use of the Library.
 
 For further licensing or inquiries, please contact: 47749486@qq.com
 

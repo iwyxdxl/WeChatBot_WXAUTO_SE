@@ -234,7 +234,9 @@ def submit_config():
             'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
             'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
-            'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES'
+            'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
+            'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
+            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE'
         ]
         for field in boolean_fields:
             new_values_for_config_py[field] = field in request.form
@@ -258,13 +260,13 @@ def submit_config():
                 original_type_source = current_config_before_update[key_from_form]
                 if isinstance(original_type_source, bool):
                     new_values_for_config_py[key_from_form] = (value_from_form.lower() == 'true')
-                elif key_from_form in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS", "AVERAGE_TYPING_SPEED", "RANDOM_TYPING_SPEED_MIN", "RANDOM_TYPING_SPEED_MAX", "TEMPERATURE", "MOONSHOT_TEMPERATURE", "ONLINE_API_TEMPERATURE", "RESTART_INTERVAL_HOURS"]: 
+                elif key_from_form in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS", "AVERAGE_TYPING_SPEED", "RANDOM_TYPING_SPEED_MIN", "RANDOM_TYPING_SPEED_MAX", "TEMPERATURE", "MOONSHOT_TEMPERATURE", "ONLINE_API_TEMPERATURE", "ASSISTANT_TEMPERATURE", "RESTART_INTERVAL_HOURS"]: 
                     try:
                         new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
                     except ValueError: 
                         new_values_for_config_py[key_from_form] = original_type_source 
                         app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
-                elif isinstance(original_type_source, int) or key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "RESTART_INACTIVITY_MINUTES"]:
+                elif isinstance(original_type_source, int) or key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "RESTART_INACTIVITY_MINUTES", "ASSISTANT_MAX_TOKEN"]:
                     try:
                         new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
                     except ValueError:
@@ -676,7 +678,9 @@ def index():
                 'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
                 'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
-                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES'
+                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
+                'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
+                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE'
             ]
             for field in boolean_fields_from_editor:
                  # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
@@ -1073,16 +1077,8 @@ def reset_default_config():
         if 'ENABLE_LOGIN_PASSWORD' in current_config:
             default_config['ENABLE_LOGIN_PASSWORD'] = current_config['ENABLE_LOGIN_PASSWORD']
         
-        # 更新配置文件
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, 'config.py')
-        
-        with open(config_path, 'w', encoding='utf-8') as f:
-            f.write("# -*- coding: utf-8 -*-\n\n")
-            f.write("# 重置为默认配置\n\n")
-            
-            for key, value in default_config.items():
-                f.write(f"{key} = {repr(value)}\n")
+        # 使用 update_config 函数来保留原有的注释和格式
+        update_config(default_config)
         
         app.logger.info("配置已恢复到默认值")
         return jsonify({'message': '配置已恢复到默认值'}), 200
@@ -1254,7 +1250,15 @@ def get_default_config():
         "ENABLE_SCHEDULED_RESTART": True,
         "RESTART_INTERVAL_HOURS": 2.0,
         "RESTART_INACTIVITY_MINUTES": 15,
-        "REMOVE_PARENTHESES": False
+        "REMOVE_PARENTHESES": False,
+        "ENABLE_ASSISTANT_MODEL": False,
+        "ASSISTANT_BASE_URL": 'https://vg.v1api.cc/v1',
+        "ASSISTANT_MODEL": 'gpt-4o-mini',
+        "ASSISTANT_API_KEY": '',
+        "ASSISTANT_TEMPERATURE": 0.3,
+        "ASSISTANT_MAX_TOKEN": 1000,
+        "USE_ASSISTANT_FOR_MEMORY_SUMMARY": False,
+        "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": False
     }
 
 def validate_config():
