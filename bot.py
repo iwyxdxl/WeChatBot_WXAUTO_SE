@@ -725,16 +725,22 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
             # 细化错误分类
             if "real name verification" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈请完成实名认证后再使用！\033[0m")
+                break  # 终止循环，不再重试
             elif "rate limit" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈当前访问 API 服务频次达到上限，请稍后再试！\033[0m")
             elif "payment required" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
+                break  # 终止循环，不再重试
+            elif "user quota" in error_info or "is not enough" in error_info or "UnlimitedQuota" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈，你的余额不足，请先充值再使用! 如有余额，请检查令牌是否为无限额度。\033[0m")
+                break  # 终止循环，不再重试
             elif "Api key is invalid" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈 API KEY 不可用，请检查配置选项！\033[0m")
             elif "service unavailable" in error_info:
                 logger.error("\033[31m错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
             elif "sensitive words detected" in error_info:
                 logger.error("\033[31m错误：Prompt或消息中含有敏感词，无法生成回复，请联系API服务商！\033[0m")
+                break  # 终止循环，不再重试
             else:
                 logger.error("\033[31m未知错误：" + error_info + "\033[0m")
 
