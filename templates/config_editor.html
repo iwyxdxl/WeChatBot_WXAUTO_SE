@@ -786,6 +786,8 @@
                         { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
                         { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },
                         { value: "gemini-2.5-pro-exp-03-25", text: "gemini-2.5-pro-exp-03-25 * (推荐，体验感更好)" },
+                        { value: "gemini-2.5-pro-05-06", text: "gemini-2.5-pro-05-06 * (推荐)" },
+                        { value: "gemini-2.5-pro-06-05", text: "gemini-2.5-pro-06-05 * (推荐)" },
                         { value: "claude-3-7-sonnet-20250219", text: "claude-3-7-sonnet-20250219 * (推荐)" },
                         { value: "claude-sonnet-4-20250514", text: "claude-sonnet-4-20250514 *" },
                         { value: "doubao-pro-256k-241115", text: "豆包 doubao-pro-256k-241115" },
@@ -794,9 +796,7 @@
                         { value: "claude-3-5-sonnet-20241022", text: "claude-3-5-sonnet-20241022 *" },
                         { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
                         { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219" },
-                        { value: "gemini-2.5-flash", text: "gemini-2.5-flash" },
-                        { value: "gemini-2.5-pro-05-06", text: "gemini-2.5-pro-05-06 *" },
-                        { value: "gemini-2.5-pro-06-05", text: "gemini-2.5-pro-06-05 *" },
+                        { value: "gemini-2.5-flash", text: "gemini-2.5-flash" },                     
                         { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" }, 
                         { value: "o4-mini", text: "o4-mini" },
                         { value: "gpt-4o", text: "gpt-4o *" },
@@ -994,6 +994,7 @@
                         { value: "Qwen/Qwen2.5-7B-Instruct", text: "硅基通义千问2.5-7B模型 (可用免费额度)" },
                         { value: "meta-llama/Llama-3.1-8B-Instruct", text: "硅基Llama-3.1-8B模型 (可用免费额度)" },
                         { value: "deepseek-ai/DeepSeek-V3", text: "硅基DeepSeek V3模型 (可用免费额度)" },
+                        { value: "Pro/deepseek-ai/DeepSeek-V3", text: "硅基DeepSeek V3 Pro模型 (需充值后方可使用)" },
                         { value: 'other', text: '其它' }
                     ];
                 } else if (apiUrl === 'https://api.deepseek.com') {
@@ -1005,8 +1006,8 @@
                     options = [
                         { value: "gpt-4o-mini", text: "gpt-4o-mini (推荐，成本低)" },
                         { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" },
-                        { value: "deepseek-chat", text: "deepseek-chat" },
-                        { value: "claude-3-haiku-20240307", text: "claude-3-haiku-20240307" },
+                        { value: "deepseek-v3", text: "deepseek-v3" },
+                        { value: "deepseek-v3-0324", text: "deepseek-v3-0324" },
                         { value: 'other', text: '其它' }
                     ];
                 } else {
@@ -2069,7 +2070,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20beta3</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
