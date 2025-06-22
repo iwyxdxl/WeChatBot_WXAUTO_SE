@@ -716,19 +716,18 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2, is_summar
                     if filtered_content:
                         return filtered_content
 
+
             # 记录错误日志
-            logger.error("错误请求消息体:")
-            logger.error(f"{MODEL}")
+            logger.error(f"错误请求消息体: {MODEL}")
             logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
-            logger.error("API 返回了空的选择项或内容为空。")
+            logger.error(f"\033[31m错误：API 返回了空的选择项或内容为空。模型名:{MODEL}\033[0m")
             logger.error(f"完整响应对象: {response}")
 
         except Exception as e:
-            logger.error("错误请求消息体:")
-            logger.error(f"{MODEL}")
+            logger.error(f"错误请求消息体: {MODEL}")
             logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
             error_info = str(e)
-            logger.error(f"自动重试：第 {attempt + 1} 次调用失败 (ID: {user_id}) 原因: {error_info}", exc_info=False)
+            logger.error(f"自动重试：第 {attempt + 1} 次调用 {MODEL}失败 (ID: {user_id}) 原因: {error_info}", exc_info=False)
 
             # 细化错误分类
             if "real name verification" in error_info:
