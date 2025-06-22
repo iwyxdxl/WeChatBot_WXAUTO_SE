@@ -34,7 +34,7 @@ from urllib.parse import urlparse
 import os
 os.environ["PROJECT_NAME"] = 'iwyxdxl/WeChatBot_WXAUTO_SE'
 from wxautox_wechatbot.param import WxParam
-WxParam.ENABLE_FILE_LOGGER = True
+WxParam.ENABLE_FILE_LOGGER = False
 WxParam.FORCE_MESSAGE_XBIAS = True
 
 # 生成用户昵称列表和prompt映射字典
