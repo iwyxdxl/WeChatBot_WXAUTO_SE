@@ -34,15 +34,12 @@ from urllib.parse import urlparse
 import os
 os.environ["PROJECT_NAME"] = 'iwyxdxl/WeChatBot_WXAUTO_SE'
 from wxautox_wechatbot.param import WxParam
-WxParam.ENABLE_FILE_LOGGER = False
+WxParam.ENABLE_FILE_LOGGER = True
+WxParam.FORCE_MESSAGE_XBIAS = True
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
 prompt_mapping = {entry[0]: entry[1] for entry in LISTEN_LIST}
-
-# 获取微信窗口对象
-wx = WeChat()
-ROBOT_WX_NAME = wx.nickname
 
 # 群聊信息缓存
 group_chat_cache = {}  # {user_name: is_group_chat}
@@ -325,6 +322,16 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
+# 获取微信窗口对象
+try:
+    wx = WeChat()
+except:
+    logger.error(f"\033[31m无法初始化微信接口，请确保您安装的是微信3.9版本，并且已经登录！\033[0m")
+    logger.error("\033[31m微信3.9版本下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe \033[0m")
+    exit(1)
+# 获取登录用户的名字
+ROBOT_WX_NAME = wx.nickname
+
 # 存储用户的计时器和随机等待时间
 user_timers = {}
 user_wait_times = {}
@@ -583,7 +590,7 @@ def save_chat_contexts():
             except OSError:
                 pass # 忽略清理错误
 
-def get_deepseek_response(message, user_id, store_context=True):
+def get_deepseek_response(message, user_id, store_context=True, is_summary=False):
     """
     从 DeepSeek API 获取响应，确保正确的上下文处理，并持久化上下文。
 
@@ -646,7 +653,7 @@ def get_deepseek_response(message, user_id, store_context=True):
             logger.info(f"工具调用 (store_context=False)，ID: {user_id}。仅发送提供的消息。")
 
         # --- 调用 API ---
-        reply = call_chat_api_with_retry(messages_to_send, user_id)
+        reply = call_chat_api_with_retry(messages_to_send, user_id, is_summary=is_summary)
 
         # --- 如果需要，存储助手回复到上下文中 ---
         if store_context:
@@ -661,6 +668,7 @@ def get_deepseek_response(message, user_id, store_context=True):
                 
                 # 保存上下文到文件
                 save_chat_contexts() # 在助手回复添加后再次保存
+        
         return reply
 
     except Exception as e:
@@ -676,7 +684,7 @@ def strip_before_thought_tags(text):
     else:
         return text
 
-def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
+def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2, is_summary=False):
     """
     调用 Chat API 并在第一次失败或返回空结果时重试。
 
@@ -740,6 +748,11 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
                 logger.error("\033[31m错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
             elif "sensitive words detected" in error_info:
                 logger.error("\033[31m错误：Prompt或消息中含有敏感词，无法生成回复，请联系API服务商！\033[0m")
+                if ENABLE_SENSITIVE_CONTENT_CLEARING:
+                    logger.warning(f"已开启敏感词自动清除上下文功能，开始清除用户 {user_id} 的聊天上下文")
+                    clear_chat_context(user_id)
+                    if is_summary:
+                        clear_memory_temp_files(user_id)  # 如果是总结任务，清除临时文件
                 break  # 终止循环，不再重试
             else:
                 logger.error("\033[31m未知错误：" + error_info + "\033[0m")
@@ -748,7 +761,7 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2):
 
     raise RuntimeError("抱歉，我现在有点忙，稍后再聊吧。")
 
-def get_assistant_response(message, user_id):
+def get_assistant_response(message, user_id, is_summary=False):
     """
     从辅助模型 API 获取响应，专用于判断型任务（表情、联网、提醒解析等）。
     不存储聊天上下文，仅用于辅助判断。
@@ -763,7 +776,7 @@ def get_assistant_response(message, user_id):
     if not assistant_client:
         logger.warning(f"辅助模型客户端未初始化，回退使用主模型。用户ID: {user_id}")
         # 回退到主模型
-        return get_deepseek_response(message, user_id, store_context=False)
+        return get_deepseek_response(message, user_id, store_context=False, is_summary=is_summary)
     
     try:
         logger.info(f"调用辅助模型 API - ID: {user_id}, 消息: {message[:100]}...")
@@ -771,7 +784,7 @@ def get_assistant_response(message, user_id):
         messages_to_send = [{"role": "user", "content": message}]
         
         # 调用辅助模型 API
-        reply = call_assistant_api_with_retry(messages_to_send, user_id)
+        reply = call_assistant_api_with_retry(messages_to_send, user_id, is_summary=is_summary)
         
         return reply
 
@@ -779,9 +792,9 @@ def get_assistant_response(message, user_id):
         logger.error(f"辅助模型调用失败 (ID: {user_id}): {str(e)}", exc_info=True)
         logger.warning(f"辅助模型调用失败，回退使用主模型。用户ID: {user_id}")
         # 回退到主模型
-        return get_deepseek_response(message, user_id, store_context=False)
+        return get_deepseek_response(message, user_id, store_context=False, is_summary=is_summary)
 
-def call_assistant_api_with_retry(messages_to_send, user_id, max_retries=2):
+def call_assistant_api_with_retry(messages_to_send, user_id, max_retries=2, is_summary=False):
     """
     调用辅助模型 API 并在第一次失败或返回空结果时重试。
 
@@ -829,19 +842,30 @@ def call_assistant_api_with_retry(messages_to_send, user_id, max_retries=2):
 
             # 细化错误分类
             if "real name verification" in error_info:
-                logger.error("\033[31m辅助模型错误：API 服务商反馈请完成实名认证后再使用！\033[0m")
+                logger.error("\033[31m错误：API 服务商反馈请完成实名认证后再使用！\033[0m")
+                break  # 终止循环，不再重试
             elif "rate limit" in error_info:
-                logger.error("\033[31m辅助模型错误：API 服务商反馈当前访问 API 服务频次达到上限，请稍后再试！\033[0m")
+                logger.error("\033[31m错误：API 服务商反馈当前访问 API 服务频次达到上限，请稍后再试！\033[0m")
             elif "payment required" in error_info:
-                logger.error("\033[31m辅助模型错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
+                logger.error("\033[31m错误：API 服务商反馈您正在使用付费模型，请先充值再使用或使用免费额度模型！\033[0m")
+                break  # 终止循环，不再重试
+            elif "user quota" in error_info or "is not enough" in error_info or "UnlimitedQuota" in error_info:
+                logger.error("\033[31m错误：API 服务商反馈，你的余额不足，请先充值再使用! 如有余额，请检查令牌是否为无限额度。\033[0m")
+                break  # 终止循环，不再重试
             elif "Api key is invalid" in error_info:
-                logger.error("\033[31m辅助模型错误：API 服务商反馈 API KEY 不可用，请检查配置选项！\033[0m")
+                logger.error("\033[31m错误：API 服务商反馈 API KEY 不可用，请检查配置选项！\033[0m")
             elif "service unavailable" in error_info:
-                logger.error("\033[31m辅助模型错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
+                logger.error("\033[31m错误：API 服务商反馈服务器繁忙，请稍后再试！\033[0m")
             elif "sensitive words detected" in error_info:
-                logger.error("\033[31m辅助模型错误：Prompt或消息中含有敏感词，无法生成回复，请联系API服务商！\033[0m")
+                logger.error("\033[31m错误：提示词中含有敏感词，无法生成回复，请联系API服务商！\033[0m")
+                if ENABLE_SENSITIVE_CONTENT_CLEARING:
+                    logger.warning(f"已开启敏感词自动清除上下文功能，开始清除用户 {user_id} 的聊天上下文")
+                    clear_chat_context(user_id)
+                    if is_summary:
+                        clear_memory_temp_files(user_id)  # 如果是总结任务，清除临时文件
+                break  # 终止循环，不再重试
             else:
-                logger.error("\033[31m辅助模型未知错误：" + error_info + "\033[0m")
+                logger.error("\033[31m未知错误：" + error_info + "\033[0m")
 
         attempt += 1
 
@@ -889,23 +913,16 @@ def keep_alive():
         time.sleep(check_interval)
 
 def message_listener(msg, chat):
+    global can_send_messages
     who = chat.who 
     msgtype = msg.type
     original_content = msg.content
     sender = msg.sender
     msgattr = msg.attr
-    logger.info(f'收到来自聊天窗口 "{who}" 中用户 "{sender}" 的原始消息 (类型: {msgtype}): {original_content[:100]}')
+    logger.info(f'收到来自聊天窗口 "{who}" 中用户 "{sender}" 的原始消息 (类型: {msgtype}, 属性: {msgattr}): {original_content[:100]}')
 
-    if not original_content:
-        logger.info("消息内容为空，已忽略。")
-        return
-    
     if msgattr != 'friend': 
         logger.info(f"非好友消息，已忽略。")
-        return
-
-    if msgtype not in ['text', 'image', 'voice', 'video', 'file', 'emotion', 'link']:
-        logger.info(f"消息类型 '{msgtype}' 不在处理范围内，已忽略。")
         return
     
     if msgtype == 'voice':
@@ -915,13 +932,99 @@ def message_listener(msg, chat):
     if msgtype == 'link':
         cardurl = msg.get_url()
         original_content = (f"[卡片链接]: {cardurl}")
+
+    if msgtype == 'quote':
+        # 引用消息处理
+        quoted_msg = msg.quote_content
+        if quoted_msg:
+            original_content = f"[引用<{quoted_msg}>消息]: {msg.content}"
+        else:
+            original_content = msg.content
     
+    if msgtype == 'merge':
+        logger.info(f"收到合并转发消息，开始处理")
+        mergecontent = msg.get_messages()
+        logger.info(f"收到合并转发消息，处理完成")
+        # mergecontent 是一个列表，每个元素是 [发送者, 内容, 时间]
+        # 转换为多行文本，每行格式: [时间] 发送者: 内容
+        if isinstance(mergecontent, list):
+            merged_text_lines = []
+            for item in mergecontent:
+                if isinstance(item, list) and len(item) == 3:
+                    sender, content, timestamp = item
+                    # 修改这里的判断逻辑，正确处理WindowsPath对象
+                    # 检查是否为WindowsPath对象
+                    if hasattr(content, 'suffix') and str(content.suffix).lower() in ('.png', '.jpg', '.jpeg', '.gif', '.bmp'):
+                        # 是WindowsPath对象且是图片
+                        if ENABLE_IMAGE_RECOGNITION:
+                            try:
+                                logger.info(f"开始识别图片: {str(content)}")
+                                # 将WindowsPath对象转换为字符串
+                                image_path = str(content)
+                                # 保存当前状态
+                                original_can_send_messages = can_send_messages
+                                # 处理图片
+                                content = recognize_image_with_moonshot(image_path, is_emoji=False)
+                                if content:
+                                    logger.info(f"图片识别成功: {content}")
+                                    content = f"[图片识别结果]: {content}"
+                                else:
+                                    content = "[图片识别结果]: 无法识别图片内容"
+                                # 确保状态恢复
+                                can_send_messages = original_can_send_messages
+                            except Exception as e:
+                                content = "[图片识别失败]"
+                                logger.error(f"图片识别失败: {e}")
+                                # 确保状态恢复
+                                can_send_messages = True
+                        else:
+                            content = "[图片]"
+                    # 处理字符串路径的判断 (兼容性保留)
+                    elif isinstance(content, str) and content.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                        if ENABLE_IMAGE_RECOGNITION:
+                            try:
+                                logger.info(f"开始识别图片: {content}")
+                                # 保存当前状态
+                                original_can_send_messages = can_send_messages
+                                # 处理图片
+                                image_content = recognize_image_with_moonshot(content, is_emoji=False)
+                                if image_content:
+                                    logger.info(f"图片识别成功: {image_content}")
+                                    content = f"[图片识别结果]: {image_content}"
+                                else:
+                                    content = "[图片识别结果]: 无法识别图片内容"
+                                # 确保状态恢复
+                                can_send_messages = original_can_send_messages
+                            except Exception as e:
+                                content = "[图片识别失败]"
+                                logger.error(f"图片识别失败: {e}")
+                                # 确保状态恢复
+                                can_send_messages = True
+                        else:
+                            content = "[图片]"
+                    merged_text_lines.append(f"[{timestamp}] {sender}: {content}")
+                else:
+                    merged_text_lines.append(str(item))
+            merged_text = "\n".join(merged_text_lines)
+            original_content = f"[合并转发消息]:\n{merged_text}"
+        else:
+            original_content = f"[合并转发消息]: {mergecontent}"
+    
+    # 在处理完所有消息类型后检查内容是否为空
+    if not original_content:
+        logger.info("消息内容为空，已忽略。")
+        return
+        
     should_process_this_message = False
     content_for_handler = original_content 
-    is_group_chat = (who != sender)
+
+    if get_chat_type_info(who) == 'group':
+        is_group_chat = True
+    else:
+        is_group_chat = False
 
     if not is_group_chat: 
-        if who == sender and who in user_names:
+        if who in user_names:
             should_process_this_message = True
             logger.info(f"收到来自监听列表用户 {who} 的个人私聊消息，准备处理。")
         else:
@@ -1011,28 +1114,8 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
 
     """使用AI识别图片内容并返回文本"""
     try:
-        # 如果是表情，则裁剪图片只保留左半部分
-        if is_emoji:
-            from PIL import Image
-            import os
-            
-            # 打开原始图片
-            original_img = Image.open(image_path)
-            width, height = original_img.size
-            
-            # 裁剪左半部分
-            left_half = original_img.crop((0, 0, width // 2, height))
-            
-            # 创建临时文件保存裁剪后的图片
-            cropped_path = f"{image_path}_left_half.jpg"
-            left_half.save(cropped_path)
-            logger.info(f"表情图片已裁剪为左半部分: {cropped_path}")
-            
-            # 使用裁剪后的图片路径
-            processed_image_path = cropped_path
-        else:
-            # 非表情图片使用原始路径
-            processed_image_path = image_path
+
+        processed_image_path = image_path
         
         # 读取图片内容并编码
         with open(processed_image_path, 'rb') as img_file:
@@ -1073,12 +1156,12 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
         logger.info(f"AI图片识别结果: {recognized_text}")
         
         # 清理临时文件
-        if is_emoji and os.path.exists(cropped_path):
+        if is_emoji and os.path.exists(processed_image_path):
             try:
-                os.remove(cropped_path)
-                logger.debug(f"已清理临时裁剪图片: {cropped_path}")
+                os.remove(processed_image_path)
+                logger.debug(f"已清理临时表情: {processed_image_path}")
             except Exception as clean_err:
-                logger.warning(f"清理临时裁剪图片失败: {clean_err}")
+                logger.warning(f"清理临时表情图片失败: {clean_err}")
                 
         # 恢复向Deepseek发送消息队列
         can_send_messages = True
@@ -1827,14 +1910,11 @@ def summarize_and_save(user_id):
         # 根据配置选择使用辅助模型或主模型进行记忆总结
         if USE_ASSISTANT_FOR_MEMORY_SUMMARY and ENABLE_ASSISTANT_MODEL:
             logger.info(f"使用辅助模型为用户 {user_id} 生成记忆总结")
-            summary = get_assistant_response(summary_prompt, "memory_summary")
+            summary = get_assistant_response(summary_prompt, "memory_summary", is_summary=True)
         else:
             logger.info(f"使用主模型为用户 {user_id} 生成记忆总结")
-            summary = get_deepseek_response(summary_prompt, "system", store_context=False)
-        
-        # 获取总结失败则不进行记忆总结
-        if summary is None or summary == "抱歉，我现在有点忙，稍后再聊吧。" or summary == "抱歉，辅助模型现在有点忙，稍后再试吧。":
-            return False
+            summary = get_deepseek_response(summary_prompt, "system", store_context=False, is_summary=True)
+
         # 添加清洗，匹配可能存在的**重要度**或**摘要**字段以及##记忆片段 [%Y-%m-%d %A %H:%M]或[%Y-%m-%d %H:%M]或[%Y-%m-%d %H:%M:%S]或[%Y-%m-%d %A %H:%M:%S]格式的时间戳
         summary = re.sub(
             r'\*{0,2}(重要度|摘要)\*{0,2}[\s:]*\d*[\.]?\d*[\s\\]*|## 记忆片段 \[\d{4}-\d{2}-\d{2}( [A-Za-z]+)? \d{2}:\d{2}(:\d{2})?\]',
@@ -1849,10 +1929,10 @@ def summarize_and_save(user_id):
         # 根据配置选择使用辅助模型或主模型进行重要性评估
         if USE_ASSISTANT_FOR_MEMORY_SUMMARY and ENABLE_ASSISTANT_MODEL:
             logger.info(f"使用辅助模型为用户 {user_id} 进行重要性评估")
-            importance_response = get_assistant_response(importance_prompt, "memory_importance")
+            importance_response = get_assistant_response(importance_prompt, "memory_importance", is_summary=True)
         else:
             logger.info(f"使用主模型为用户 {user_id} 进行重要性评估")
-            importance_response = get_deepseek_response(importance_prompt, "system", store_context=False)
+            importance_response = get_deepseek_response(importance_prompt, "system", store_context=False, is_summary=True)
         
         # 强化重要性提取逻辑
         importance_match = re.search(r'[1-5]', importance_response)
@@ -2026,6 +2106,30 @@ def manage_memory_capacity(user_file):
 
     except Exception as e:
         logger.error(f"记忆整理失败: {str(e)}")
+
+def clear_memory_temp_files(user_id):
+    """清除指定用户的Memory_Temp文件"""
+    try:
+        logger.warning(f"已开启自动清除Memory_Temp文件功能，尝试清除用户 {user_id} 的Memory_Temp文件")
+        prompt_name = prompt_mapping.get(user_id, user_id)
+        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_{prompt_name}_log.txt')
+        if os.path.exists(log_file):
+            os.remove(log_file)
+            logger.warning(f"已清除用户 {user_id} 的Memory_Temp文件: {log_file}")
+    except Exception as e:
+        logger.error(f"清除Memory_Temp文件失败: {str(e)}")
+
+def clear_chat_context(user_id):
+    """清除指定用户的聊天上下文"""
+    logger.info(f"已开启自动清除上下文功能，尝试清除用户 {user_id} 的聊天上下文")
+    try:
+        with queue_lock:
+            if user_id in chat_contexts:
+                del chat_contexts[user_id]
+                save_chat_contexts()
+                logger.warning(f"已清除用户 {user_id} 的聊天上下文")
+    except Exception as e:
+        logger.error(f"清除聊天上下文失败: {str(e)}")
 
 def send_error_reply(user_id, error_description_for_ai, fallback_message, error_context_log=""):
     """
@@ -3121,10 +3225,23 @@ def main():
         logger.info("\033[32m初始化微信接口和清理临时文件...\033[0m")
         clean_up_temp_files()
         global wx
-        wx = WeChat()
+        try:
+            wx = WeChat()
+        except:
+            logger.error(f"\033[31m无法初始化微信接口，请确保您安装的是微信3.9版本，并且已经登录！\033[0m")
+            exit(1)
+
         for user_name in user_names:
-            logger.info(f"添加监听用户: {user_name}")
-            wx.AddListenChat(nickname=user_name, callback=message_listener)
+            if user_name == ROBOT_WX_NAME:
+                logger.error(f"\033[31m您填写的用户列表中包含自己登录的微信昵称，请删除后再试！\033[0m")
+                exit(1)
+            ListenChat = wx.AddListenChat(nickname=user_name, callback=message_listener)
+            if ListenChat:
+                logger.info(f"成功添加监听用户{ListenChat}")
+            else:
+                logger.error(f"\033[31m添加监听用户{user_name}失败，请确保您在用户列表填写的微信昵称/备注与实际完全匹配，并且不要包含表情符号和特殊符号，注意填写的不是自己登录的微信昵称!\033[0m")
+                exit(1)
+        logger.info("监听用户添加完成")
         
         # 初始化所有用户的自动消息计时器
         if ENABLE_AUTO_MESSAGE:

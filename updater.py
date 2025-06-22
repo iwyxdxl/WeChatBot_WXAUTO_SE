@@ -189,12 +189,11 @@ class Updater:
                 }
                 
             except (requests.RequestException, json.JSONDecodeError) as e:
-                logger.warning(f"使用当前代理检查更新失败: {str(e)}")
                 if self.try_next_proxy():
-                    logger.info("正在切换到下一个代理服务器...")
+                    logger.info("正在切换到下一个代理服务器检查更新，请稍候...")
                     continue
                 else:
-                    logger.error("所有代理服务器均已尝试失败")
+                    logger.error("所有代理服务器均已尝试失败，将跳过更新直接启动程序")
                     return {
                         'has_update': False,
                         'error': "检查更新失败：无法连接到更新服务器",

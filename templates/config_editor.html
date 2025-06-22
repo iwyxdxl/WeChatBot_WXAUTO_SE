@@ -2070,7 +2070,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.20</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.21</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -2496,6 +2496,12 @@
                         <div class="switch-item">
                             <label>允许AI读取Prompt当中的记忆片段</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="UPLOAD_MEMORY_TO_AI" {% if config.UPLOAD_MEMORY_TO_AI %}checked{% endif %}><span class="slider round"></span></label></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="switch-item">
+                            <label>启用敏感词清除功能 (遇到敏感词时自动清除Memory_Temp文件和聊天上下文)</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_SENSITIVE_CONTENT_CLEARING" {% if config.ENABLE_SENSITIVE_CONTENT_CLEARING %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
                     <div class="form-group">

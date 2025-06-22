@@ -20,16 +20,30 @@ for %%K in (
     )
 )
 if not defined wxversion (
-    echo ❌ 未检测到微信安装，或无法读取注册表，请确认微信已正确安装。
-    pause
-    exit /b 1
+    echo ⚠️ 警告：未检测到微信安装或无法读取注册表！
+    echo    这可能是由于以下原因：
+    echo    1. 微信未正确安装
+    echo    2. 注册表访问权限不足
+    echo    3. 微信版本过老或过新
+    echo    4. 您使用的是便携版微信
+    echo.
+    echo    程序将跳过微信版本检查并继续运行。
+    echo    如果程序启动后无法控制微信，请下载微信3.9版本：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo.
+    echo 🔄3秒后自动继续...
+    timeout /t 3 /nobreak >nul
+    goto :check_python
 )
 :found_wxversion
 
 if not defined wxversion (
-    echo ❌ 未能正确获取微信版本号，请确认微信已安装并重试。
-    pause
-    exit /b 1
+    echo ⚠️ 警告：无法获取微信版本号！
+    echo    程序将跳过微信版本检查并继续运行，但建议检查微信安装状态。
+    echo    如果程序启动后无法控制微信，请下载微信3.9版本：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo.
+    echo 🔄3秒后自动继续...
+    timeout /t 3 /nobreak >nul
+    goto :check_python
 )
 
 :: 解析主版本号
@@ -39,58 +53,82 @@ for /f "tokens=1 delims=." %%a in ("!wxversion!") do (
 
 :: 只判断主版本
 if !major! lss 3 (
-    echo ❌ 当前微信版本 !wxversion!，请前往[https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe/]升级到3.9及以上版本。
+    echo ❌ 当前微信版本 !wxversion!，版本过低！
+    echo    请下载微信3.9版本
+    echo    下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo.
+    echo 🔄如果您确信已经安装了正确版本的微信，请按下键盘任意键继续运行程序，否则关闭窗口退出。
     pause
-    exit /b 1
+    goto :check_python
 )
 if !major! geq 4 (
-    echo ❌ 当前微信版本 !wxversion!，暂不支持4及以上版本，前往下载合适版本的[https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe]。
+    echo ❌ 当前微信版本 !wxversion!，版本过高！
+    echo    软件暂不支持微信4.x及以上版本，可能导致兼容性问题
+    echo    请下载微信3.9版本
+    echo    下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo.
+    echo 🔄如果您确信已经安装了正确版本的微信，请按下键盘任意键继续运行程序，否则关闭窗口退出。
     pause
-    exit /b 1
+    goto :check_python
 )
 
 echo ✅ 微信版本检查通过：!wxversion!
 
+:check_python
+
 :: ---------------------------
 :: 检查 Python 是否安装
 :: ---------------------------
+echo 🔍 检查Python环境...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ❌ Python 未安装，请先安装 Python 3.8 - 3.11 版本。
+    echo ❌ Python 未安装或未添加到系统PATH！
+    echo    请前往官网下载并安装 Python 3.9-3.12 版本
+    echo    下载地址：https://www.python.org/downloads/
+    echo    ⚠️ 安装时请勾选"Add Python to PATH"选项
     pause
     exit /b 1
 )
 
 :: 获取 Python 版本
 for /f "tokens=2,*" %%i in ('python --version 2^>^&1') do set "pyversion=%%i"
-for /f "tokens=1,2 delims=." %%a in ("%pyversion%") do (
-    set major=%%a
-    set minor=%%b
+echo 检测到Python版本：%pyversion%
+
+:: 解析版本号
+for /f "tokens=1,2,3 delims=." %%a in ("%pyversion%") do (
+    set "py_major=%%a"
+    set "py_minor=%%b"
+    set "py_patch=%%c"
 )
 
-:: 检查版本范围
-if %major% lss 3 (
-    echo ❌ 当前 Python 版本 %pyversion%，请使用 Python 3.8+
-    pause
-    exit /b 1
-)
-if %major% gtr 3 (
-    echo ❌ 当前 Python 版本 %pyversion%，请使用 Python 3.8-3.11 之间版本
-    pause
-    exit /b 1
-)
-if %minor% lss 8 (
-    echo ❌ Python 版本太旧，最低要求为 Python 3.8
-    pause
-    exit /b 1
-)
-if %minor% geq 12 (
-    echo ❌ 暂不支持 Python 3.12 及以上版本
+:: 检查主版本号
+if "%py_major%" neq "3" (
+    echo ❌ 不支持的Python主版本：%pyversion%
+    echo    支持版本：Python 3.9-3.12
+    echo    当前版本：Python %pyversion%
     pause
     exit /b 1
 )
 
-echo ✅ Python 版本检查通过：%pyversion%
+:: 检查次版本号范围 (3.9-3.12)
+if %py_minor% lss 9 (
+    echo ❌ Python版本过低：%pyversion%
+    echo    最低要求：Python 3.9
+    echo    当前版本：Python %pyversion%
+    echo    请升级Python版本
+    pause
+    exit /b 1
+)
+if %py_minor% gtr 12 (
+    echo ❌ Python版本过高：%pyversion%
+    echo    支持版本：Python 3.9-3.12
+    echo    当前版本：Python %pyversion%
+    echo    可能存在兼容性问题，建议降级
+    pause
+    exit /b 1
+)
+
+echo ✅ Python版本检查通过：%pyversion% (满足3.9-3.12要求)
 
 :: ---------------------------
 :: 检查 pip 是否存在

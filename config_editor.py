@@ -39,6 +39,102 @@ import time
 import json
 
 app = Flask(__name__)
+
+def safe_type_convert(value, target_type, default_value=None, field_name=""):
+    """
+    安全的类型转换函数，防止整数转换为字符串
+    
+    Args:
+        value: 要转换的值
+        target_type: 目标类型 (int, float, bool)
+        default_value: 转换失败时的默认值
+        field_name: 字段名，用于日志记录
+    
+    Returns:
+        转换后的值或默认值
+    """
+    try:
+        str_value = str(value).strip()
+        
+        if target_type == int:
+            if str_value and str_value.isdigit():
+                return int(str_value)
+            elif str_value == '':
+                return 0 if default_value is None else default_value
+            else:
+                if field_name:
+                    app.logger.warning(f"配置项 {field_name} 的值 '{value}' 包含非数字字符，使用默认值。")
+                return default_value if default_value is not None else 0
+                
+        elif target_type == float:
+            if str_value:
+                import re
+                if re.match(r'^-?\d+(\.\d+)?$', str_value):
+                    return float(str_value)
+                else:
+                    if field_name:
+                        app.logger.warning(f"配置项 {field_name} 的值 '{value}' 不是有效的数字格式，使用默认值。")
+                    return default_value if default_value is not None else 0.0
+            else:
+                return 0.0 if default_value is None else default_value
+                
+        elif target_type == bool:
+            return str_value.lower() in ('on', 'true', '1', 'yes')
+            
+    except (ValueError, TypeError) as e:
+        if field_name:
+            app.logger.warning(f"配置项 {field_name} 类型转换失败: {e}，使用默认值。")
+        return default_value if default_value is not None else (0 if target_type == int else 0.0 if target_type == float else False)
+    
+    return value
+
+def validate_config_types(config_path):
+    """
+    验证config.py中的数据类型是否正确
+    """
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 检查是否有字符串形式的数字
+        import re
+        
+        # 查找可能的问题配置项
+        issues = []
+        
+        # 检查应该是整数但被保存为字符串的配置项
+        int_fields = ['MAX_GROUPS', 'MAX_TOKEN', 'QUEUE_WAITING_TIME', 'EMOJI_SENDING_PROBABILITY', 
+                     'MAX_MESSAGE_LOG_ENTRIES', 'MAX_MEMORY_NUMBER', 'PORT', 'ONLINE_API_MAX_TOKEN',
+                     'REQUESTS_TIMEOUT', 'MAX_WEB_CONTENT_LENGTH', 'RESTART_INACTIVITY_MINUTES',
+                     'GROUP_CHAT_RESPONSE_PROBABILITY', 'ASSISTANT_MAX_TOKEN']
+        
+        # 检查应该是浮点数但被保存为字符串的配置项  
+        float_fields = ['TEMPERATURE', 'MOONSHOT_TEMPERATURE', 'MIN_COUNTDOWN_HOURS', 'MAX_COUNTDOWN_HOURS',
+                       'AVERAGE_TYPING_SPEED', 'RANDOM_TYPING_SPEED_MIN', 'RANDOM_TYPING_SPEED_MAX',
+                       'ONLINE_API_TEMPERATURE', 'RESTART_INTERVAL_HOURS', 'ASSISTANT_TEMPERATURE']
+        
+        for field in int_fields:
+            pattern = rf'{field}\s*=\s*[\'"](\d+)[\'"]'
+            matches = re.findall(pattern, content)
+            if matches:
+                issues.append(f"{field} 被保存为字符串 '{matches[0]}'，应为整数 {matches[0]}")
+        
+        for field in float_fields:
+            pattern = rf'{field}\s*=\s*[\'"](\d+\.?\d*)[\'"]'
+            matches = re.findall(pattern, content)
+            if matches:
+                issues.append(f"{field} 被保存为字符串 '{matches[0]}'，应为浮点数 {matches[0]}")
+        
+        if issues:
+            app.logger.warning(f"配置文件类型验证发现问题: {'; '.join(issues)}")
+            return False
+        
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"配置文件类型验证失败: {e}")
+        return False
+
 app.secret_key = os.urandom(24).hex()  # 48位十六进制字符串
 bot_process = None
 
@@ -236,7 +332,7 @@ def submit_config():
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
             'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
             'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE'
+            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
         ]
         for field in boolean_fields:
             new_values_for_config_py[field] = field in request.form
@@ -262,22 +358,55 @@ def submit_config():
                     new_values_for_config_py[key_from_form] = (value_from_form.lower() == 'true')
                 elif key_from_form in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS", "AVERAGE_TYPING_SPEED", "RANDOM_TYPING_SPEED_MIN", "RANDOM_TYPING_SPEED_MAX", "TEMPERATURE", "MOONSHOT_TEMPERATURE", "ONLINE_API_TEMPERATURE", "ASSISTANT_TEMPERATURE", "RESTART_INTERVAL_HOURS"]: 
                     try:
-                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
-                    except ValueError: 
+                        # 先确保值是字符串类型，然后进行转换
+                        str_value = str(value_from_form).strip()
+                        if str_value:
+                            # 验证是否为有效的数字格式
+                            import re
+                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
+                                new_values_for_config_py[key_from_form] = float(str_value)
+                            else:
+                                # 如果不是有效数字格式，保留原值
+                                new_values_for_config_py[key_from_form] = original_type_source
+                                app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 不是有效的数字格式，已保留旧值。")
+                        else:
+                            new_values_for_config_py[key_from_form] = 0.0
+                    except (ValueError, TypeError) as e: 
                         new_values_for_config_py[key_from_form] = original_type_source 
-                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。错误: {e}")
                 elif isinstance(original_type_source, int) or key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "RESTART_INACTIVITY_MINUTES", "ASSISTANT_MAX_TOKEN"]:
                     try:
-                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
-                    except ValueError:
+                        # 先确保值是字符串类型，然后进行转换
+                        str_value = str(value_from_form).strip()
+                        if str_value and str_value.isdigit():
+                            new_values_for_config_py[key_from_form] = int(str_value)
+                        elif str_value == '':
+                            new_values_for_config_py[key_from_form] = 0
+                        else:
+                            # 如果包含非数字字符，保留原值
+                            new_values_for_config_py[key_from_form] = original_type_source
+                            app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 包含非数字字符，已保留旧值。")
+                    except (ValueError, TypeError) as e:
                         new_values_for_config_py[key_from_form] = original_type_source
-                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。")
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。错误: {e}")
                 elif isinstance(original_type_source, float):
                      try:
-                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
-                     except ValueError:
+                        # 先确保值是字符串类型，然后进行转换
+                        str_value = str(value_from_form).strip()
+                        if str_value:
+                            # 验证是否为有效的数字格式
+                            import re
+                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
+                                new_values_for_config_py[key_from_form] = float(str_value)
+                            else:
+                                # 如果不是有效数字格式，保留原值
+                                new_values_for_config_py[key_from_form] = original_type_source
+                                app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 不是有效的数字格式，已保留旧值。")
+                        else:
+                            new_values_for_config_py[key_from_form] = 0.0
+                     except (ValueError, TypeError) as e:
                         new_values_for_config_py[key_from_form] = original_type_source
-                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。错误: {e}")
                 elif isinstance(original_type_source, list):
                     try:
                         evaluated_list = ast.literal_eval(value_from_form)
@@ -294,27 +423,55 @@ def submit_config():
             else: 
                 if key_from_form == "GROUP_CHAT_RESPONSE_PROBABILITY":
                     try:
-                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
-                    except ValueError:
+                        str_value = str(value_from_form).strip()
+                        if str_value and str_value.isdigit():
+                            new_values_for_config_py[key_from_form] = int(str_value)
+                        elif str_value == '':
+                            new_values_for_config_py[key_from_form] = 0
+                        else:
+                            new_values_for_config_py[key_from_form] = 100
+                            app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 包含非数字字符，已设为默认值100。")
+                    except (ValueError, TypeError) as e:
                         new_values_for_config_py[key_from_form] = 100
-                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值100。")
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值100。错误: {e}")
                 elif key_from_form == "RESTART_INACTIVITY_MINUTES":
                      try:
-                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 15
-                     except ValueError:
+                        str_value = str(value_from_form).strip()
+                        if str_value and str_value.isdigit():
+                            new_values_for_config_py[key_from_form] = int(str_value)
+                        elif str_value == '':
+                            new_values_for_config_py[key_from_form] = 15
+                        else:
+                            new_values_for_config_py[key_from_form] = 15
+                            app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 包含非数字字符，已设为默认值15。")
+                     except (ValueError, TypeError) as e:
                         new_values_for_config_py[key_from_form] = 15 
-                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值15。")
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值15。错误: {e}")
 
                 elif key_from_form == "RESTART_INTERVAL_HOURS":
                      try:
-                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 2.0
-                     except ValueError:
+                        str_value = str(value_from_form).strip()
+                        if str_value:
+                            import re
+                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
+                                new_values_for_config_py[key_from_form] = float(str_value)
+                            else:
+                                new_values_for_config_py[key_from_form] = 2.0
+                                app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 不是有效的数字格式，已设为默认值2.0。")
+                        else:
+                            new_values_for_config_py[key_from_form] = 2.0
+                     except (ValueError, TypeError) as e:
                         new_values_for_config_py[key_from_form] = 2.0
-                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已设为默认值2.0。")
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已设为默认值2.0。错误: {e}")
                 else:
                     new_values_for_config_py[key_from_form] = value_from_form
         
         update_config(new_values_for_config_py)
+        
+        # 验证配置文件类型正确性
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, 'config.py')
+        validate_config_types(config_path)
 
         if users_whose_prompt_changed:
             with FileLock(CHAT_CONTEXTS_LOCK_FILE):
@@ -651,16 +808,32 @@ def index():
                     new_values[var] = value_from_form.lower() in ('on', 'true', '1', 'yes')
                 elif isinstance(original_value, int):
                     try:
-                        new_values[var] = int(value_from_form) if value_from_form else 0
-                    except ValueError:
+                        str_value = str(value_from_form).strip()
+                        if str_value and str_value.isdigit():
+                            new_values[var] = int(str_value)
+                        elif str_value == '':
+                            new_values[var] = 0
+                        else:
+                            new_values[var] = original_value
+                            app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 包含非数字字符，已保留旧值。")
+                    except (ValueError, TypeError) as e:
                         new_values[var] = original_value # 保留旧值
-                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。")
+                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。错误: {e}")
                 elif isinstance(original_value, float):
                     try:
-                        new_values[var] = float(value_from_form) if value_from_form else 0.0
-                    except ValueError:
+                        str_value = str(value_from_form).strip()
+                        if str_value:
+                            import re
+                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
+                                new_values[var] = float(str_value)
+                            else:
+                                new_values[var] = original_value
+                                app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 不是有效的数字格式，已保留旧值。")
+                        else:
+                            new_values[var] = 0.0
+                    except (ValueError, TypeError) as e:
                         new_values[var] = original_value # 保留旧值
-                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。错误: {e}")
 
                 elif original_value is None and value_from_form: # 如果原配置中某项不存在 (None), 但表单提交了值
                      # 尝试推断类型或默认为字符串
@@ -680,7 +853,7 @@ def index():
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
                 'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
                 'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE'
+                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
             ]
             for field in boolean_fields_from_editor:
                  # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
@@ -688,6 +861,12 @@ def index():
                     new_values[field] = field in request.form # 统一处理，在表单中出现即为True
 
             update_config(new_values)
+            
+            # 验证配置文件类型正确性
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(script_dir, 'config.py')
+            validate_config_types(config_path)
+            
             return redirect(url_for('index')) # 保存后重定向到自身以刷新GET请求
         except Exception as e:
             app.logger.error(f"主配置页保存配置错误: {e}")
@@ -1258,7 +1437,8 @@ def get_default_config():
         "ASSISTANT_TEMPERATURE": 0.3,
         "ASSISTANT_MAX_TOKEN": 1000,
         "USE_ASSISTANT_FOR_MEMORY_SUMMARY": False,
-        "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": False
+        "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": False,
+        "ENABLE_SENSITIVE_CONTENT_CLEARING": True
     }
 
 def validate_config():

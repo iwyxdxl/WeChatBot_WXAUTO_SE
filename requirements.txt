@@ -14,4 +14,4 @@ filelock
 requests
 beautifulsoup4
 lxml
-wxautox_wechatbot
+wxautox_wechatbot==39.1.3
