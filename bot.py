@@ -1017,7 +1017,7 @@ def message_listener(msg, chat):
     should_process_this_message = False
     content_for_handler = original_content 
 
-    is_group_chat = get_chat_type_info(who)
+    is_group_chat = is_user_group_chat(who)
 
     if not is_group_chat: 
         if who in user_names:
