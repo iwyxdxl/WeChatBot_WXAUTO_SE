@@ -1368,6 +1368,44 @@ def clear_chat_context(username):
             app.logger.error(f"处理 chat_contexts.json 失败: {e}")
             return jsonify({'status': 'error', 'message': '处理聊天上下文文件失败'}), 500
 
+
+
+def run_bat_file():
+    bat_file_path = "一键检测.bat"
+    if os.path.exists(bat_file_path):
+        os.system(f"start {bat_file_path}")
+
+from multiprocessing import Process
+@app.route('/run_one_key_detection', methods=['GET'])
+def run_one_key_detection():
+    bat_file_path = "一键检测.bat"
+    if os.path.exists(bat_file_path):
+        # 使用独立的进程运行 .bat 文件
+        p = Process(target=run_bat_file)
+        p.start()
+        return """
+        <h2>启动成功！</h2>
+        <p>一键检测工具已成功启动！</p>
+        <ul>
+            <li>检测工具将在单独的端口上运行，并自动打开浏览器窗口显示检测结果。</li>
+            <li>启动后，检测工具将在3分钟后自动关闭进程。</li>
+        </ul>
+        <h3>检测功能：</h3>
+        <ul>
+            <li>微信环境检测：检查微信版本、登录状态和窗口状态。</li>
+            <li>API配置检测：验证API密钥和连接状态。</li>
+            <li>系统资源检测：分析CPU、内存使用情况。</li>
+            <li>生成详细的诊断报告：提供问题解决建议。</li>
+        </ul>
+        <p style="color: green; font-weight: bold;">提示：本页面可以安全关闭，检测工具将在后台运行。</p>
+        """
+    return """
+    <h2>启动失败</h2>
+    <p style="color: red;">未找到一键检测.bat，请检查路径是否正确。</p>
+    <p>请确保<b>一键检测.bat</b>文件位于程序当前运行目录下。</p>
+    """
+
+
 def get_default_config():
     return {
         "LISTEN_LIST": [['微信名1', '角色1']],
