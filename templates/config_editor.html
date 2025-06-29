@@ -2078,6 +2078,19 @@
             <button type="button" id="importButton" class="nav-button" style="background-color: #2196F3;">导入配置</button>      
             <a href="https://ciu4ws3raf1.feishu.cn/docx/EgE7d5JvtopzmIxYZMKcLU2xnge?from=from_copylink"
                class="nav-button" target="_blank" style="background-color: #03A9F4;">帮助文档</a>
+           <button id="oneKeyDiagnosticButton" class="nav-button" style="background-color:#f44336;">报错一键检测</button>
+<script>
+document.getElementById('oneKeyDiagnosticButton').addEventListener('click', async function() {
+    try {
+        const response = await fetch('/run_one_key_detection');
+        if (!response.ok) throw new Error('检测失败，请稍后重试。');
+        const result = await response.text();
+        console.log(result || '检测工具启动中');
+    } catch (error) {
+        console.error('检测出现错误:', error);
+    }
+});
+</script>
         </div>
     </div>
     <div id="sidebarOverlay"></div>
