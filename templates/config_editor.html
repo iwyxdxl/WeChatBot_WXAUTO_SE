@@ -2194,7 +2194,7 @@
                 <div id="section-chat-model" class="content-panel">
                     <h2>Chat 模型配置</h2>
                     <div class="form-group">
-                        <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1vuQeYxEnj/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=108" target="_blank">[查看使用教程]</a> )</label>
+                        <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://linkvg.v1chat.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1vuQeYxEnj/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=108" target="_blank">[查看使用教程]</a> )</label>
                         <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
                             <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                             <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
@@ -2316,7 +2316,7 @@
                         </select>
                         <input type="text" id="customImageApiUrl" class="custom-input" placeholder="请输入自定义API地址" {% if config.MOONSHOT_BASE_URL not in ['https://api.moonshot.cn/v1','https://vg.v1api.cc/v1'] %} value="{{ config.MOONSHOT_BASE_URL }}" style="display:block;" {% endif %}>
                         <input type="hidden" id="finalImageApiUrl" name="MOONSHOT_BASE_URL" value="{{ config.MOONSHOT_BASE_URL }}">
-                        <small>推荐使用WeAPIs，API Key可与Chat模型配置保持一致。<a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">[点击注册]</a></small>
+                        <small>推荐使用WeAPIs，API Key可与Chat模型配置保持一致。<a href="https://linkvg.v1chat.cc/register?aff=Rf3h" target="_blank">[点击注册]</a></small>
                         <small>MOONSHOT月之暗面注册地址：<a href="https://platform.moonshot.cn/" target="_blank">[点击注册]</a></small>
                     </div>
                     <div class="form-group">
@@ -2355,7 +2355,7 @@
                         </select>
                         <input type="text" id="customOnlineApiUrl" class="custom-input" placeholder="请输入自定义联网API地址" {% if config.ONLINE_BASE_URL not in ['https://vg.v1api.cc/v1'] %} value="{{ config.ONLINE_BASE_URL }}" style="display:block;" {% endif %}>
                         <input type="hidden" id="finalOnlineApiUrl" name="ONLINE_BASE_URL" value="{{ config.ONLINE_BASE_URL }}">
-                        <small>推荐使用WeAPIs，API Key可与Chat模型配置保持一致。<a href="https://vg.v1api.cc/register?aff=Rf3h" target="_blank">[点击注册]</a></small>
+                        <small>推荐使用WeAPIs，API Key可与Chat模型配置保持一致。<a href="https://linkvg.v1chat.cc/register?aff=Rf3h" target="_blank">[点击注册]</a></small>
                     </div>
                     <div class="form-group">
                         <label>联网搜索模型：</label>
