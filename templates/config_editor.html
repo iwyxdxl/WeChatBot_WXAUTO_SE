@@ -558,6 +558,14 @@
             #reminder-list input[type="datetime-local"] {
                 width: 100%;
             }
+            #summary-group-list .entry {
+                grid-template-columns: 1fr !important;
+                gap: 8px !important;
+            }
+            #summary-group-list .entry button {
+                width: 100%;
+                margin-top: 5px;
+            }
         }
         @media (max-width: 520px) {
             .header-bar {
@@ -654,15 +662,87 @@
         .context-user-item button:hover {
             background-color: #ffa000;
         }
+        
+        /* 时间范围按钮样式 */
+        .time-range-button {
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .time-range-button:hover {
+            transform: translateY(-2px);
+            border-color: #2196F3 !important;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2) !important;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%) !important;
+        }
+        
+        .time-range-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3) !important;
+        }
+        
+        /* 选中状态样式 */
+        input[type="radio"]:checked + .time-range-button {
+            border-color: #2196F3 !important;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+            box-shadow: 0 3px 10px rgba(33, 150, 243, 0.3) !important;
+            transform: translateY(-1px);
+        }
+        
+        input[type="radio"]:checked + .time-range-button > div:first-child {
+            color: #1976d2 !important;
+        }
+        
+        input[type="radio"]:checked + .time-range-button > div:last-child {
+            color: #1565c0 !important;
+        }
+        
+        /* 添加选中后的发光效果 */
+        input[type="radio"]:checked + .time-range-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%);
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .time-range-button {
+                min-width: 120px !important;
+                max-width: 100% !important;
+                margin: 0 auto;
+            }
+        }
     </style>
 
     <script>
+        // 全局函数定义
+        function showAlert(message, isSuccess) {
+            const alertDiv = document.getElementById('config-alert');
+            if (!alertDiv) return;
+            alertDiv.innerText = message;
+            alertDiv.style.backgroundColor = isSuccess ? '#4CAF50' : '#ff4444';
+            alertDiv.style.display = 'block';
+            setTimeout(() => {
+                alertDiv.style.display = 'none';
+            }, 5000);
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             loadReminders();
             startReminderRefresh();
             setupReminderInputListeners();
             startChatContextUserPolling();
             setupGroupChatOptionsVisibility();
+            
+            // 初始化时间范围按钮
+            initTimeRangeButtons();
 
             document.querySelectorAll('#reminder-list').forEach(container => {
                 container.addEventListener('input', debounce(saveReminders, 500));
@@ -1127,17 +1207,6 @@
             }
             initBotStatus();
 
-            function showAlert(message, isSuccess) {
-                const alertDiv = document.getElementById('config-alert');
-                if (!alertDiv) return;
-                alertDiv.innerText = message;
-                alertDiv.style.backgroundColor = isSuccess ? '#4CAF50' : '#ff4444';
-                alertDiv.style.display = 'block';
-                setTimeout(() => {
-                    alertDiv.style.display = 'none';
-                }, 5000);
-            }
-
             async function saveConfig() {
                 const form = document.getElementById('configForm');
                 if (!form) {
@@ -1274,6 +1343,8 @@
                     button.disabled = false;
                 }
             }
+
+
 
             async function checkBotStatus(showAlerts = true) {
                 const button = document.getElementById('botButton');
@@ -2061,6 +2132,178 @@
                 toggleOptions();
             }
         }
+
+        // 时间范围按钮交互效果
+        function initTimeRangeButtons() {
+            const buttons = document.querySelectorAll('.time-range-button');
+            const radios = document.querySelectorAll('input[name="SUMMARY_TIME_RANGE"]');
+            const preview = document.getElementById('timeRangePreview');
+            
+            // 初始化按钮样式
+            function updateButtonStyles() {
+                buttons.forEach(button => {
+                    const range = button.getAttribute('data-range');
+                    const radio = document.querySelector(`input[name="SUMMARY_TIME_RANGE"][value="${range}"]`);
+                    
+                    if (radio && radio.checked) {
+                        button.style.borderColor = '#2196F3';
+                        button.style.backgroundColor = '#e3f2fd';
+                        button.style.transform = 'scale(1.02)';
+                    } else {
+                        button.style.borderColor = '#e0e0e0';
+                        button.style.backgroundColor = 'white';
+                        button.style.transform = 'scale(1)';
+                    }
+                });
+            }
+            
+            // 更新预览文本
+            function updatePreview() {
+                const checkedRadio = document.querySelector('input[name="SUMMARY_TIME_RANGE"]:checked');
+                if (!checkedRadio || !preview) return;
+                
+                const range = checkedRadio.value;
+                const descriptions = {
+                    'today': '今天 (今天 00:00 - 现在)',
+                    'yesterday': '昨天 (昨天 00:00 - 23:59)',
+                    'last3days': '过去三天 (3天前 00:00 - 现在)',
+                    'thisweek': '本周 (本周一 00:00 - 现在)'
+                };
+                
+                preview.textContent = descriptions[range] || '昨天 (昨天 00:00 - 23:59)';
+            }
+            
+            // 添加点击事件
+            buttons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const range = this.getAttribute('data-range');
+                    const radio = document.querySelector(`input[name="SUMMARY_TIME_RANGE"][value="${range}"]`);
+                    
+                    if (radio) {
+                        radio.checked = true;
+                        updateButtonStyles();
+                        updatePreview();
+                    }
+                });
+            });
+            
+            // 添加radio change事件
+            radios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    updateButtonStyles();
+                    updatePreview();
+                });
+            });
+            
+            // 初始化
+            updateButtonStyles();
+            updatePreview();
+        }
+
+        // 群聊总结功能：触发单个群聊总结
+        async function triggerSingleGroupSummary(button) {
+            const entry = button.closest('.entry');
+            const groupNameInput = entry.querySelector('input[name="group_name"]');
+            const groupName = groupNameInput.value.trim();
+            
+            if (!groupName) {
+                showAlert('请先填写群聊名称！', false);
+                return;
+            }
+            
+            // 获取当前选择的时间范围
+            const timeRangeRadio = document.querySelector('input[name="SUMMARY_TIME_RANGE"]:checked');
+            const timeRange = timeRangeRadio ? timeRangeRadio.value : 'yesterday';
+            
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '生成中...';
+            
+            try {
+                const requestBody = { group_name: groupName };
+                if (timeRange) {
+                    requestBody.time_range = timeRange;
+                }
+                
+                const response = await fetch('/trigger_single_group_summary', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const timeInfo = timeRange ? 
+                        getTimeRangeDescription(timeRange) : 
+                        '(默认时间范围)';
+                    showAlert(result.message || `群聊 "${groupName}" 的总结已触发 ${timeInfo}`, true);
+                } else {
+                    const errorData = await response.json().catch(() => ({ detail: "未知错误" }));
+                    showAlert(`触发群聊总结失败: ${errorData.detail || errorData.message || '未知错误'}`, false);
+                }
+            } catch (error) {
+                console.error('触发单个群聊总结失败:', error);
+                showAlert('触发群聊总结失败，请检查网络连接或服务器状态！', false);
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        function addSummaryGroup() {
+            const container = document.getElementById('summary-group-list');
+            const div = document.createElement('div');
+            div.className = 'entry';
+            div.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; margin-bottom: 10px; align-items: center;';
+            
+            // 生成提示词选项
+            const promptOptions = `
+                <option value="">-- 使用默认总结逻辑 --</option>
+                {% for file in prompt_files %}
+                <option value="{{ file }}">{{ file }}</option>
+                {% endfor %}
+            `;
+            
+            div.innerHTML = `
+                <input type="text" name="group_name" value="" placeholder="请输入群聊名称" style="flex: 1;">
+                <select name="group_prompt" style="flex: 1;">
+                    ${promptOptions}
+                </select>
+                <button type="button" onclick="triggerSingleGroupSummary(this)" style="background: #2196F3; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">生成总结</button>
+                <button type="button" onclick="removeSummaryGroup(this)" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">删除</button>
+            `;
+            container.appendChild(div);
+        }
+        window.addSummaryGroup = addSummaryGroup;
+        window.triggerSingleGroupSummary = triggerSingleGroupSummary;
+        window.updateSummaryPreview = updateSummaryPreview;
+        window.setQuickTimeRange = setQuickTimeRange;
+
+        function removeSummaryGroup(button) {
+            const entries = document.querySelectorAll('#summary-group-list .entry');
+            if (entries.length > 1) {
+                button.parentElement.remove();
+            } else {
+                // 如果只剩一个，清空输入框但不删除
+                const input = button.parentElement.querySelector('input[name="group_name"]');
+                if (input) input.value = '';
+            }
+        }
+        window.removeSummaryGroup = removeSummaryGroup;
+
+        // 获取时间范围的中文描述
+        function getTimeRangeDescription(timeRange) {
+            const descriptions = {
+                'today': '(今天 00:00 - 现在)',
+                'yesterday': '(昨天 00:00 - 23:59)',
+                'last3days': '(过去三天)',
+                'thisweek': '(本周)'
+            };
+            return descriptions[timeRange] || '(默认时间范围)';
+        }
     </script>
 </head>
 <body>
@@ -2092,6 +2335,7 @@
                 <li><a href="#" data-target="section-online-search">联网搜索配置</a></li>
                 <li><a href="#" data-target="section-active-emoji">主动表情包配置</a></li>
                 <li><a href="#" data-target="section-group-chat">群聊消息接收</a></li>
+                <li><a href="#" data-target="section-group-summary">群聊总结功能</a></li>
                 <li><a href="#" data-target="section-reply-interval">回复间隔配置</a></li>
                 <li><a href="#" data-target="section-memory">记忆功能配置</a></li>
                 <li><a href="#" data-target="section-active-message">主动消息配置</a></li>
@@ -2454,7 +2698,177 @@
                             <label>关键词触发时忽略回复概率</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY" {% if config.GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
-                        <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的“群聊回复概率”，必定进行回复。此选项优先于“群聊回复概率”。</small>
+                        <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的"群聊回复概率"，必定进行回复。此选项优先于"群聊回复概率"。</small>
+                    </div>
+                </div>
+
+                <div id="section-group-summary" class="content-panel">
+                    <h2>群聊总结功能</h2>
+                    <div class="form-group">
+                        <div class="switch-item">
+                            <label>启用群聊总结功能</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_GROUP_SUMMARY" {% if config.ENABLE_GROUP_SUMMARY %}checked{% endif %}><span class="slider round"></span></label></div>
+                        </div>
+                        <small>启用后，在指定群聊中发送"群聊总结"、"总结群聊"、"生成总结"或"聊天总结"即可生成群聊精华总结</small>
+                    </div>
+                    
+                    <!-- 总结配置 -->
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 15px; font-weight: bold;">总结配置</label>
+                        
+                        <!-- 总结时间范围选择配置 -->
+                        <div style="background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%); padding: 20px; border-radius: 12px; border-left: 4px solid #2196F3; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);">
+                            <div style="font-weight: 600; color: #1976d2; margin-bottom: 18px; font-size: 16px;">📅 总结时间范围</div>
+                            
+                            <div style="margin-bottom: 18px;">
+                                <label style="font-size: 14px; color: #1976d2; margin-bottom: 12px; display: block; font-weight: 500;">选择时间范围:</label>
+                                <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start;">
+                                    <label style="position: relative; cursor: pointer; flex: 0 0 auto;">
+                                        <input type="radio" name="SUMMARY_TIME_RANGE" value="today" 
+                                               {% if config.SUMMARY_TIME_RANGE == 'today' %}checked{% endif %}
+                                               style="position: absolute; opacity: 0; width: 0; height: 0;">
+                                        <div class="time-range-button" data-range="today" style="
+                                            text-align: center; 
+                                            padding: 14px 16px; 
+                                            border: 2px solid #e0e0e0; 
+                                            border-radius: 10px; 
+                                            transition: all 0.3s ease; 
+                                            font-size: 13px; 
+                                            background: white; 
+                                            min-width: 140px; 
+                                            max-width: 160px;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        ">
+                                            <div style="font-weight: 600; color: #333; font-size: 14px;">📅 今天</div>
+                                            <div style="font-size: 11px; color: #666; margin-top: 6px; line-height: 1.3;">今天 00:00 - 现在</div>
+                                        </div>
+                                    </label>
+                                    
+                                    <label style="position: relative; cursor: pointer; flex: 0 0 auto;">
+                                        <input type="radio" name="SUMMARY_TIME_RANGE" value="yesterday" 
+                                               {% if not config.SUMMARY_TIME_RANGE or config.SUMMARY_TIME_RANGE == 'yesterday' %}checked{% endif %}
+                                               style="position: absolute; opacity: 0; width: 0; height: 0;">
+                                        <div class="time-range-button" data-range="yesterday" style="
+                                            text-align: center; 
+                                            padding: 14px 16px; 
+                                            border: 2px solid #e0e0e0; 
+                                            border-radius: 10px; 
+                                            transition: all 0.3s ease; 
+                                            font-size: 13px; 
+                                            background: white; 
+                                            min-width: 140px; 
+                                            max-width: 160px;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        ">
+                                            <div style="font-weight: 600; color: #333; font-size: 14px;">🕒 昨天</div>
+                                            <div style="font-size: 11px; color: #666; margin-top: 6px; line-height: 1.3;">昨天 00:00 - 23:59</div>
+                                        </div>
+                                    </label>
+                                    
+                                    <label style="position: relative; cursor: pointer; flex: 0 0 auto;">
+                                        <input type="radio" name="SUMMARY_TIME_RANGE" value="last3days" 
+                                               {% if config.SUMMARY_TIME_RANGE == 'last3days' %}checked{% endif %}
+                                               style="position: absolute; opacity: 0; width: 0; height: 0;">
+                                        <div class="time-range-button" data-range="last3days" style="
+                                            text-align: center; 
+                                            padding: 14px 16px; 
+                                            border: 2px solid #e0e0e0; 
+                                            border-radius: 10px; 
+                                            transition: all 0.3s ease; 
+                                            font-size: 13px; 
+                                            background: white; 
+                                            min-width: 140px; 
+                                            max-width: 160px;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        ">
+                                            <div style="font-weight: 600; color: #333; font-size: 14px;">📆 过去三天</div>
+                                            <div style="font-size: 11px; color: #666; margin-top: 6px; line-height: 1.3;">3天前 00:00 - 现在</div>
+                                        </div>
+                                    </label>
+                                    
+                                    <label style="position: relative; cursor: pointer; flex: 0 0 auto;">
+                                        <input type="radio" name="SUMMARY_TIME_RANGE" value="thisweek" 
+                                               {% if config.SUMMARY_TIME_RANGE == 'thisweek' %}checked{% endif %}
+                                               style="position: absolute; opacity: 0; width: 0; height: 0;">
+                                        <div class="time-range-button" data-range="thisweek" style="
+                                            text-align: center; 
+                                            padding: 14px 16px; 
+                                            border: 2px solid #e0e0e0; 
+                                            border-radius: 10px; 
+                                            transition: all 0.3s ease; 
+                                            font-size: 13px; 
+                                            background: white; 
+                                            min-width: 140px; 
+                                            max-width: 160px;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                        ">
+                                            <div style="font-weight: 600; color: #333; font-size: 14px;">📅 本周</div>
+                                            <div style="font-size: 11px; color: #666; margin-top: 6px; line-height: 1.3;">本周一 00:00 - 现在</div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 18px; padding: 12px 16px; background: linear-gradient(135deg, #bbdefb 0%, #e1f5fe 100%); border-radius: 8px; border-left: 3px solid #2196F3;">
+                                <div style="font-size: 13px; color: #0d47a1; font-weight: 600; margin-bottom: 6px;">✨ 当前选择:</div>
+                                <div id="timeRangePreview" style="font-size: 13px; color: #1565c0; font-weight: 500;">
+                                    {% if config.SUMMARY_TIME_RANGE == 'today' %}
+                                        今天 (今天 00:00 - 现在)
+                                    {% elif config.SUMMARY_TIME_RANGE == 'last3days' %}
+                                        过去三天 (3天前 00:00 - 现在)
+                                    {% elif config.SUMMARY_TIME_RANGE == 'thisweek' %}
+                                        本周 (本周一 00:00 - 现在)
+                                    {% else %}
+                                        昨天 (昨天 00:00 - 23:59)
+                                    {% endif %}
+                                </div>
+                                <div style="font-size: 11px; color: #1565c0; margin-top: 6px; font-style: italic; opacity: 0.9;">💡 此时间范围将用于下方群聊管理中的"生成总结"按钮和定时任务</div>
+                            </div>
+                        </div>
+                    
+                    <!-- 群聊列表管理 -->
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 10px; font-weight: bold;">群聊管理</label>
+                        <div id="summary-group-list">
+                            {% for group_data in config.SUMMARY_GROUP_LIST or [{'group': '', 'prompt': ''}] %}
+                            <div class="entry" style="display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; margin-bottom: 10px; align-items: center;">
+                                <input type="text" name="group_name" value="{{ group_data.group if group_data is mapping else group_data }}" placeholder="请输入群聊名称" style="flex: 1;">
+                                <select name="group_prompt" style="flex: 1;">
+                                    <option value="">-- 使用默认总结逻辑 --</option>
+                                    {% for file in prompt_files %}
+                                    <option value="{{ file }}" {% if (group_data.prompt if group_data is mapping else '') == file %}selected{% endif %}>{{ file }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" onclick="triggerSingleGroupSummary(this)" style="background: #2196F3; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">生成总结</button>
+                                <button type="button" onclick="removeSummaryGroup(this)" style="background: #ff4444; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">删除</button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="button" onclick="addSummaryGroup()" style="background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-top: 10px;">添加群聊</button>
+                        <small style="display: block; margin-top: 10px; color: #777;">请填写在"用户列表"中配置的群聊名称，每个群聊可以配置独立的总结提示词</small>
+                    </div>
+                        
+                        <!-- 每日自动总结配置 -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 10px; font-weight: 500; color: #333;">⏰ 每日自动总结</label>
+                            <div style="max-width: 300px;">
+                                <label style="font-size: 12px; color: #666; margin-bottom: 5px; display: block;">每日总结时间:</label>
+                                <input type="time" name="SUMMARY_TIME" value="{{ config.SUMMARY_TIME }}" style="width: 100%;">
+                                <small style="color: #888; font-size: 11px;">系统将在此时间自动生成并发送群聊总结</small>
+                            </div>
+                        </div>
+                        
+                        <!-- 说明文字 -->
+                        <div style="margin-top: 15px; font-size: 12px; color: #666; line-height: 1.5;">
+                            <div style="margin-bottom: 8px;"><strong>使用说明:</strong></div>
+                            <ul style="margin: 0; padding-left: 20px;">
+                                <li style="margin-bottom: 4px;"><strong>手动生成</strong>：先在上方选择时间范围，然后在群聊管理中点击"生成总结"</li>
+                                <li style="margin-bottom: 4px;"><strong>快速总结</strong>：在群聊中发送"群聊总结"，使用智能时间范围</li>
+                                <li style="margin-bottom: 4px;"><strong>定时总结</strong>：系统每日自动生成并发送总结到群聊</li>
+                                <li style="margin-bottom: 4px;"><strong>个性化</strong>：每个群聊可配置独立的提示词文件</li>
+                                <li>所有总结结果都会直接发送到对应群聊中</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 
