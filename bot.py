@@ -1477,8 +1477,19 @@ def process_user_messages(user_id):
             summary_keywords = ['群聊总结', '总结群聊', '生成总结', '聊天总结']
             if any(keyword in merged_message for keyword in summary_keywords):
                 # 检查是否为指定的总结群聊列表中的群聊
+                import config
                 if hasattr(config, 'SUMMARY_GROUP_LIST') and config.SUMMARY_GROUP_LIST:
-                    if user_id in config.SUMMARY_GROUP_LIST:
+                    # 正确检查群聊是否在配置列表中
+                    group_found = False
+                    for group_data in config.SUMMARY_GROUP_LIST:
+                        if isinstance(group_data, dict) and group_data.get('group') == user_id:
+                            group_found = True
+                            break
+                        elif isinstance(group_data, str) and group_data == user_id:
+                            group_found = True
+                            break
+                    
+                    if group_found:
                         logger.info(f"检测到群聊总结请求，来自群聊 '{user_id}'")
                         
                         # 异步处理群聊总结，避免阻塞主线程
@@ -2095,7 +2106,6 @@ def get_chat_messages_for_summary(user_id, time_range=None):
     
     try:
         import os
-        import json
         from datetime import datetime, timedelta
         
         # 确定日期范围
@@ -2127,72 +2137,87 @@ def get_chat_messages_for_summary(user_id, time_range=None):
         
         logger.info(f"开始获取群聊 '{user_id}' 的聊天记录，时间范围：{time_description}")
         
-        # 检查聊天存档目录
-        archive_dir = os.path.join(root_dir, 'chat_archive', user_id)
+        # 检查聊天存档目录（实际的文件格式）
+        archive_dir = os.path.join(root_dir, CHAT_ARCHIVE_DIR)
         if not os.path.exists(archive_dir):
             logger.warning(f"聊天存档目录不存在: {archive_dir}")
             return []
         
-        # 获取需要检查的日期文件
+        # 获取prompt_name
+        prompt_name = prompt_mapping.get(user_id, user_id)
+        
+        # 计算需要检查的日期范围
         current_date = start_date.date()
         end_date_only = end_date.date()
-        files_to_check = []
         
-        while current_date <= end_date_only:
-            date_str = current_date.strftime('%Y%m%d')
-            file_path = os.path.join(archive_dir, f'{date_str}.json')
-            if os.path.exists(file_path):
-                files_to_check.append((file_path, current_date))
-            current_date += timedelta(days=1)
-        
-        if not files_to_check:
-            logger.warning(f"在时间范围 {time_description} 内没有找到任何聊天记录文件")
-            return []
-        
-        logger.info(f"找到 {len(files_to_check)} 个文件需要检查：{[f[1].strftime('%Y-%m-%d') for f in files_to_check]}")
-        
-        # 读取并处理消息
         all_messages = []
+        files_checked = 0
         valid_message_count = 0
         
-        for file_path, file_date in files_to_check:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    daily_messages = json.load(f)
+        # 检查每个日期的文件
+        while current_date <= end_date_only:
+            date_str = current_date.strftime('%Y-%m-%d')
+            # 实际的文件格式：测试群1_角色1_2025-07-01.txt
+            archive_file = os.path.join(archive_dir, f'{user_id}_{prompt_name}_{date_str}.txt')
+            
+            if os.path.exists(archive_file):
+                files_checked += 1
+                logger.debug(f"正在检查文件: {archive_file}")
+                
+                try:
+                    with open(archive_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
                     
-                for msg in daily_messages:
-                    # 解析时间戳
-                    timestamp_str = msg.get('timestamp', '')
-                    if not timestamp_str:
-                        continue
-                    
-                    try:
-                        msg_time = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                    # 解析每行的时间戳并过滤
+                    for line in lines:
+                        line = line.strip()
+                        if not line or line.startswith('[系统]'):
+                            continue
                         
-                        # 检查是否在时间范围内
-                        if start_date <= msg_time <= end_date:
-                            speaker = msg.get('speaker', '').strip()
-                            content = msg.get('content', '').strip()
-                            
-                            # 过滤无效消息
-                            if speaker and content and content not in ['[图片]', '[文件]', '[语音]', '[视频]', '[表情]']:
-                                formatted_msg = f"[{msg_time.strftime('%H:%M')}] {speaker}: {content}"
-                                all_messages.append(formatted_msg)
-                                valid_message_count += 1
-                    
-                    except ValueError:
-                        continue  # 跳过时间格式错误的消息
-                        
-            except (FileNotFoundError, json.JSONDecodeError, IOError) as e:
-                logger.warning(f"读取文件失败: {file_path}, 错误: {e}")
-                continue
+                        # 解析时间戳：格式为 2025-01-22 Wednesday 14:30:25 | [发言者] 消息内容
+                        if ' | ' in line:
+                            try:
+                                timestamp_str = line.split(' | ')[0]
+                                # 移除星期几部分
+                                timestamp_parts = timestamp_str.split()
+                                if len(timestamp_parts) >= 3:
+                                    # 重构为：YYYY-MM-DD HH:MM:SS
+                                    clean_timestamp = f"{timestamp_parts[0]} {timestamp_parts[-1]}"
+                                    message_time = datetime.strptime(clean_timestamp, '%Y-%m-%d %H:%M:%S')
+                                    
+                                    # 检查是否在时间范围内
+                                    if start_date <= message_time <= end_date:
+                                        # 提取发言者和消息内容
+                                        message_part = line.split(' | ', 1)[1]
+                                        if message_part.startswith('[') and ']' in message_part:
+                                            speaker_end = message_part.find(']')
+                                            speaker = message_part[1:speaker_end]
+                                            content = message_part[speaker_end+2:] if speaker_end+2 < len(message_part) else ""
+                                            
+                                            # 过滤无效消息
+                                            if speaker and content and content not in ['[图片]', '[文件]', '[语音]', '[视频]', '[表情]']:
+                                                formatted_msg = f"[{message_time.strftime('%H:%M')}] {speaker}: {content}"
+                                                all_messages.append((message_time, formatted_msg))
+                                                valid_message_count += 1
+                            except (ValueError, IndexError):
+                                # 时间戳解析失败，但如果是当前日期范围内的文件，仍然包含该消息
+                                if current_date == now.date():
+                                    all_messages.append((now, line))
+                                    valid_message_count += 1
+                                    
+                except Exception as e:
+                    logger.warning(f"读取文件失败: {archive_file}, 错误: {e}")
+                    continue
+            
+            current_date += timedelta(days=1)
         
-        logger.info(f"从时间范围 {time_description} 内获取到 {valid_message_count} 条有效消息")
+        logger.info(f"检查了 {files_checked} 个文件，从时间范围 {time_description} 内获取到 {valid_message_count} 条有效消息")
         
-        # 按时间排序（消息已经包含时间信息）
-        all_messages.sort()
+        # 按时间排序并格式化
+        all_messages.sort(key=lambda x: x[0])
+        formatted_messages = [msg[1] for msg in all_messages]
         
-        return all_messages
+        return formatted_messages
         
     except Exception as e:
         logger.error(f"获取聊天消息失败: {e}", exc_info=True)
@@ -2200,6 +2225,7 @@ def get_chat_messages_for_summary(user_id, time_range=None):
 
 def process_group_summary(user_id):
     """处理群聊总结请求"""
+    import config
     try:
         # 查找是否有特定群聊的配置
         group_config = None

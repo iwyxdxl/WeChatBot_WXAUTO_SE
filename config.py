@@ -12,7 +12,7 @@
 
 # 用户列表(请配置要和bot说话的账号的微信昵称！)
 # 例如：LISTEN_LIST = [['微信名1', '角色1'],['微信名2', '角色2']]
-LISTEN_LIST = [['微信名1', '角色1']]
+LISTEN_LIST = [['测试群1', '角色1'], ['测试群2', '角色2']]
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = ''
@@ -144,4 +144,19 @@ USE_ASSISTANT_FOR_MEMORY_SUMMARY = False
 # 敏感词处理配置
 # 开启后遇到敏感词时自动清除Memory_Temp文件和聊天上下文
 ENABLE_SENSITIVE_CONTENT_CLEARING = True
+
+# === 群聊总结功能配置 ===
+# 是否启用群聊总结功能
+ENABLE_GROUP_SUMMARY = True
+
+# 支持总结的群聊列表
+SUMMARY_GROUP_LIST = [{'group': '测试群1', 'prompt': '群聊总结官'}, {'group': '测试群2', 'prompt': '高冷群聊总结助手'}]
+
+# 每日总结执行时间（24小时制，格式：HH:MM）
+SUMMARY_TIME = '19:46'
+
+# 群聊总结时间范围选项: 'today', 'yesterday', 'last3days', 'thisweek'
+SUMMARY_TIME_RANGE = 'today'
+
+# --- 配置文件结束 ---
 
