@@ -317,6 +317,28 @@ def submit_config():
                     processed_listen_list.append([nick_stripped, pf_stripped])
         new_values_for_config_py['LISTEN_LIST'] = processed_listen_list
         
+        # 处理群聊总结的群聊列表
+        group_names_from_form = request.form.getlist('group_name')
+        group_prompts_from_form = request.form.getlist('group_prompt')
+        processed_group_list = []
+        if group_names_from_form and group_prompts_from_form and len(group_names_from_form) == len(group_prompts_from_form):
+            for i, group_name in enumerate(group_names_from_form):
+                group_name_stripped = group_name.strip()
+                group_prompt = group_prompts_from_form[i]
+                if group_name_stripped:  # 只添加非空的群聊名称
+                    if group_prompt:
+                        # 如果提供了提示词，保存为字典格式
+                        processed_group_list.append({'group': group_name_stripped, 'prompt': group_prompt})
+                    else:
+                        # 如果没有提供提示词，只保存群聊名称（向后兼容）
+                        processed_group_list.append(group_name_stripped)
+        new_values_for_config_py['SUMMARY_GROUP_LIST'] = processed_group_list
+        
+        # 处理群聊总结时间范围选择
+        summary_time_range = request.form.get('SUMMARY_TIME_RANGE', 'yesterday')
+        new_values_for_config_py['SUMMARY_TIME_RANGE'] = summary_time_range
+        app.logger.info(f"保存群聊总结时间范围: {summary_time_range}")
+        
         new_listen_list_map = {item[0]: item[1] for item in processed_listen_list}
         
         users_whose_prompt_changed = []
@@ -332,14 +354,15 @@ def submit_config():
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
             'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
             'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
+            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING',
+            'ENABLE_GROUP_SUMMARY'
         ]
         for field in boolean_fields:
             new_values_for_config_py[field] = field in request.form
 
         for key_from_form in request.form:
-            if key_from_form in ['nickname', 'prompt_file'] or key_from_form in boolean_fields:
-                continue 
+            if key_from_form in ['nickname', 'prompt_file', 'group_name', 'group_prompt'] or key_from_form in boolean_fields:
+                continue
 
             value_from_form = request.form[key_from_form].strip()
             
@@ -853,7 +876,8 @@ def index():
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
                 'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
                 'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
+                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING',
+                'ENABLE_GROUP_SUMMARY'
             ]
             for field in boolean_fields_from_editor:
                  # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
@@ -881,11 +905,17 @@ def index():
         prompt_files = [f[:-3] for f in os.listdir(prompt_files_dir) if f.endswith('.md')]
         config = parse_config() # 重新解析以获取最新配置
         chat_context_users = get_chat_context_users()
+        
+        # 提取群聊名称列表（从LISTEN_LIST获取）
+        group_names = []
+        if 'LISTEN_LIST' in config and config['LISTEN_LIST']:
+            group_names = [entry[0] for entry in config['LISTEN_LIST'] if isinstance(entry, list) and len(entry) >= 1]
 
         return render_template('config_editor.html',
                              config=config,
                              prompt_files=prompt_files,
-                             chat_context_users=chat_context_users)
+                             chat_context_users=chat_context_users,
+                             group_names=group_names)
     except Exception as e:
         app.logger.error(f"加载主配置页面错误: {e}")
         return "加载配置页面错误，请检查日志。"
@@ -1367,6 +1397,65 @@ def clear_chat_context(username):
         except (json.JSONDecodeError, IOError) as e:
             app.logger.error(f"处理 chat_contexts.json 失败: {e}")
             return jsonify({'status': 'error', 'message': '处理聊天上下文文件失败'}), 500
+
+@app.route('/trigger_single_group_summary', methods=['POST'])
+@login_required 
+def trigger_single_group_summary():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': '无效的请求数据'}), 400
+        
+        group_name = data['group_name'].strip()
+        if not group_name:
+            return jsonify({'error': '群聊名称不能为空'}), 400
+        
+        # 创建群聊总结请求文件，让bot程序处理
+        group_summary_requests_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'group_summary_requests.json')
+        group_summary_lock_file = group_summary_requests_file + '.lock'
+        
+        try:
+            with FileLock(group_summary_lock_file, timeout=5):
+                # 读取现有请求
+                requests_list = []
+                if os.path.exists(group_summary_requests_file):
+                    try:
+                        with open(group_summary_requests_file, 'r', encoding='utf-8') as f:
+                            requests_list = json.load(f)
+                    except (json.JSONDecodeError, IOError):
+                        requests_list = []
+                
+                # 检查是否已有相同的请求（避免重复）
+                existing_request = any(req.get('group_name') == group_name and req.get('status') == 'pending' 
+                                     for req in requests_list)
+                
+                if existing_request:
+                    return jsonify({'message': f'群聊 "{group_name}" 已有待处理的总结请求，请稍候...'})
+                
+                # 添加新请求
+                new_request = {
+                    'group_name': group_name,
+                    'status': 'pending',
+                    'created_at': time.time(),
+                    'request_id': f"{group_name}_{int(time.time())}"
+                }
+                
+                requests_list.append(new_request)
+                
+                # 写入文件
+                with open(group_summary_requests_file, 'w', encoding='utf-8') as f:
+                    json.dump(requests_list, f, ensure_ascii=False, indent=2)
+                
+                app.logger.info(f"已创建群聊总结请求: {group_name}")
+                return jsonify({'message': f'群聊 "{group_name}" 的总结请求已提交，Bot程序将尽快处理'})
+                
+        except Exception as file_error:
+            app.logger.error(f"处理群聊总结请求文件时出错: {file_error}")
+            return jsonify({'error': '无法创建群聊总结请求，请稍后重试'}), 500
+            
+    except Exception as e:
+        app.logger.error(f"触发群聊总结失败: {e}")
+        return jsonify({'error': f'触发群聊总结失败: {str(e)}'}), 500
 
 def get_default_config():
     return {

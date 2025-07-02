@@ -12,7 +12,7 @@
 
 # 用户列表(请配置要和bot说话的账号的微信昵称！)
 # 例如：LISTEN_LIST = [['微信名1', '角色1'],['微信名2', '角色2']]
-LISTEN_LIST = [['微信名1', '角色1']]
+LISTEN_LIST = [['测试群1', '角色1'], ['测试群2', '角色2']]
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = ''
@@ -144,4 +144,37 @@ USE_ASSISTANT_FOR_MEMORY_SUMMARY = False
 # 敏感词处理配置
 # 开启后遇到敏感词时自动清除Memory_Temp文件和聊天上下文
 ENABLE_SENSITIVE_CONTENT_CLEARING = True
+
+# === 群聊总结功能配置 ===
+# 是否启用群聊总结功能
+ENABLE_GROUP_SUMMARY = True
+
+# 支持总结的群聊列表 (每个群聊可以配置专门的总结角色)
+SUMMARY_GROUP_LIST = [{'group': '测试群1', 'prompt': '群聊总结官'}, {'group': '测试群2', 'prompt': '高冷群聊总结助手'}]
+
+# 每日总结执行时间（24小时制，格式：HH:MM）
+SUMMARY_TIME = '19:46'
+
+# 群聊总结时间范围选项: 'today', 'yesterday', 'last3days', 'thisweek'
+SUMMARY_TIME_RANGE = 'today'
+
+# === MySQL数据库配置 ===
+# 数据库总开关
+ENABLE_DATABASE = True
+
+# 数据库连接信息
+DB_HOST = 'ip'
+DB_PORT = 3306
+DB_USER = 'root'
+DB_PASSWORD = ' 密码'
+DB_NAME = 'wechat_bot'
+DB_CHARSET = 'utf8mb4'
+
+# 数据库连接池配置
+DB_POOL_SIZE = 5
+DB_MAX_OVERFLOW = 10
+DB_POOL_TIMEOUT = 30
+DB_POOL_RECYCLE = 3600  # 连接回收时间（秒）
+
+# --- 配置文件结束 ---
 
