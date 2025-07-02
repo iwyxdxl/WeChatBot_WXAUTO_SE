@@ -361,7 +361,7 @@ def submit_config():
             new_values_for_config_py[field] = field in request.form
 
         for key_from_form in request.form:
-            if key_from_form in ['nickname', 'prompt_file', 'group_name'] or key_from_form in boolean_fields:
+            if key_from_form in ['nickname', 'prompt_file', 'group_name', 'group_prompt'] or key_from_form in boolean_fields:
                 continue
 
             value_from_form = request.form[key_from_form].strip()
@@ -905,11 +905,17 @@ def index():
         prompt_files = [f[:-3] for f in os.listdir(prompt_files_dir) if f.endswith('.md')]
         config = parse_config() # 重新解析以获取最新配置
         chat_context_users = get_chat_context_users()
+        
+        # 提取群聊名称列表（从LISTEN_LIST获取）
+        group_names = []
+        if 'LISTEN_LIST' in config and config['LISTEN_LIST']:
+            group_names = [entry[0] for entry in config['LISTEN_LIST'] if isinstance(entry, list) and len(entry) >= 1]
 
         return render_template('config_editor.html',
                              config=config,
                              prompt_files=prompt_files,
-                             chat_context_users=chat_context_users)
+                             chat_context_users=chat_context_users,
+                             group_names=group_names)
     except Exception as e:
         app.logger.error(f"加载主配置页面错误: {e}")
         return "加载配置页面错误，请检查日志。"

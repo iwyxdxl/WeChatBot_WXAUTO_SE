@@ -1,6 +1,7 @@
 flask
 flask-cors
 sqlalchemy~=2.0.37
+pymysql
 comtypes
 Pillow
 typing-extensions

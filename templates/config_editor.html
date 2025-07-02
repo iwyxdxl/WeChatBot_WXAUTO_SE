@@ -2259,6 +2259,14 @@
             div.className = 'entry';
             div.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; margin-bottom: 10px; align-items: center;';
             
+            // 生成群聊选项
+            const groupOptions = `
+                <option value="">-- 请选择群聊 --</option>
+                {% for group_name in group_names %}
+                <option value="{{ group_name }}">{{ group_name }}</option>
+                {% endfor %}
+            `;
+            
             // 生成提示词选项
             const promptOptions = `
                 <option value="">-- 使用默认总结逻辑 --</option>
@@ -2268,7 +2276,9 @@
             `;
             
             div.innerHTML = `
-                <input type="text" name="group_name" value="" placeholder="请输入群聊名称" style="flex: 1;">
+                <select name="group_name" style="flex: 1;">
+                    ${groupOptions}
+                </select>
                 <select name="group_prompt" style="flex: 1;">
                     ${promptOptions}
                 </select>
@@ -2287,9 +2297,9 @@
             if (entries.length > 1) {
                 button.parentElement.remove();
             } else {
-                // 如果只剩一个，清空输入框但不删除
-                const input = button.parentElement.querySelector('input[name="group_name"]');
-                if (input) input.value = '';
+                // 如果只剩一个，清空下拉框但不删除
+                const select = button.parentElement.querySelector('select[name="group_name"]');
+                if (select) select.value = '';
             }
         }
         window.removeSummaryGroup = removeSummaryGroup;
@@ -2832,7 +2842,12 @@
                         <div id="summary-group-list">
                             {% for group_data in config.SUMMARY_GROUP_LIST or [{'group': '', 'prompt': ''}] %}
                             <div class="entry" style="display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 10px; margin-bottom: 10px; align-items: center;">
-                                <input type="text" name="group_name" value="{{ group_data.group if group_data is mapping else group_data }}" placeholder="请输入群聊名称" style="flex: 1;">
+                                <select name="group_name" style="flex: 1;">
+                                    <option value="">-- 请选择群聊 --</option>
+                                    {% for group_name in group_names %}
+                                    <option value="{{ group_name }}" {% if (group_data.group if group_data is mapping else group_data) == group_name %}selected{% endif %}>{{ group_name }}</option>
+                                    {% endfor %}
+                                </select>
                                 <select name="group_prompt" style="flex: 1;">
                                     <option value="">-- 使用默认总结逻辑 --</option>
                                     {% for file in prompt_files %}
@@ -2845,7 +2860,7 @@
                             {% endfor %}
                         </div>
                         <button type="button" onclick="addSummaryGroup()" style="background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-top: 10px;">添加群聊</button>
-                        <small style="display: block; margin-top: 10px; color: #777;">请填写在"用户列表"中配置的群聊名称，每个群聊可以配置独立的总结提示词</small>
+                        <small style="display: block; margin-top: 10px; color: #777;">请从下拉框中选择已在"用户列表"中配置的群聊，每个群聊可以配置独立的总结提示词</small>
                     </div>
                         
                         <!-- 每日自动总结配置 -->

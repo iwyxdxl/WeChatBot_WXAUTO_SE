@@ -37,6 +37,10 @@ from wxautox_wechatbot.param import WxParam
 WxParam.ENABLE_FILE_LOGGER = False
 WxParam.FORCE_MESSAGE_XBIAS = True
 
+# 数据库相关导入
+from database import db_manager, init_database, close_database
+from models import UserChatMessage, GroupChatMessage, GroupSummary
+
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
 prompt_mapping = {entry[0]: entry[1] for entry in LISTEN_LIST}
@@ -2091,7 +2095,7 @@ def summarize_and_save(user_id):
 
 def get_chat_messages_for_summary(user_id, time_range=None):
     """
-    获取指定时间范围内的聊天消息用于生成总结
+    获取指定时间范围内的聊天消息用于生成总结（数据库或文件）
     
     参数:
         user_id: 用户ID
@@ -2105,37 +2109,110 @@ def get_chat_messages_for_summary(user_id, time_range=None):
         time_range = 'yesterday'  # 默认昨天
     
     try:
+        # 优先从数据库获取
+        if db_manager.is_available():
+            messages = get_messages_from_database(user_id, time_range)
+            if messages is not None:
+                return messages
+            else:
+                logger.warning(f"数据库查询失败，降级使用文件查询，用户: {user_id}")
+        
+        # 数据库不可用时从文件获取
+        return get_messages_from_files(user_id, time_range)
+        
+    except Exception as e:
+        logger.error(f"获取聊天消息失败: {e}", exc_info=True)
+        return []
+
+def get_messages_from_database(user_id, time_range):
+    """从数据库获取聊天消息"""
+    try:
+        def query_operation(session):
+            # 计算时间范围
+            start_time, end_time, time_description = calculate_time_range(time_range)
+            
+            # 判断是群聊还是私聊
+            is_group = is_user_group_chat(user_id)
+            
+            if is_group:
+                # 查询群聊表
+                messages = session.query(GroupChatMessage)\
+                    .filter(GroupChatMessage.group_id == user_id)\
+                    .filter(GroupChatMessage.message_time >= start_time)\
+                    .filter(GroupChatMessage.message_time <= end_time)\
+                    .order_by(GroupChatMessage.message_time)\
+                    .all()
+            else:
+                # 查询用户表
+                messages = session.query(UserChatMessage)\
+                    .filter(UserChatMessage.user_id == user_id)\
+                    .filter(UserChatMessage.message_time >= start_time)\
+                    .filter(UserChatMessage.message_time <= end_time)\
+                    .order_by(UserChatMessage.message_time)\
+                    .all()
+            
+            # 格式化消息
+            formatted_messages = []
+            valid_count = 0
+            for msg in messages:
+                # 过滤无效消息
+                if msg.message_content and msg.message_content not in ['[图片]', '[文件]', '[语音]', '[视频]', '[表情]']:
+                    formatted_msg = f"[{msg.message_time.strftime('%H:%M')}] {msg.speaker}: {msg.message_content}"
+                    formatted_messages.append(formatted_msg)
+                    valid_count += 1
+            
+            logger.info(f"数据库查询成功，{'群聊' if is_group else '用户'} '{user_id}' 在{time_description}内获取到 {valid_count} 条有效消息")
+            return formatted_messages
+        
+        result = db_manager.execute_with_retry(query_operation)
+        return result if result is not None else []
+        
+    except Exception as e:
+        logger.error(f"数据库查询出错，用户 {user_id}: {e}")
+        return None
+
+def calculate_time_range(time_range):
+    """计算时间范围"""
+    from datetime import datetime, timedelta
+    
+    now = datetime.now()
+    if time_range == 'today':
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
+        time_description = f"今天 ({now.strftime('%Y-%m-%d')})"
+    elif time_range == 'yesterday':
+        yesterday = now - timedelta(days=1)
+        start_date = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        time_description = f"昨天 ({yesterday.strftime('%Y-%m-%d')})"
+    elif time_range == 'last3days':
+        start_date = (now - timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
+        time_description = f"过去三天 ({start_date.strftime('%Y-%m-%d')} 至 {now.strftime('%Y-%m-%d')})"
+    elif time_range == 'thisweek':
+        days_since_monday = now.weekday()
+        start_date = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
+        time_description = f"本周 ({start_date.strftime('%Y-%m-%d')} 至 {now.strftime('%Y-%m-%d')})"
+    else:
+        # 默认为昨天
+        yesterday = now - timedelta(days=1)
+        start_date = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        time_description = f"昨天 ({yesterday.strftime('%Y-%m-%d')})"
+    
+    return start_date, end_date, time_description
+
+def get_messages_from_files(user_id, time_range):
+    """从文件获取聊天消息（原有逻辑）"""
+    try:
         import os
         from datetime import datetime, timedelta
         
-        # 确定日期范围
-        now = datetime.now()
-        if time_range == 'today':
-            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = now
-            time_description = f"今天 ({now.strftime('%Y-%m-%d')})"
-        elif time_range == 'yesterday':
-            yesterday = now - timedelta(days=1)
-            start_date = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
-            time_description = f"昨天 ({yesterday.strftime('%Y-%m-%d')})"
-        elif time_range == 'last3days':
-            start_date = (now - timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = now
-            time_description = f"过去三天 ({start_date.strftime('%Y-%m-%d')} 至 {now.strftime('%Y-%m-%d')})"
-        elif time_range == 'thisweek':
-            days_since_monday = now.weekday()
-            start_date = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = now
-            time_description = f"本周 ({start_date.strftime('%Y-%m-%d')} 至 {now.strftime('%Y-%m-%d')})"
-        else:
-            # 默认为昨天
-            yesterday = now - timedelta(days=1)
-            start_date = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
-            time_description = f"昨天 ({yesterday.strftime('%Y-%m-%d')})"
+        # 计算时间范围
+        start_date, end_date, time_description = calculate_time_range(time_range)
         
-        logger.info(f"开始获取群聊 '{user_id}' 的聊天记录，时间范围：{time_description}")
+        logger.info(f"开始从文件获取群聊 '{user_id}' 的聊天记录，时间范围：{time_description}")
         
         # 检查聊天存档目录（实际的文件格式）
         archive_dir = os.path.join(root_dir, CHAT_ARCHIVE_DIR)
@@ -2201,8 +2278,8 @@ def get_chat_messages_for_summary(user_id, time_range=None):
                                                 valid_message_count += 1
                             except (ValueError, IndexError):
                                 # 时间戳解析失败，但如果是当前日期范围内的文件，仍然包含该消息
-                                if current_date == now.date():
-                                    all_messages.append((now, line))
+                                if current_date == datetime.now().date():
+                                    all_messages.append((datetime.now(), line))
                                     valid_message_count += 1
                                     
                 except Exception as e:
@@ -2211,7 +2288,7 @@ def get_chat_messages_for_summary(user_id, time_range=None):
             
             current_date += timedelta(days=1)
         
-        logger.info(f"检查了 {files_checked} 个文件，从时间范围 {time_description} 内获取到 {valid_message_count} 条有效消息")
+        logger.info(f"文件查询完成，检查了 {files_checked} 个文件，从时间范围 {time_description} 内获取到 {valid_message_count} 条有效消息")
         
         # 按时间排序并格式化
         all_messages.sort(key=lambda x: x[0])
@@ -2220,29 +2297,28 @@ def get_chat_messages_for_summary(user_id, time_range=None):
         return formatted_messages
         
     except Exception as e:
-        logger.error(f"获取聊天消息失败: {e}", exc_info=True)
+        logger.error(f"文件查询聊天消息失败: {e}", exc_info=True)
         return []
 
 def process_group_summary(user_id):
     """处理群聊总结请求"""
     import config
     try:
-        # 查找是否有特定群聊的配置
-        group_config = None
-        custom_prompt_file = None
+        # 获取群聊对应的总结角色名称（优先从SUMMARY_GROUP_LIST获取）
+        prompt_name = None
         
-        # 读取群聊配置
-        try:
-            with open(os.path.join(root_dir, 'group_summary_config.json'), 'r', encoding='utf-8') as f:
-                groups_config = json.load(f)
-                for group_data in groups_config:
-                    if group_data.get('group_name') == user_id:
-                        group_config = group_data
-                        custom_prompt_file = group_data.get('prompt', '').strip()
-                        logger.info(f"找到群聊 '{user_id}' 的配置，提示词: {custom_prompt_file}")
-                        break
-        except (FileNotFoundError, json.JSONDecodeError):
-            logger.warning("群聊配置文件不存在或格式错误，使用默认配置")
+        # 首先检查SUMMARY_GROUP_LIST中是否有专门的总结角色配置
+        if hasattr(config, 'SUMMARY_GROUP_LIST') and config.SUMMARY_GROUP_LIST:
+            for group_data in config.SUMMARY_GROUP_LIST:
+                if isinstance(group_data, dict) and group_data.get('group') == user_id:
+                    prompt_name = group_data.get('prompt')
+                    logger.info(f"群聊 '{user_id}' 使用专门的总结角色: {prompt_name}")
+                    break
+        
+        # 如果没有专门的总结角色，报错
+        if not prompt_name:
+            logger.error(f"群聊 '{user_id}' 没有找到总结角色配置")
+            return
         
         # 使用配置的默认时间范围
         time_range = getattr(config, 'SUMMARY_TIME_RANGE', 'yesterday')
@@ -2277,35 +2353,30 @@ def process_group_summary(user_id):
         # 构建聊天记录内容
         chat_content = '\n'.join(formatted_messages)
         
-        # 选择使用的提示词
-        if custom_prompt_file:
-            # 使用自定义提示词文件
-            custom_prompt_path = os.path.join(root_dir, 'prompts', f'{custom_prompt_file}.md')
-            if os.path.exists(custom_prompt_path):
-                try:
-                    with open(custom_prompt_path, 'r', encoding='utf-8') as f:
-                        custom_prompt_content = f.read().strip()
-                    
-                    # 使用自定义提示词进行总结
-                    summary_prompt = f"""{custom_prompt_content}
+        # 选择使用的提示词（直接使用配置的角色名称）
+        prompt_path = os.path.join(root_dir, 'prompts', f'{prompt_name}.md')
+        if os.path.exists(prompt_path):
+            try:
+                with open(prompt_path, 'r', encoding='utf-8') as f:
+                    prompt_content = f.read().strip()
+                
+                # 使用配置的角色提示词进行总结
+                summary_prompt = f"""{prompt_content}
 
 以下是{time_description}的群聊记录：
 
 {chat_content}
 
 请根据上述角色设定，对这些聊天记录进行总结。"""
-                    
-                    logger.info(f"使用自定义提示词文件进行总结: {custom_prompt_file}")
-                except Exception as e:
-                    logger.error(f"读取自定义提示词文件失败: {e}")
-                    # fallback到默认提示词
-                    summary_prompt = build_default_summary_prompt(chat_content, time_description)
-            else:
-                logger.warning(f"自定义提示词文件不存在: {custom_prompt_path}")
+                
+                logger.info(f"使用角色提示词文件进行总结: {prompt_name}")
+            except Exception as e:
+                logger.error(f"读取角色提示词文件失败: {e}")
                 # fallback到默认提示词
                 summary_prompt = build_default_summary_prompt(chat_content, time_description)
         else:
-            # 使用默认总结提示词
+            logger.warning(f"角色提示词文件不存在: {prompt_path}")
+            # fallback到默认提示词
             summary_prompt = build_default_summary_prompt(chat_content, time_description)
         
         # 调用AI生成总结
@@ -2318,7 +2389,7 @@ def process_group_summary(user_id):
                 summary_header = f"📝 群聊总结报告\n" \
                                 f"⏰ 时间范围: {time_description}\n" \
                                 f"📊 消息数量: {len(formatted_messages)}条\n" \
-                                f"{'🎭 使用提示词: ' + custom_prompt_file if custom_prompt_file else '📋 默认总结逻辑'}\n" \
+                                f"🎭 使用角色: {prompt_name}\n" \
                                 f"{'=' * 30}\n\n"
                 
                 # 完整的总结消息
@@ -2331,12 +2402,19 @@ def process_group_summary(user_id):
             except Exception as send_error:
                 logger.error(f"发送群聊总结失败: {send_error}")
             
+            # 保存总结到数据库（如果启用）
+            try:
+                # 使用从prompt_mapping获取的角色名称
+                save_group_summary_to_database(user_id, summary, time_range, len(formatted_messages), prompt_name)
+            except Exception as db_save_error:
+                logger.error(f"保存群聊总结到数据库失败: {db_save_error}")
+            
             # 在日志中显示总结结果
             logger.info(f"=" * 80)
             logger.info(f"📝 群聊总结 - {user_id}")
             logger.info(f"时间范围: {time_description}")
             logger.info(f"消息数量: {len(formatted_messages)}条")
-            logger.info(f"自定义提示词: {custom_prompt_file if custom_prompt_file else '默认'}")
+            logger.info(f"使用角色: {prompt_name}")
             logger.info(f"-" * 80)
             logger.info(summary)
             logger.info(f"=" * 80)
@@ -2347,6 +2425,53 @@ def process_group_summary(user_id):
             
     except Exception as e:
         logger.error(f"处理群聊总结时发生错误 - '{user_id}': {str(e)}", exc_info=True)
+
+def save_group_summary_to_database(group_name, summary_content, time_range, message_count, prompt_name):
+    """保存群聊总结到数据库"""
+    if not db_manager.is_available():
+        logger.debug("数据库未启用，跳过总结存储")
+        return
+    
+    try:
+        def save_summary_operation(session):
+            from datetime import datetime, date
+            
+            # 计算总结日期
+            now = datetime.now()
+            if time_range == 'today':
+                summary_date = now.date()
+            elif time_range == 'yesterday':
+                summary_date = (now - dt.timedelta(days=1)).date()
+            elif time_range == 'last3days':
+                summary_date = (now - dt.timedelta(days=2)).date()  # 使用中间日期
+            elif time_range == 'thisweek':
+                days_since_monday = now.weekday()
+                summary_date = (now - dt.timedelta(days=days_since_monday)).date()  # 本周一
+            else:
+                summary_date = (now - dt.timedelta(days=1)).date()  # 默认昨天
+            
+            # 创建新记录
+            summary_record = GroupSummary(
+                group_name=group_name,
+                summary_content=summary_content,
+                summary_date=summary_date,
+                time_range=time_range,
+                message_count=message_count,
+                prompt_name=prompt_name
+            )
+            session.add(summary_record)
+            logger.info(f"保存新群聊总结记录: {group_name} - {summary_date} ({time_range})")
+            
+            return True
+        
+        result = db_manager.execute_with_retry(save_summary_operation)
+        if result:
+            logger.debug(f"群聊总结数据库保存成功: {group_name}")
+        else:
+            logger.error(f"群聊总结数据库保存失败: {group_name}")
+            
+    except Exception as e:
+        logger.error(f"保存群聊总结到数据库出错 {group_name}: {e}")
 
 def build_default_summary_prompt(chat_content, time_description):
     """构建默认的群聊总结提示词"""
@@ -2987,13 +3112,75 @@ def log_ai_reply_to_memory(username, reply_part):
         logger.error(f"记录 AI 回复到记忆日志失败，用户 {username}: {log_err}")
 
 def log_to_permanent_archive(username, speaker, message_content):
-    """将聊天记录保存到按日期分类的永久化存档中。
+    """将聊天记录保存到永久存档（数据库或文件）。
     
     Args:
         username: 用户ID/群聊名称
         speaker: 发言者（用户名或AI角色名）
         message_content: 消息内容
     """
+    try:
+        # 优先尝试数据库存储
+        if db_manager.is_available():
+            success = save_to_database(username, speaker, message_content)
+            if success:
+                return
+            else:
+                logger.warning(f"数据库存储失败，降级使用文件存储，用户: {username}")
+        
+        # 数据库不可用时使用文件存储
+        save_to_file(username, speaker, message_content)
+                
+    except Exception as archive_err:
+        logger.error(f"保存到永久存档失败，用户 {username}: {archive_err}")
+
+def save_to_database(username, speaker, message_content):
+    """保存聊天记录到数据库"""
+    try:
+        def save_operation(session):
+            # 判断是群聊还是私聊
+            is_group = is_user_group_chat(username)
+            prompt_name = prompt_mapping.get(username, username)
+            message_time = datetime.now()
+            
+            if is_group:
+                # 保存到群聊表
+                message = GroupChatMessage(
+                    group_id=username,
+                    speaker=speaker,
+                    message_content=message_content,
+                    message_time=message_time,
+                    prompt_name=prompt_name,
+                    message_type='ai' if speaker == prompt_name else 'user'
+                )
+            else:
+                # 保存到用户表
+                message = UserChatMessage(
+                    user_id=username,
+                    speaker=speaker,
+                    message_content=message_content,
+                    message_time=message_time,
+                    prompt_name=prompt_name,
+                    message_type='ai' if speaker == prompt_name else 'user'
+                )
+            
+            session.add(message)
+            return True
+        
+        result = db_manager.execute_with_retry(save_operation)
+        if result:
+            logger.debug(f"数据库保存成功，用户: {username}, 表类型: {'群聊' if is_user_group_chat(username) else '私聊'}")
+            return True
+        else:
+            logger.error(f"数据库保存失败，用户: {username}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"数据库保存出错，用户 {username}: {e}")
+        return False
+
+def save_to_file(username, speaker, message_content):
+    """保存聊天记录到文件（原有逻辑）"""
     try:
         with chat_archive_lock:
             # 获取当前日期
@@ -3014,10 +3201,11 @@ def log_to_permanent_archive(username, speaker, message_content):
             # 追加写入（按日期的文件会随时间增长）
             with open(archive_file, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
-            logger.info(f"永久化保存成功，日志文件：{archive_file}")
+            logger.debug(f"文件保存成功，日志文件：{archive_file}")
                 
-    except Exception as archive_err:
-        logger.error(f"保存到永久存档失败，用户 {username}: {archive_err}")
+    except Exception as file_err:
+        logger.error(f"文件保存失败，用户 {username}: {file_err}")
+        raise file_err
 
 def load_recurring_reminders():
     """从 JSON 文件加载重复和长期一次性提醒到内存中。"""
@@ -3747,6 +3935,13 @@ def main():
         else:
             logger.info("群聊总结功能已禁用。")
 
+        # --- 数据库初始化 ---
+        logger.info("正在初始化数据库连接...")
+        if init_database():
+            logger.info("数据库连接初始化成功")
+        else:
+            logger.info("数据库功能未启用或连接失败，将使用文件存储")
+
         # --- 初始化 ---
         logger.info("\033[32m初始化微信接口和清理临时文件...\033[0m")
         clean_up_temp_files()
@@ -3893,6 +4088,11 @@ def main():
 
         logger.info("执行最终临时文件清理...")
         clean_up_temp_files()
+        
+        # 关闭数据库连接
+        logger.info("正在关闭数据库连接...")
+        close_database()
+        
         logger.info("程序退出。")
 
 if __name__ == '__main__':
