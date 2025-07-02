@@ -33,7 +33,7 @@
 11. 接收语音消息（需在微信设置中开启"聊天中的语音消息自动转文字"功能）
 12. 自动更新程序
 13. 群聊总结功能
-14. 对话存储至数据库功能：在 `config.py` 中设置 `ENABLE_DATABASE = True`
+14. 对话存储至数据库功能：在 `config.py` 中设置 `ENABLE_DATABASE = True`，并且创建 wechat_bot数据库并执行wechat_bot.sql脚本
 
 # 使用前准备
 1. 请先安装python、pip，python版本应大于3.8
