@@ -15,11 +15,11 @@
 LISTEN_LIST = [['重操旧业', '角色2']]
 
 # DeepSeek API 配置
-DEEPSEEK_API_KEY = 'zxcvbnm'
+DEEPSEEK_API_KEY = ''
 # 硅基流动API注册地址，免费15元额度 https://cloud.siliconflow.cn/
-DEEPSEEK_BASE_URL = 'https://bqoqphbcsytu.us-west-1.clawcloudrun.com/v1'
+DEEPSEEK_BASE_URL = ''
 # 硅基流动API的模型
-MODEL = 'gemini-2.5-flash'
+MODEL = ''
 # 用户和AI对话轮数
 MAX_GROUPS = 25
 
