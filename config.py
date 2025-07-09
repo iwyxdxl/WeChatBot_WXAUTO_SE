@@ -12,16 +12,16 @@
 
 # 用户列表(请配置要和bot说话的账号的微信昵称！)
 # 例如：LISTEN_LIST = [['微信名1', '角色1'],['微信名2', '角色2']]
-LISTEN_LIST = [['微信名1', '角色1']]
+LISTEN_LIST = [['重操旧业', '角色2']]
 
 # DeepSeek API 配置
 DEEPSEEK_API_KEY = ''
 # 硅基流动API注册地址，免费15元额度 https://cloud.siliconflow.cn/
-DEEPSEEK_BASE_URL = 'https://vg.v1api.cc/v1'
+DEEPSEEK_BASE_URL = ''
 # 硅基流动API的模型
-MODEL = 'deepseek-v3-0324'
+MODEL = ''
 # 用户和AI对话轮数
-MAX_GROUPS = 5
+MAX_GROUPS = 25
 
 # 如果要使用官方的API
 # DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
@@ -29,26 +29,26 @@ MAX_GROUPS = 5
 # MODEL = 'deepseek-chat'
 
 # 回复最大token
-MAX_TOKEN = 2000
+MAX_TOKEN = 9000
 # DeepSeek温度
 TEMPERATURE = 1.1
 
 # Moonshot AI配置（用于图片和表情包识别）
 # API申请https://platform.moonshot.cn/
 MOONSHOT_API_KEY = ''
-MOONSHOT_BASE_URL = 'https://vg.v1api.cc/v1'
-MOONSHOT_MODEL = 'gpt-4o'
+MOONSHOT_BASE_URL = ''
+MOONSHOT_MODEL = ''
 MOONSHOT_TEMPERATURE = 0.8
 ENABLE_IMAGE_RECOGNITION = True
 ENABLE_EMOJI_RECOGNITION = True
 
 # 消息队列等待时间
-QUEUE_WAITING_TIME = 7
+QUEUE_WAITING_TIME = 1
 
 # 表情包存放目录
 EMOJI_DIR = 'emojis'
 ENABLE_EMOJI_SENDING = True
-EMOJI_SENDING_PROBABILITY = 25
+EMOJI_SENDING_PROBABILITY = 100
 
 # 自动消息配置
 AUTO_MESSAGE = '请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么'
@@ -64,10 +64,10 @@ IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE = False
 
 # 消息回复时间间隔
 # 间隔时间 = 字数 * (平均时间 + 随机时间)
-AVERAGE_TYPING_SPEED = 0.2
+AVERAGE_TYPING_SPEED = 0.1
 RANDOM_TYPING_SPEED_MIN = 0.05
-RANDOM_TYPING_SPEED_MAX = 0.1
-SEPARATE_ROW_SYMBOLS = True
+RANDOM_TYPING_SPEED_MAX = 0.15
+SEPARATE_ROW_SYMBOLS = False
 
 # 记忆功能
 # 采用综合评分公式：0.6*重要度 - 0.4*(存在时间小时数)
@@ -76,17 +76,17 @@ SEPARATE_ROW_SYMBOLS = True
 # 重要度4的新记忆（存在1小时）得分：0.64 - 0.41 = 2.4 - 0.4 = 2.0 → 保留新记忆
 ENABLE_MEMORY = True
 MEMORY_TEMP_DIR = 'Memory_Temp'
-MAX_MESSAGE_LOG_ENTRIES = 30
-MAX_MEMORY_NUMBER = 50
-UPLOAD_MEMORY_TO_AI = True
+MAX_MESSAGE_LOG_ENTRIES = 1
+MAX_MEMORY_NUMBER = 20
+UPLOAD_MEMORY_TO_AI = False
 
 # 是否接收全部群聊消息
 ACCEPT_ALL_GROUP_CHAT_MESSAGES = False
 ENABLE_GROUP_AT_REPLY = True
 ENABLE_GROUP_KEYWORD_REPLY = True
-GROUP_KEYWORD_LIST = ['你好', '机器人', '在吗']
+GROUP_KEYWORD_LIST = []
 GROUP_CHAT_RESPONSE_PROBABILITY = 100
-GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY = True
+GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY = False
 
 # 登录配置编辑器设置
 ENABLE_LOGIN_PASSWORD = False
@@ -101,7 +101,7 @@ ENABLE_REMINDERS = True
 ALLOW_REMINDERS_IN_QUIET_TIME = True
 # 是否使用语音通话进行提醒
 # 群聊无法使用语音通话进行提醒
-USE_VOICE_CALL_FOR_REMINDERS = False
+USE_VOICE_CALL_FOR_REMINDERS = True
 
 # 联网API配置
 ENABLE_ONLINE_API = False
@@ -134,14 +134,14 @@ REMOVE_PARENTHESES = False
 
 # 是否使用辅助模型
 ENABLE_ASSISTANT_MODEL = False
-ASSISTANT_BASE_URL = 'https://vg.v1api.cc/v1'
-ASSISTANT_MODEL = 'gpt-4o-mini'
+ASSISTANT_BASE_URL = ''
+ASSISTANT_MODEL = ''
 ASSISTANT_API_KEY = ''
 ASSISTANT_TEMPERATURE = 0.3
 ASSISTANT_MAX_TOKEN = 1000
-USE_ASSISTANT_FOR_MEMORY_SUMMARY = False
+USE_ASSISTANT_FOR_MEMORY_SUMMARY = True
 
 # 敏感词处理配置
 # 开启后遇到敏感词时自动清除Memory_Temp文件和聊天上下文
-ENABLE_SENSITIVE_CONTENT_CLEARING = True
+ENABLE_SENSITIVE_CONTENT_CLEARING = False
 
