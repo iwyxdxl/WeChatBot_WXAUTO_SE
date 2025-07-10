@@ -112,6 +112,18 @@ active_timers = {} # { (user_id, timer_id): Timer_object } (用于短期一次�
 timer_lock = threading.Lock()
 next_timer_id = 0
 
+class NoSelfLoggingFilter(logging.Filter):
+    """一个日志过滤器，防止将发往日志API的请求本身以及导致循环的特定错误再次发送。"""
+    def filter(self, record):
+        msg = record.getMessage()
+        # 过滤掉发往/api/log的请求日志，避免无限循环
+        if '/api/log' in msg:
+            return False
+        # 过滤掉"Bad request syntax"错误，这是由HTTPS请求HTTP端口引起的，是噪音
+        if 'Bad request syntax' in msg:
+            return False
+        return True
+
 class AsyncHTTPHandler(logging.Handler):
     def __init__(self, url, retry_attempts=3, timeout=3, max_queue_size=1000, batch_size=20, batch_timeout=5):
         """
@@ -344,6 +356,7 @@ async_http_handler = AsyncHTTPHandler(
     batch_timeout=1  # 即使不满20条，最多等待1秒也发送
 )
 async_http_handler.setFormatter(formatter)
+async_http_handler.addFilter(NoSelfLoggingFilter())
 
 # 配置根Logger
 logger = logging.getLogger()
