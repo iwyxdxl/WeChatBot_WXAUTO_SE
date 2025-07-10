@@ -25,6 +25,7 @@ from typing import Optional
 import pyautogui
 import shutil
 import re
+from regex_patterns import QINGLI_AI_BIAOQIAN_ZHUJIE
 from config import *
 import queue
 import json
@@ -1644,13 +1645,18 @@ def process_user_messages(user_id):
 
         # --- 发送最终回复 ---
         if reply:
-            # 如果回复中包含思考标签（如 Deepseek R1），移除它
-            if "</think>" in reply:
-                reply = reply.split("</think>", 1)[1].strip()
+            # 【新增的清理步骤】
+            # 使用我们导入的正则表达式，将所有匹配到的内容（注释和标签）替换为空字符串
+            cleaned_reply = QINGLI_AI_BIAOQIAN_ZHUJIE.sub('', reply).strip()
+            
+            # (可选的双重保险) 如果还有</think>标签，也一并清理
+            if "</think>" in cleaned_reply:
+                cleaned_reply = cleaned_reply.split("</think>", 1)[1].strip()
 
             # 屏蔽记忆片段发送（如果包含）
-            if "## 记忆片段" not in reply:
-                send_reply(user_id, sender_name, username, merged_message, reply)
+            # 注意：这里我们检查和发送的都是清理后的 cleaned_reply
+            if "## 记忆片段" not in cleaned_reply:
+                send_reply(user_id, sender_name, username, merged_message, cleaned_reply)
             else:
                 logger.info(f"回复包含记忆片段标记，已屏蔽发送给用户 {user_id}。")
         else:
