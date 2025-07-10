@@ -1314,20 +1314,56 @@ def handle_wxauto_message(msg, who):
         # 检查是否为图片文件路径
         if msg.type in ('image'):
             if ENABLE_IMAGE_RECOGNITION:
-                img_path = msg.download()
-                is_emoji = False
-                processed_content = None # 标记为None，稍后会被识别结果替换
-                logger.info(f"检测到图片消息，准备识别: {img_path}")
+                # 三次重试机制下载图片
+                img_path = None
+                for attempt in range(3):
+                    try:
+                        img_path = msg.download()
+                        if img_path:
+                            logger.info(f"图片下载成功 (第{attempt + 1}次尝试): {img_path}")
+                            break
+                        else:
+                            logger.warning(f"图片下载失败 (第{attempt + 1}次尝试)")
+                    except Exception as e:
+                        logger.warning(f"图片下载异常 (第{attempt + 1}次尝试): {e}")
+                    
+                    if attempt < 2:  # 不是最后一次尝试
+                        time.sleep(0.5)  # 等待0.5秒后重试
+                
+                if img_path:
+                    is_emoji = False
+                    processed_content = None # 标记为None，稍后会被识别结果替换
+                    logger.info(f"检测到图片消息，准备识别: {img_path}")
+                else:
+                    logger.error("图片下载失败，已重试3次")
             else:
                 logger.info("检测到图片消息，但图片识别功能已禁用。")
 
         # 检查是否为动画表情
         elif msg.type in ('emotion'):
             if ENABLE_EMOJI_RECOGNITION:
-                img_path = msg.capture() # 截图
-                is_emoji = True
-                processed_content = None # 标记为None，稍后会被识别结果替换
-                logger.info("检测到动画表情，准备截图识别...")
+                # 三次重试机制截图表情
+                img_path = None
+                for attempt in range(3):
+                    try:
+                        img_path = msg.capture() # 截图
+                        if img_path:
+                            logger.info(f"表情截图成功 (第{attempt + 1}次尝试): {img_path}")
+                            break
+                        else:
+                            logger.warning(f"表情截图失败 (第{attempt + 1}次尝试)")
+                    except Exception as e:
+                        logger.warning(f"表情截图异常 (第{attempt + 1}次尝试): {e}")
+                    
+                    if attempt < 2:  # 不是最后一次尝试
+                        time.sleep(0.5)  # 等待0.5秒后重试
+                
+                if img_path:
+                    is_emoji = True
+                    processed_content = None # 标记为None，稍后会被识别结果替换
+                    logger.info("检测到动画表情，准备截图识别...")
+                else:
+                    logger.error("表情截图失败，已重试3次")
             else:
                 clean_up_temp_files() # 清理可能的临时文件
                 logger.info("检测到动画表情，但表情识别功能已禁用。")
@@ -3223,6 +3259,7 @@ def main():
         global wx
         try:
             wx = WeChat()
+            wx.Show()
         except:
             logger.error(f"\033[31m无法初始化微信接口，请确保您安装的是微信3.9版本，并且已经登录！\033[0m")
             exit(1)

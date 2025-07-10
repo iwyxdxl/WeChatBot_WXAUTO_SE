@@ -657,7 +657,67 @@
     </style>
 
     <script>
+        // WeAPIs节点配置
+        const WEAPIS_NODES = [
+            'https://vg.v1api.cc',
+            'https://vg.v1chat.cc',
+            'https://vg.a3e.top'
+        ];
+        
+        // 检测WeAPIs节点可用性
+        async function checkWeAPIsNode(baseUrl) {
+            try {
+                const controller = new AbortController();
+                setTimeout(() => controller.abort(), 3000); // 3秒超时
+                
+                const response = await fetch(baseUrl + '/v1/models', {
+                    method: 'GET',
+                    signal: controller.signal,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+        
+        // 自动选择可用的WeAPIs节点
+        async function selectAvailableWeAPIsNode() {
+            for (const node of WEAPIS_NODES) {
+                if (await checkWeAPIsNode(node)) {
+                    return node + '/v1';
+                }
+            }
+            return 'https://vg.v1api.cc/v1'; // 默认返回第一个节点
+        }
+        
+        // 更新所有WeAPIs相关的URL配置
+        async function updateWeAPIsUrls() {
+            const availableUrl = await selectAvailableWeAPIsNode();
+            
+            // 更新所有WeAPIs选项的值
+            document.querySelectorAll('option[value="https://vg.v1api.cc/v1"]').forEach(option => {
+                option.value = availableUrl;
+            });
+            
+            // 更新已选中的WeAPIs配置
+            const providers = ['apiProvider', 'assistantApiProvider', 'imageApiProvider', 'onlineApiProvider'];
+            providers.forEach(providerId => {
+                const provider = document.getElementById(providerId);
+                if (provider && provider.value === 'https://vg.v1api.cc/v1') {
+                    provider.value = availableUrl;
+                    // 触发change事件更新隐藏字段
+                    provider.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
+            // 初始化时检测WeAPIs节点
+            updateWeAPIsUrls();
+            
             loadReminders();
             startReminderRefresh();
             setupReminderInputListeners();
@@ -679,7 +739,7 @@
                 const apiUrl = onlineApiProvider.value;
                 const savedModel = finalOnlineModel.value;
 
-                if (apiUrl === 'https://vg.v1api.cc/v1') {
+                if (WEAPIS_NODES.some(node => apiUrl.startsWith(node))) {
                     options = [
                         { value: 'net-gpt-4o-mini', text: 'net-gpt-4o-mini (推荐)' },
                         { value: 'deepseek-r1-searching', text: 'deepseek-r1-searching' },
@@ -728,13 +788,20 @@
             }
 
 
-            onlineApiProvider.addEventListener('change', function() {
+            onlineApiProvider.addEventListener('change', async function() {
                 if (this.value === 'other') {
                     customOnlineApiUrl.style.display = 'block';
                     finalOnlineApiUrl.value = customOnlineApiUrl.value;
                 } else {
                     customOnlineApiUrl.style.display = 'none';
-                    finalOnlineApiUrl.value = this.value;
+                    if (this.value === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => this.value.startsWith(node))) {
+                        // 选择WeAPIs时检测可用节点
+                        const availableUrl = await selectAvailableWeAPIsNode();
+                        this.value = availableUrl;
+                        finalOnlineApiUrl.value = availableUrl;
+                    } else {
+                        finalOnlineApiUrl.value = this.value;
+                    }
                 }
                 updateOnlineModelOptions();
             });
@@ -780,7 +847,7 @@
                         { value: "deepseek-reasoner", text: "DeepSeeek官方R1模型" },
                         { value: "other", text: "其它" }
                     ];
-                } else if (apiUrl === 'https://vg.v1api.cc/v1') {
+                } else if (WEAPIS_NODES.some(node => apiUrl.startsWith(node))) {
                     options = [                
                         { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (1226版本，推荐)" },
                         { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
@@ -850,13 +917,20 @@
             finalModelInput.value = (modelSelect.value === 'other') ? customModelInput.value : modelSelect.value;
 
 
-            apiProviderSelect.addEventListener('change', function() {
+            apiProviderSelect.addEventListener('change', async function() {
                 if (this.value === 'other') {
                     customApiUrlInput.style.display = 'block';
                     finalApiUrlInput.value = customApiUrlInput.value;
                 } else {
                     customApiUrlInput.style.display = 'none';
-                    finalApiUrlInput.value = this.value;
+                    if (this.value === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => this.value.startsWith(node))) {
+                        // 选择WeAPIs时检测可用节点
+                        const availableUrl = await selectAvailableWeAPIsNode();
+                        this.value = availableUrl;
+                        finalApiUrlInput.value = availableUrl;
+                    } else {
+                        finalApiUrlInput.value = this.value;
+                    }
                 }
                 updateModelOptions();
             });
@@ -896,7 +970,7 @@
                         { value: 'moonshot-v1-8k-vision-preview',   text: 'moonshot-v1-8k-vision-preview' },
                         { value: 'other', text: '其它' }
                     ];
-                } else if (apiUrl === 'https://vg.v1api.cc/v1') {
+                } else if (WEAPIS_NODES.some(node => apiUrl.startsWith(node))) {
                     options = [
                         { value: 'gpt-4o', text: 'gpt-4o' },
                         { value: 'other', text: '其它' }
@@ -943,13 +1017,20 @@
             }
 
 
-            imageApiProvider.addEventListener('change', function() {
+            imageApiProvider.addEventListener('change', async function() {
                 if (this.value === 'other') {
                     customImageApiUrl.style.display = 'block';
                     finalImageApiUrl.value = customImageApiUrl.value;
                 } else {
                     customImageApiUrl.style.display = 'none';
-                    finalImageApiUrl.value = this.value;
+                    if (this.value === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => this.value.startsWith(node))) {
+                        // 选择WeAPIs时检测可用节点
+                        const availableUrl = await selectAvailableWeAPIsNode();
+                        this.value = availableUrl;
+                        finalImageApiUrl.value = availableUrl;
+                    } else {
+                        finalImageApiUrl.value = this.value;
+                    }
                 }
                 updateImageModelOptions();
             });
@@ -1002,7 +1083,7 @@
                         { value: "deepseek-chat", text: "DeepSeek官方V3模型" },
                         { value: 'other', text: '其它' }
                     ];
-                } else if (apiUrl === 'https://vg.v1api.cc/v1') {
+                } else if (WEAPIS_NODES.some(node => apiUrl.startsWith(node))) {
                     options = [
                         { value: "gpt-4o-mini", text: "gpt-4o-mini (推荐，成本低)" },
                         { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" },
@@ -1056,13 +1137,20 @@
 
             // 辅助模型事件监听
             if (assistantApiProvider) {
-                assistantApiProvider.addEventListener('change', function() {
+                assistantApiProvider.addEventListener('change', async function() {
                     if (this.value === 'other') {
                         customAssistantApiUrl.style.display = 'block';
                         finalAssistantApiUrl.value = customAssistantApiUrl.value;
                     } else {
                         customAssistantApiUrl.style.display = 'none';
-                        finalAssistantApiUrl.value = this.value;
+                        if (this.value === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => this.value.startsWith(node))) {
+                            // 选择WeAPIs时检测可用节点
+                            const availableUrl = await selectAvailableWeAPIsNode();
+                            this.value = availableUrl;
+                            finalAssistantApiUrl.value = availableUrl;
+                        } else {
+                            finalAssistantApiUrl.value = this.value;
+                        }
                     }
                     updateAssistantModelOptions();
                 });
@@ -2070,7 +2158,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.21.1</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.22</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
