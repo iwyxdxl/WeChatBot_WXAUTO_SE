@@ -55,10 +55,10 @@ class Updater:
 
     # GitHub代理列表
     PROXY_SERVERS = [
-        "",  # 空字符串表示直接使用原始GitHub地址
         "https://ghfast.top/",
         "https://github.moeyy.xyz/", 
         "https://git.886.be/",
+        "",  # 空字符串表示直接使用原始GitHub地址
     ]
 
     def __init__(self):
@@ -92,10 +92,8 @@ class Updater:
 
     def format_version_info(self, current_version: str, update_info: Optional[dict] = None) -> str:
         """格式化版本信息输出"""
-        output = (
-            "\n" + "=" * 50 + "\n"
-            f"当前版本: {current_version}\n"
-        )
+        output = f'\n{"=" * 50}\n'
+        output += f"当前版本: {current_version}\n"
         
         if update_info:
             output += (
@@ -103,12 +101,12 @@ class Updater:
                 f"更新时间: {update_info.get('last_update', '未知')}\n\n"
                 "更新内容:\n"
                 f"  {update_info.get('description', '无更新说明')}\n"
-                + "=" * 50 + "\n\n"
+                f'{"=" * 50}\n\n'
             )
         else:
             output += (
                 "检查结果: 当前已是最新版本\n"
-                + "=" * 50 + "\n"
+                f'{"=" * 50}\n'
             )
             
         return output
@@ -130,14 +128,14 @@ class Updater:
         
         while True:
             try:
-                version_url = f"https://raw.githubusercontent.com/{self.REPO_OWNER}/{self.REPO_NAME}/{self.REPO_BRANCH}/version.json"
-                proxied_url = self.get_proxy_url(version_url)
+                version_url = f"https://raw.githubusercontent.com/{self.REPO_OWNER}/{self.REPO_NAME}/{self.REPO_BRANCH}/version.json?t={int(time.time())}"
+                proxied_url = self.get_proxy_url(str(version_url))
                 
                 logger.info(f"正在尝试从 {proxied_url} 获取版本信息...")
                 response = requests.get(
                     proxied_url,
                     headers=headers,
-                    timeout=10,
+                    timeout=30,
                     verify=True
                 )
                 response.raise_for_status()
@@ -160,11 +158,12 @@ class Updater:
                 latest_ver_tuple = parse_version(latest_version)
 
                 if latest_ver_tuple > current_ver_tuple:
-                    release_url = self.get_proxy_url(f"{self.GITHUB_API}/releases/latest")
+                    release_url_str = f"{self.GITHUB_API}/releases/latest"
+                    release_url = self.get_proxy_url(str(release_url_str))
                     response = requests.get(
                         release_url,
                         headers=headers,
-                        timeout=10
+                        timeout=30
                     )
                     
                     if response.status_code == 404:
