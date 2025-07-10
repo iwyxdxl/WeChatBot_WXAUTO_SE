@@ -28,7 +28,7 @@
             height: 100vh;
             margin: 0;
             background-color: #f5f5f5;
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", "Arial", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
         }
         h1 {
             margin: 0;
@@ -641,19 +641,292 @@
             font-size: 14px;
             color: #333;
         }
-        .context-user-item button {
-            padding: 6px 10px;
+        .context-user-item .actions button {
+            padding: 5px 10px;
             font-size: 12px;
-            background-color: #ffc107; /* 橙黄色，更柔和的警告 */
-            color: #333;
             border: none;
             border-radius: 3px;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, color 0.2s;
         }
-        .context-user-item button:hover {
+        .context-user-item .actions .switch-btn {
+            background-color: #009688; /* Teal */
+            color: white;
+            margin-right: 8px;
+        }
+        .context-user-item .actions .switch-btn:hover {
+            background-color: #00796B;
+        }
+        .context-user-item .actions .edit-btn {
+            background-color: #2196F3; /* 蓝色 */
+            color: white;
+        }
+        .context-user-item .actions .edit-btn:hover {
+            background-color: #1976D2;
+        }
+        .context-user-item .actions .clear-btn {
+            background-color: #ffc107; /* 橙黄色 */
+            color: #333;
+        }
+        .context-user-item .actions .clear-btn:hover {
             background-color: #ffa000;
         }
+        .context-user-item .actions .edit-btn {
+            background-color: #2196F3; /* 蓝色 */
+            color: white;
+            margin-right: 8px; /* 和清除按钮拉开距离 */
+        }
+        .context-user-item .actions .edit-btn:hover {
+            background-color: #1976D2;
+        }
+
+        #contextEditorModal, #memorySummaryEditorModal, #switchPromptModal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            padding-top: 40px;
+        }
+        #contextEditorModal .modal-content,
+        #memorySummaryEditorModal .modal-content,
+        #switchPromptModal .modal-content {
+            background-color: #fefefe;
+            margin: 2% auto;
+            padding: 25px;
+            border: 1px solid #888;
+            width: 85%;
+            max-width: 800px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 800px;
+        }
+    #switchPromptModal .modal-content {
+        height: auto;
+        max-height: 400px;
+        margin: 15% auto;
+    }
+    #contextEditorModal h3,
+    #memorySummaryEditorModal h3,
+    #switchPromptModal h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+        #contextEditorModal textarea,
+        #memorySummaryEditorModal textarea {
+            width: 100%;
+            box-sizing: border-box;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            flex-grow: 1; /* 占据剩余空间 */
+            margin-bottom: 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            resize: vertical;
+        }
+        #contextEditorModal .modal-actions,
+        #memorySummaryEditorModal .modal-actions {
+            text-align: right;
+        }
+        #contextEditorModal .modal-actions button,
+        #memorySummaryEditorModal .modal-actions button {
+            padding: 10px 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            font-size: 14px;
+        }
+        #contextEditorModal #save-context-btn,
+        #memorySummaryEditorModal #save-memory-summary-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #contextEditorModal #cancel-edit-context-btn,
+        #memorySummaryEditorModal #cancel-edit-memory-summary-btn {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+        #editor-status,
+        #memory-summary-editor-status {
+            margin-top: -10px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            height: 16px;
+            text-align: left;
+        }
+
+        /* New styles for context editor */
+        #contextEditorModal .modal-content {
+            height: 90vh;
+            max-height: 850px; /* Increased max-height */
+        }
+        #context-editor-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 10px;
+            background-color: #f7f8fc;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .conversation-turn {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message-bubble {
+            display: flex;
+            flex-direction: column;
+        }
+        .message-bubble label {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .message-bubble.user-message label {
+            color: #007bff;
+        }
+        .message-bubble.assistant-message label {
+            color: #28a745;
+        }
+        .message-content {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+            min-height: 70px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .message-content:focus {
+            border-color: #4caf50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+            outline: none;
+        }
+        .turn-actions {
+            text-align: right;
+            margin-top: 5px;
+            border-top: 1px solid #f0f0f0;
+            padding-top: 10px;
+        }
+        .turn-actions .delete-turn-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .turn-actions .delete-turn-btn:hover {
+            background-color: #c82333;
+        }
+        #context-editor-toolbar {
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            margin-top: auto; /* Pushes to bottom */
+            flex-shrink: 0;
+        }
+     
+        /* New styles for memory summary editor */
+        #memory-summary-editor-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 10px;
+            background-color: #f7f8fc;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .memory-entry-item {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
+        }
+        .memory-entry-item label {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 0;
+            color: #333;
+        }
+        .memory-entry-item textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: 'Helvetica Neue', 'Arial', sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            min-height: 60px;
+        }
+        .memory-entry-item .importance-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .memory-entry-item input[type="number"] {
+            width: 80px;
+            padding: 8px;
+            margin-bottom: 0;
+        }
+        .delete-memory-entry-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .delete-memory-entry-btn:hover {
+            background-color: #c82333;
+        }
+        #memory-editor-toolbar {
+             padding-top: 10px;
+             border-top: 1px solid #eee;
+             margin-top: auto; /* Pushes to bottom */
+             flex-shrink: 0;
+        }
+
     </style>
 
     <script>
@@ -663,6 +936,425 @@
             setupReminderInputListeners();
             startChatContextUserPolling();
             setupGroupChatOptionsVisibility();
+
+
+
+// --- 聊天上下文编辑器相关函数 (新版) ---
+const contextModal = document.getElementById('contextEditorModal');
+const contextContainer = document.getElementById('context-editor-container');
+const contextTextarea = document.getElementById('context-textarea');
+const contextEditorTitle = document.getElementById('editor-title');
+const contextSaveBtn = document.getElementById('save-context-btn');
+const contextCancelBtn = document.getElementById('cancel-edit-context-btn');
+const addTurnBtn = document.getElementById('add-turn-btn');
+const editorStatus = document.getElementById('editor-status');
+let currentEditingUser = null;
+let isJsonMode = false; // To track which view is active
+
+// Helper function to create a new conversation turn element
+function createTurnElement(turn = { user: '', assistant: '' }) {
+    const turnDiv = document.createElement('div');
+    turnDiv.className = 'conversation-turn';
+
+    turnDiv.innerHTML = `
+        <div class="message-bubble user-message">
+            <label>User</label>
+            <textarea class="message-content" rows="3" placeholder="用户消息...">${turn.user}</textarea>
+        </div>
+        <div class="message-bubble assistant-message">
+            <label>Assistant</label>
+            <textarea class="message-content" rows="3" placeholder="AI 回复...">${turn.assistant}</textarea>
+        </div>
+        <div class="turn-actions">
+            <button type="button" class="delete-turn-btn">删除此轮</button>
+        </div>
+    `;
+
+    turnDiv.querySelector('.delete-turn-btn').addEventListener('click', () => {
+        turnDiv.remove();
+    });
+
+    return turnDiv;
+}
+
+// Function to render the structured editor from context data
+function renderStructuredEditor(contextData) {
+    contextContainer.innerHTML = ''; // Clear previous content
+    let turns = [];
+
+    // Assuming context is an array of {role, content}
+    for (let i = 0; i < contextData.length; i++) {
+        if (contextData[i].role === 'user') {
+            const userContent = contextData[i].content;
+            const assistantContent = (i + 1 < contextData.length && contextData[i + 1].role === 'assistant') ? contextData[i + 1].content : '';
+            turns.push({ user: userContent, assistant: assistantContent });
+            if (assistantContent) i++; // Skip next message as it's handled
+        }
+    }
+
+    turns.forEach(turn => {
+        contextContainer.appendChild(createTurnElement(turn));
+    });
+    
+    // Show structured editor and hide textarea
+    contextContainer.style.display = 'flex';
+    contextTextarea.style.display = 'none';
+    addTurnBtn.style.display = 'inline-block';
+    isJsonMode = true;
+}
+
+// Function to render the raw text editor
+function renderRawEditor(text) {
+    contextTextarea.value = text;
+    contextContainer.style.display = 'none';
+    contextTextarea.style.display = 'block';
+    addTurnBtn.style.display = 'none';
+    isJsonMode = false;
+}
+
+// Open the context editor
+async function openContextEditor(username) {
+    if (!contextModal) return;
+    currentEditingUser = username;
+    
+    contextEditorTitle.textContent = `编辑用户 "${username}" 的上下文`;
+    editorStatus.textContent = '';
+    contextModal.style.display = 'block';
+
+    renderRawEditor('正在加载...');
+
+    try {
+        const response = await fetch(`/api/get_chat_context/${encodeURIComponent(username)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        const contextStr = data.context || '[]';
+        
+        try {
+            const contextJson = JSON.parse(contextStr);
+            if (Array.isArray(contextJson)) {
+                renderStructuredEditor(contextJson);
+            } else {
+                // If it's valid JSON but not an array, show in raw editor
+                renderRawEditor(JSON.stringify(contextJson, null, 2));
+                 editorStatus.textContent = '内容不是预期的对话格式，已在纯文本模式下打开。';
+                editorStatus.style.color = 'orange';
+            }
+        } catch (e) {
+            // If parsing fails, it's not valid JSON. Show as raw text.
+            renderRawEditor(contextStr);
+            editorStatus.textContent = '内容不是有效的JSON格式，已在纯文本模式下打开。';
+            editorStatus.style.color = 'orange';
+        }
+
+    } catch (error) {
+        console.error('加载上下文失败:', error);
+        const errorMessage = `加载上下文失败: ${error.message}`;
+        renderRawEditor(errorMessage);
+        editorStatus.textContent = errorMessage;
+        editorStatus.style.color = 'red';
+    }
+}
+window.openContextEditor = openContextEditor;
+
+// Close the editor
+function closeContextEditor() {
+    if (!contextModal) return;
+    contextModal.style.display = 'none';
+    currentEditingUser = null;
+}
+
+// Add event listeners
+if (contextCancelBtn) {
+    contextCancelBtn.addEventListener('click', closeContextEditor);
+}
+if (addTurnBtn) {
+    addTurnBtn.addEventListener('click', () => {
+        contextContainer.appendChild(createTurnElement());
+        // Scroll to the new turn
+        contextContainer.scrollTop = contextContainer.scrollHeight;
+    });
+}
+if (contextModal) {
+    contextModal.addEventListener('click', (event) => {
+        if (event.target === contextModal) {
+            closeContextEditor();
+        }
+    });
+}
+// Save button logic
+if (contextSaveBtn) {
+    contextSaveBtn.addEventListener('click', async () => {
+        if (!currentEditingUser) return;
+        
+        let contentToSave;
+        if (isJsonMode) {
+            // Reconstruct JSON from the structured view
+            const turns = [];
+            contextContainer.querySelectorAll('.conversation-turn').forEach(turnDiv => {
+                const userContent = turnDiv.querySelector('.user-message .message-content').value.trim();
+                const assistantContent = turnDiv.querySelector('.assistant-message .message-content').value.trim();
+                
+                if (userContent) {
+                    turns.push({ role: 'user', content: userContent });
+                    if (assistantContent) {
+                        turns.push({ role: 'assistant', content: assistantContent });
+                    }
+                }
+            });
+            contentToSave = JSON.stringify(turns, null, 2); // Pretty print JSON
+        } else {
+            // Get content from raw textarea
+            contentToSave = contextTextarea.value;
+        }
+
+        editorStatus.textContent = '正在保存...';
+        editorStatus.style.color = 'orange';
+        contextSaveBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/save_chat_context/${encodeURIComponent(currentEditingUser)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ context: contentToSave })
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || '保存失败');
+            }
+            
+            editorStatus.textContent = '保存成功！';
+            editorStatus.style.color = 'green';
+            
+            setTimeout(closeContextEditor, 1500);
+
+        } catch (error) {
+            console.error('保存上下文失败:', error);
+            editorStatus.textContent = `保存失败: ${error.message}`;
+            editorStatus.style.color = 'red';
+        } finally {
+            contextSaveBtn.disabled = false;
+        }
+    });
+}
+
+// =====================================================================
+// 新增: 核心记忆 (Memory Summaries) 相关函数
+// =====================================================================
+const memorySummaryModal = document.getElementById('memorySummaryEditorModal');
+const memorySummaryContainer = document.getElementById('memory-summary-editor-container'); // Changed from textarea
+const memorySummaryEditorTitle = document.getElementById('memory-summary-editor-title');
+const memorySummarySaveBtn = document.getElementById('save-memory-summary-btn');
+const memorySummaryCancelBtn = document.getElementById('cancel-edit-memory-summary-btn');
+const memorySummaryEditorStatus = document.getElementById('memory-summary-editor-status');
+const addMemoryBtn = document.getElementById('add-memory-btn');
+let currentEditingMemoryUser = null;
+
+// Helper to create a single memory entry element
+function createMemoryEntryElement(entry = { summary: '', importance: 5 }) {
+    const div = document.createElement('div');
+    div.className = 'memory-entry-item';
+
+    div.innerHTML = `
+        <label>记忆内容:</label>
+        <textarea class="memory-summary-text" rows="3" placeholder="输入核心记忆...">${entry.summary}</textarea>
+        <div class="importance-container">
+            <label>重要性:</label>
+            <input type="number" class="memory-importance-score" value="${entry.importance}" min="1" max="10" step="1">
+            <small>(1-10, 数字越大越重要)</small>
+        </div>
+        <button type="button" class="delete-memory-entry-btn">删除</button>
+    `;
+
+    div.querySelector('.delete-memory-entry-btn').addEventListener('click', () => {
+        div.remove();
+    });
+
+    return div;
+}
+
+
+function openMemorySummaryEditor(username) {
+    if (!memorySummaryModal) return;
+    currentEditingMemoryUser = username;
+    
+    memorySummaryEditorTitle.textContent = `编辑 "${username}" 的核心记忆`;
+    memorySummaryEditorStatus.textContent = '';
+    memorySummaryContainer.innerHTML = '<p>正在加载...</p>'; // Show loading message in the container
+    memorySummaryModal.style.display = 'block';
+
+    fetch(`/api/get_memory_summary/${encodeURIComponent(username)}`)
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.error || `HTTP ${response.status}`); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            memorySummaryContainer.innerHTML = ''; // Clear loading message
+            try {
+                // The summary content is expected to be a JSON string, but could be an object.
+                let memories = [];
+                if (typeof data.summary === 'string') {
+                    memories = JSON.parse(data.summary);
+                } else if (Array.isArray(data.summary)) {
+                    memories = data.summary;
+                } else if (Array.isArray(data)) { // Fallback for when the API returns the array directly
+                    memories = data;
+                }
+
+                if (Array.isArray(memories)) {
+                    if (memories.length > 0) {
+                        memories.forEach(mem => {
+                            memorySummaryContainer.appendChild(createMemoryEntryElement(mem));
+                        });
+                    } else {
+                         memorySummaryContainer.innerHTML = '<p style="text-align: center; color: #777;">暂无核心记忆。点击"新增记忆"来添加第一条。</p>';
+                    }
+                } else {
+                    throw new Error("数据不是预期的数组格式。");
+                }
+            } catch (e) {
+                console.error('解析核心记忆失败:', e);
+                memorySummaryContainer.innerHTML = `<p style="color: red;">加载失败: ${e.message}<br>请在下方文本框中手动修复后保存，或清除此用户的记忆文件。</p><textarea id="memory-summary-fallback-editor" style="width:100%; height: 300px;">${data.summary}</textarea>`;
+                // In case of parsing error, we add a textarea to let user fix it.
+                // The save logic will need to handle this case.
+            }
+        })
+        .catch(error => {
+            console.error('加载核心记忆失败:', error);
+            const errorMessage = `加载失败: ${error.message}`;
+            memorySummaryContainer.innerHTML = `<p style="color: red; text-align: center;">${errorMessage}<br>您可以手动"新增记忆"并保存来创建新的记忆文件。</p>`;
+            memorySummaryEditorStatus.textContent = errorMessage;
+            memorySummaryEditorStatus.style.color = 'red';
+        });
+}
+window.openMemorySummaryEditor = openMemorySummaryEditor;
+
+function closeMemorySummaryEditor() {
+    if (!memorySummaryModal) return;
+    memorySummaryModal.style.display = 'none';
+    currentEditingMemoryUser = null;
+}
+
+if(addMemoryBtn) {
+    addMemoryBtn.addEventListener('click', () => {
+        // If the placeholder text is present, remove it first
+        const placeholder = memorySummaryContainer.querySelector('p');
+        if (placeholder) {
+            placeholder.remove();
+        }
+        memorySummaryContainer.appendChild(createMemoryEntryElement());
+        memorySummaryContainer.scrollTop = memorySummaryContainer.scrollHeight;
+    });
+}
+
+if (memorySummaryCancelBtn) {
+    memorySummaryCancelBtn.addEventListener('click', closeMemorySummaryEditor);
+}
+
+if (memorySummaryModal) {
+    memorySummaryModal.addEventListener('click', (event) => {
+        if (event.target === memorySummaryModal) {
+            closeMemorySummaryEditor();
+        }
+    });
+}
+
+if (memorySummarySaveBtn) {
+    memorySummarySaveBtn.addEventListener('click', async () => {
+        if (!currentEditingMemoryUser) return;
+        
+        let contentToSave;
+        
+        // Check if there is a textarea for manual fixing (the raw text editor)
+        const fallbackTextarea = memorySummaryContainer.querySelector('#memory-summary-fallback-editor');
+        if (fallbackTextarea) {
+            contentToSave = fallbackTextarea.value;
+        } else {
+            // Otherwise, construct JSON from the structured editor
+            const memories = [];
+            memorySummaryContainer.querySelectorAll('.memory-entry-item').forEach(item => {
+                const summary = item.querySelector('.memory-summary-text').value.trim();
+                const importance = parseInt(item.querySelector('.memory-importance-score').value, 10) || 5;
+                if (summary) { // Only save entries that have content
+                    memories.push({ summary, importance });
+                }
+            });
+            contentToSave = JSON.stringify(memories, null, 2); // pretty-print
+        }
+        
+        // Final validation to ensure content is valid JSON before sending
+        try {
+            JSON.parse(contentToSave);
+        } catch (e) {
+            alert('保存失败：内容不是有效的JSON格式。请检查您的输入。');
+            memorySummaryEditorStatus.textContent = '保存失败：内容不是有效的JSON格式。';
+            memorySummaryEditorStatus.style.color = 'red';
+            return;
+        }
+
+        memorySummaryEditorStatus.textContent = '正在保存...';
+        memorySummaryEditorStatus.style.color = 'orange';
+        memorySummarySaveBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/save_memory_summary/${encodeURIComponent(currentEditingMemoryUser)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ summary: contentToSave })
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || '保存失败');
+            }
+            
+            memorySummaryEditorStatus.textContent = '保存成功！';
+            memorySummaryEditorStatus.style.color = 'green';
+            
+            setTimeout(() => {
+                closeMemorySummaryEditor();
+                // No need to reload, UI is self-contained
+            }, 1000);
+
+        } catch (error) {
+            console.error('保存核心记忆失败:', error);
+            memorySummaryEditorStatus.textContent = `保存失败: ${error.message}`;
+            memorySummaryEditorStatus.style.color = 'red';
+        } finally {
+            memorySummarySaveBtn.disabled = false;
+        }
+    });
+}
+
+async function deleteMemorySummary(username) {
+    if (!confirm(`确定要永久删除用户 "${username}" 的所有核心记忆吗？此操作不可恢复。`)) {
+        return;
+    }
+    try {
+        const response = await fetch(`/api/delete_memory_summary/${encodeURIComponent(username)}`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (response.ok && result.status === 'success') {
+            alert(result.message);
+            location.reload();
+        } else {
+            alert(`删除失败: ${result.message || '未知错误'}`);
+        }
+    } catch (error) {
+        console.error('删除核心记忆失败:', error);
+        alert('操作失败，请检查控制台获取更多信息。');
+    }
+}
+window.deleteMemorySummary = deleteMemorySummary;
+
+// =====================================================================
 
             document.querySelectorAll('#reminder-list').forEach(container => {
                 container.addEventListener('input', debounce(saveReminders, 500));
@@ -784,7 +1476,7 @@
                     options = [                
                         { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (1226版本，推荐)" },
                         { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
-                        { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },     
+                        { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },
                         { value: "gemini-2.5-pro-06-05", text: "gemini-2.5-pro-06-05 * (推荐，体验感更好)" },
                         { value: "gemini-2.5-pro-exp-03-25", text: "gemini-2.5-pro-exp-03-25 * (推荐)" },
                         { value: "gemini-2.5-pro-05-06", text: "gemini-2.5-pro-05-06 *" },
@@ -1105,12 +1797,180 @@
                 `;
                 container.appendChild(div);
             }
+            // --- 切换Prompt相关函数 ---
+const switchPromptModal = document.getElementById('switchPromptModal');
+let promptFiles = [];
+try {
+    const promptFilesJson = '{{ prompt_files | tojson | safe }}';
+    const parsed = JSON.parse(promptFilesJson);
+    if (Array.isArray(parsed)) {
+        promptFiles = parsed;
+    }
+} catch (e) {
+    console.error("无法解析Prompt文件列表:", e);
+    // 如果解析失败，promptFiles会保持为空数组[]，这是安全的。
+}
+let currentUserForSwitch = null;
+
+function openSwitchPromptModal(username) {
+    if (!switchPromptModal) return;
+    currentUserForSwitch = username;
+    const modalTitle = document.getElementById('switch-prompt-title');
+    const promptSelect = document.getElementById('prompt-select');
+    const statusP = document.getElementById('switch-prompt-status');
+
+    modalTitle.textContent = `为 "${username}" 切换 Prompt`;
+    statusP.textContent = '';
+    promptSelect.innerHTML = ''; // 清空旧选项
+
+    // 填充Prompt选项
+    let defaultOption = document.createElement('option');
+    defaultOption.value = "";
+    defaultOption.textContent = "-- 选择Prompt文件 --";
+    promptSelect.appendChild(defaultOption);
+    
+    promptFiles.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file;
+        option.textContent = file;
+        promptSelect.appendChild(option);
+    });
+
+    // 在用户列表中查找当前用户的Prompt
+    let currentPrompt = '';
+    const userListEntries = document.querySelectorAll('#listen-list .entry');
+    userListEntries.forEach(entry => {
+        const nicknameInput = entry.querySelector('input[name="nickname"]');
+        if (nicknameInput && nicknameInput.value === username) {
+            const promptFileInput = entry.querySelector('select[name="prompt_file"]');
+            if (promptFileInput) {
+                currentPrompt = promptFileInput.value;
+            }
+        }
+    });
+
+    if (currentPrompt) {
+        promptSelect.value = currentPrompt;
+    }
+
+    switchPromptModal.style.display = 'block';
+}
+window.openSwitchPromptModal = openSwitchPromptModal;
+
+function closeSwitchPromptModal() {
+    if (!switchPromptModal) return;
+    switchPromptModal.style.display = 'none';
+    currentUserForSwitch = null;
+}
+
+if (switchPromptModal) {
+    document.getElementById('cancel-switch-prompt-btn').addEventListener('click', closeSwitchPromptModal);
+    switchPromptModal.addEventListener('click', (event) => {
+        if (event.target === switchPromptModal) {
+            closeSwitchPromptModal();
+        }
+    });
+
+    document.getElementById('save-switch-prompt-btn').addEventListener('click', async () => {
+        if (!currentUserForSwitch) return;
+
+        const selectedPrompt = document.getElementById('prompt-select').value;
+        if (!selectedPrompt) {
+            alert("请为用户选择一个Prompt文件。");
+            return;
+        }
+        
+        const statusP = document.getElementById('switch-prompt-status');
+        let userEntryFound = false;
+
+        // 在主列表中查找用户并更新他们的Prompt
+        const userListEntries = document.querySelectorAll('#listen-list .entry');
+        userListEntries.forEach(entry => {
+            const nicknameInput = entry.querySelector('input[name="nickname"]');
+            if (nicknameInput && nicknameInput.value === currentUserForSwitch) {
+                const promptFileInput = entry.querySelector('select[name="prompt_file"]');
+                if (promptFileInput) {
+                    promptFileInput.value = selectedPrompt;
+                    userEntryFound = true;
+                }
+            }
+        });
+
+        // 如果用户不在列表中，则添加他们
+        if (!userEntryFound) {
+            addEntry(); // 使用现有函数添加一个新行
+            const newUserEntry = document.querySelector('#listen-list .entry:last-child');
+            if (newUserEntry) {
+                newUserEntry.querySelector('input[name="nickname"]').value = currentUserForSwitch;
+                newUserEntry.querySelector('select[name="prompt_file"]').value = selectedPrompt;
+            }
+        }
+
+        statusP.textContent = '正在保存配置...';
+        statusP.style.color = 'orange';
+
+        const success = await saveConfig();
+        if (success) {
+            statusP.textContent = '切换并保存成功！';
+            statusP.style.color = 'green';
+            setTimeout(closeSwitchPromptModal, 1500);
+        } else {
+            statusP.textContent = '保存失败，请查看主页面提示。';
+            statusP.style.color = 'red';
+        }
+    });
+}
             window.addEntry = addEntry;
 
             function removeEntry(button) {
                 button.parentElement.remove();
             }
             window.removeEntry = removeEntry;
+            function saveDynamicSettings() {
+                const limitInput = document.getElementById('emoji-tag-max-length');
+                const statusDiv = document.getElementById('dynamic-settings-status');
+                const newLimit = parseInt(limitInput.value, 10);
+
+                if (isNaN(newLimit) || newLimit <= 0) {
+                    statusDiv.textContent = '错误: 请输入一个有效的正整数。';
+                    statusDiv.style.color = 'red';
+                    return;
+                }
+
+                statusDiv.textContent = '正在保存...';
+                statusDiv.style.color = 'orange';
+
+                fetch('/save_dynamic_settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emoji_tag_max_length: newLimit })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                         // 如果服务器返回错误状态码，尝试解析JSON错误信息
+                        return response.json().then(err => { throw new Error(err.error || '未知服务器错误'); });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                    statusDiv.textContent = '保存成功！设置将在下次机器人启动时应用。';
+                    statusDiv.style.color = 'green';
+                    } else {
+                        // 理论上不会走到这里，因为错误在上面的.then中被捕获
+                        statusDiv.textContent = '保存失败: ' + (data.error || '未知错误');
+                        statusDiv.style.color = 'red';
+                    }
+                    // 5秒后清除提示信息
+                    setTimeout(() => { statusDiv.textContent = '' }, 5000);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    statusDiv.textContent = '保存失败: ' + error.message;
+                    statusDiv.style.color = 'red';
+                    setTimeout(() => { statusDiv.textContent = '' }, 5000);
+                });
+            }window.saveDynamicSettings = saveDynamicSettings;
 
 
             async function initBotStatus() {
@@ -1471,12 +2331,13 @@
                     }
                     
                     try {
+                        const formData = new FormData();
+                        formData.append('filename', filename);
+                        formData.append('content', content);
+
                         const response = await fetch('/create_prompt', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded', // 保持这个格式
-                            },
-                            body: `filename=${encodeURIComponent(filename)}&content=${encodeURIComponent(content)}`
+                            body: formData
                         });
                         
                         if (response.ok) { // 2xx 状态码
@@ -1539,13 +2400,14 @@
                     }
                     
                     try {
+                        const formData = new FormData();
+                        formData.append('filename', filename);
+                        formData.append('content', content);
+
                         // URL中的originalFilename应该是带.md后缀的，且经过encodeURIComponent
                         const response = await fetch(`edit_prompt/${encodeURIComponent(originalFilename)}`, {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: `filename=${encodeURIComponent(filename)}&content=${encodeURIComponent(content)}`
+                            body: formData
                         });
                         
                         if (response.ok) {
@@ -1606,6 +2468,8 @@
                 });
             }
         });
+    
+        
 
         // 编辑Prompt
         async function editPrompt(filenameWithoutExt) { 
@@ -1936,52 +2800,38 @@
         }
 
         function updateChatContextUserListOnPage(usersFromServer) {
-            const listContainer = document.querySelector('#section-memory .context-user-list');
-            // 修改选择器以匹配新的HTML结构（见下方HTML修改）
-            const noDataDiv = document.querySelector('#section-memory p.no-context-data'); 
+    const listContainer = document.querySelector('#section-memory .context-user-list');
+    const noDataDiv = document.querySelector('#section-memory p.no-context-data'); 
 
-            if (!listContainer || !noDataDiv) {
-                console.error("聊天上下文列表容器或“无数据”提示元素未找到!");
-                return;
-            }
+    if (!listContainer || !noDataDiv) {
+        console.error('聊天上下文列表容器或"无数据"提示元素未找到!');
+        return;
+    }
 
-            const currentUsersOnPage = new Set();
-            listContainer.querySelectorAll('.context-user-item span').forEach(span => {
-                currentUsersOnPage.add(span.textContent.trim());
-            });
+    // 直接使用服务器数据重建列表，更简单且不易出错
+    listContainer.innerHTML = ''; 
 
-            const serverUsersSet = new Set(usersFromServer);
-
-            // 移除在服务器上已不存在的用户条目
-            listContainer.querySelectorAll('.context-user-item').forEach(itemElement => {
-                const username = itemElement.querySelector('span').textContent.trim();
-                if (!serverUsersSet.has(username)) {
-                    itemElement.remove();
-                }
-            });
-
-            // 添加服务器上存在但页面上不存在的新用户条目
-            usersFromServer.forEach(user => {
-                if (!currentUsersOnPage.has(user)) {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'context-user-item';
-                    listItem.innerHTML = `
-                        <span>${user}</span>
-                        <button type="button" onclick="clearUserChatContext('${user}')">清除临时记忆</button>
-                    `;
-                    listContainer.appendChild(listItem);
-                }
-            });
-            
-            // 根据用户列表是否有数据，更新“暂无记录”提示和列表本身的显示状态
-            if (usersFromServer.length === 0) {
-                noDataDiv.style.display = 'block'; // 显示“暂无记录”
-                listContainer.style.display = 'none'; // 隐藏空列表容器
-            } else {
-                noDataDiv.style.display = 'none'; // 隐藏“暂无记录”
-                listContainer.style.display = 'block'; // 显示列表容器
-            }
-        }
+    if (usersFromServer && usersFromServer.length > 0) {
+        usersFromServer.forEach(user => {
+            const listItem = document.createElement('li');
+            listItem.className = 'context-user-item';
+            listItem.innerHTML = `
+                <span>${user}</span>
+                <div class="actions">
+                    <button type="button" class="switch-btn" onclick="openSwitchPromptModal('${user}')">切换</button>
+                    <button type="button" class="edit-btn" onclick="openContextEditor('${user}')">编辑</button>
+                    <button type="button" class="clear-btn" onclick="clearUserChatContext('${user}')">清除</button>
+                </div>
+            `;
+            listContainer.appendChild(listItem);
+        });
+        noDataDiv.style.display = 'none';
+        listContainer.style.display = 'block';
+    } else {
+        noDataDiv.style.display = 'block';
+        listContainer.style.display = 'none';
+    }
+}
 
         async function pollAndUpdateChatContextUsers() {
             if (document.hidden) { // 页面非激活状态不轮询
@@ -2061,6 +2911,8 @@
                 toggleOptions();
             }
         }
+               
+
     </script>
 </head>
 <body>
@@ -2396,6 +3248,7 @@
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_EMOJI_SENDING" {% if config.ENABLE_EMOJI_SENDING %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
+
                     <div class="form-group">
                         <label>主动表情包触发概率(0-100):</label>
                         <input type="number" step="1" name="EMOJI_SENDING_PROBABILITY" value="{{ config.EMOJI_SENDING_PROBABILITY }}">
@@ -2403,6 +3256,19 @@
                     <div class="form-group">
                         <label>表情包存放目录:</label>
                         <input type="text" name="EMOJI_DIR" value="{{ config.EMOJI_DIR }}">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="emoji-tag-max-length">表情包标签最大字符数</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <!-- 输入框，使用 config.get() 确保变量不存在时有默认值 -->
+                            <input type="number" id="emoji-tag-max-length" name="emoji_tag_max_length" value="{{ config.get('emoji_tag_max_length', 10) }}" min="1" style="flex-grow: 1;">
+                            <!-- 独立的保存按钮 -->
+                            <button type="button" onclick="saveDynamicSettings()" class="nav-button" style="flex-shrink: 0; background-color: #007bff;">保存此项</button>
+                        </div>
+                        <small>设置机器人将文本识别为表情包标签（如 `[开心]`）的最大长度。超过此长度的文本将被当作普通消息发送。此项设置保存后，**下次启动机器人时**生效。</small>
+                        <!-- 用于显示保存状态 -->
+                        <div id="dynamic-settings-status" style="margin-top: 5px; font-size: 13px; font-weight: bold;"></div>
                     </div>
                 </div>
 
@@ -2422,7 +3288,7 @@
                                 <label>被@时回复</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_GROUP_AT_REPLY" {% if config.ENABLE_GROUP_AT_REPLY %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
-                            <small>启用后，当机器人在群聊中被@时会作出回应。此选项在“接收所有群聊消息”模式下无效。</small>
+                            <small>启用后，当机器人在群聊中被@时会作出回应。此选项在"接收所有群聊消息"模式下无效。</small>
                         </div>
 
                         <div class="form-group">
@@ -2454,7 +3320,7 @@
                             <label>关键词触发时忽略回复概率</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY" {% if config.GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
-                        <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的“群聊回复概率”，必定进行回复。此选项优先于“群聊回复概率”。</small>
+                        <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的"群聊回复概率"，必定进行回复。此选项优先于"群聊回复概率"。</small>
                     </div>
                 </div>
 
@@ -2505,11 +3371,11 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>触发聊天记录总结进Prompt的阈值数量 (条):</label>
+                        <label>触发聊天记录总结轮数:</label>
                         <input type="number" step="1" name="MAX_MESSAGE_LOG_ENTRIES" value="{{ config.MAX_MESSAGE_LOG_ENTRIES }}">
                     </div>
                     <div class="form-group">
-                        <label>储存在Prompt中的记忆片段的最大数量 (条):</label>
+                        <label>存储核心记忆片段最大条数:</label>
                         <input type="number" step="1" name="MAX_MEMORY_NUMBER" value="{{ config.MAX_MEMORY_NUMBER }}">
                     </div>
                     <div class="form-group">
@@ -2517,9 +3383,9 @@
                         <input type="text" name="MEMORY_TEMP_DIR" value="{{ config.MEMORY_TEMP_DIR }}">
                     </div>
                     <div class="form-group">
-                        <label>用户与AI的对话上下文轮数 (保存在 <code>chat_contexts.json</code>):</label>
+                        <label>短期记忆最多轮数:</label>
                         <input type="number" step="1" name="MAX_GROUPS" value="{{ config.MAX_GROUPS }}">
-                        <small>设置每次上传给AI的历史对话轮数，数值越大，AI记忆的上下文越多，但可能增加消耗。</small>
+                        <small>这是AI能记住的短期对话轮数（一问一答为一轮）。数值越大，AI对当前话题的记忆越好，但API成本也越高。推荐5-15轮。</small>
                     </div>
                     <div class="form-group" style="margin-top: 30px;">
                         <h3>聊天上下文管理 (chat_contexts.json)</h3>
@@ -2528,14 +3394,38 @@
                                 {% for user in chat_context_users %}
                                 <li class="context-user-item">
                                     <span>{{ user }}</span>
-                                    <button type="button" onclick="clearUserChatContext('{{ user }}')">清除临时记忆</button>
+                                    <div class="actions">
+                                        <button type="button" class="switch-btn" onclick="openSwitchPromptModal('{{ user }}')">切换</button>
+                                        <button type="button" class="edit-btn" onclick="openContextEditor('{{ user }}')">编辑</button>
+                                        <button type="button" class="clear-btn" onclick="clearUserChatContext('{{ user }}')">清除</button>
+                                    </div>
                                 </li>
                                 {% endfor %}
                             {% endif %}
                         </ul>
                         <p class="no-context-data" style="font-size: 14px; color: #777;" {% if chat_context_users %}style="display: none;"{% else %}style="display: block;"{% endif %}>暂无聊天上下文记录。</p>
-                        <small>此处的“临时记忆”指的是保存在 <code>chat_contexts.json</code> 文件中的短期对话历史，用于维持对话的连贯性。清除后，与该用户的下一次对话将不包含之前的短期上下文，但不会影响Prompt中长期记忆的总结。</small>
-                    </div>                 
+                        <small>此处的"临时记忆"指的是保存在 <code>chat_contexts.json</code> 文件中的短期对话历史，用于维持对话的连贯性。清除后，与该用户的下一次对话将不包含之前的短期上下文，但不会影响Prompt中长期记忆的总结。</small>
+                    </div>
+                    <div class="form-group" style="margin-top: 30px;">
+                        <h3>核心记忆 (Memory_Summaries/)</h3>
+                        <ul class="context-user-list" id="memory-summary-user-list">
+                            {% if memory_summary_users %}
+                                {% for user in memory_summary_users %}
+                                <li class="context-user-item" id="memory-summary-user-{{ user | urlencode }}">
+                                    <span>{{ user }}</span>
+                                    <div class="actions">
+                                        <button type="button" class="switch-btn" onclick="openSwitchPromptModal('{{ user }}')">切换</button>
+                                        <button type="button" class="edit-btn" onclick="openMemorySummaryEditor('{{ user }}')">编辑</button>
+                                        <button type="button" class="clear-btn" onclick="deleteMemorySummary('{{ user }}')">清除</button>
+                                    </div>
+                                </li>
+                                {% endfor %}
+                            {% else %}
+                                <p style="font-size: 14px; color: #777;">暂无用户核心记忆。</p>
+                            {% endif %}
+                        </ul>
+                        <small>此处的"核心记忆"指的是保存在 `Memory_Summaries/` 目录中的长期、提炼后的记忆。清除后，与该用户的下一次对话将不包含这些长期记忆。</small>
+                    </div>
                 </div>
 
                 <div id="section-active-message" class="content-panel">
@@ -2549,7 +3439,7 @@
                     <div class="form-group">
                         <label>主动消息内容(发送给ai获取回复):</label>
                         <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
-                        <small>如果开启了联网功能，您也可以在这里设置联网请求比如“获取最新的新闻资讯”。</small>
+                        <small>如果开启了联网功能，您也可以在这里设置联网请求比如"获取最新的新闻资讯"。</small>
                     </div>
                     <div class="form-group">
                         <label>主动消息触发时间(小时):</label>
@@ -2585,8 +3475,8 @@
                         </div>
                     </div>
                     <p style="font-size:14px; line-height:1.6; color:#555;">
-                    开启后，您可以给AI发送指令如“15分钟后提醒我出门”、“下午3点叫我开会”、“每天早上8点跟我道早安”来生成临时一次性定时/重复定时消息。<br>
-                    如果开启了联网搜索功能，你还可以通过指令如“每天早上10点跟我讲讲今天的新闻”来生成定时联网消息。<br>
+                    开启后，您可以给AI发送指令如"15分钟后提醒我出门"、"下午3点叫我开会"、"每天早上8点跟我道早安"来生成临时一次性定时/重复定时消息。<br>
+                    如果开启了联网搜索功能，你还可以通过指令如"每天早上10点跟我讲讲今天的新闻"来生成定时联网消息。<br>
                     定时消息将储存在目录下的<code>recurring_reminders.json</code> 文件中并在程序运行时调用。<br>
                     推荐使用云部署的方式来运行本程序，这样可以保持程序24h运行以获得更好的体验：<a href="https://www.bilibili.com/video/BV11x9vYnEbC/" target="_blank">[查看教程]</a>
                     </p>
@@ -2708,7 +3598,7 @@
             原项目版权: Copyright (C) 2025, umaru<br>
             修改版本版权: Copyright (C) 2025, iwyxdxl</p>
             <p>本软件是自由软件，您可以根据 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">GNU 通用公共许可证 第3版 (或更高版本)</a> 的条款重新发布和修改本软件。</p>
-            <p>本软件按“现状”提供，不提供任何明示或暗示的担保 (包括适销性或特定用途适用性)。<br>
+            <p>本软件按"现状"提供，不提供任何明示或暗示的担保 (包括适销性或特定用途适用性)。<br>
             如您未收到完整的许可证副本，请访问 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">GNU GPL 3.0 中文版</a> 获取。</p>
             <p>源代码获取：<br>
             原项目源代码：<a href="https://github.com/KouriChat/KouriChat" target="_blank">https://github.com/KouriChat/KouriChat</a><br>
@@ -2806,6 +3696,54 @@
             });
         }
     </script>
+    <!-- 放在 </body> 标签之前 -->
+        <div id="contextEditorModal">
+            <div class="modal-content">
+                <h3 id="editor-title">编辑聊天上下文</h3>
+                <p id="editor-status"></p>
+                <div id="context-editor-container" style="flex-grow: 1; overflow-y: auto;">
+                    <!-- Structured editor content will be injected here -->
+                </div>
+                <textarea id="context-textarea" spellcheck="false" style="display: none; flex-grow: 1;"></textarea>
+                <div class="modal-actions">
+                    <button type="button" id="add-turn-btn" class="nav-button" style="background-color: #17a2b8; float: left; display: none;">添加一轮对话</button>
+                    <button id="cancel-edit-context-btn">取消</button>
+                    <button id="save-context-btn">保存</button>
+                </div>
+            </div>
+        </div>
 
+    <!-- 新增: 核心记忆编辑器 Modal -->
+    <div id="memorySummaryEditorModal">
+        <div class="modal-content">
+            <h3 id="memory-summary-editor-title">编辑核心记忆</h3>
+            <p id="memory-summary-editor-status"></p>
+            <div id="memory-summary-editor-container">
+                <!-- Memory entries will be dynamically injected here -->
+            </div>
+            <div class="modal-actions" id="memory-editor-toolbar">
+                 <button type="button" id="add-memory-btn" class="nav-button" style="background-color: #17a2b8; float: left;">新增记忆</button>
+                <button id="cancel-edit-memory-summary-btn">取消</button>
+                <button id="save-memory-summary-btn">保存</button>
+            </div>
+        </div>
+    </div>
+        <!-- 新增: 切换Prompt Modal -->
+        <div id="switchPromptModal">
+            <div class="modal-content">
+                <h3 id="switch-prompt-title">切换用户Prompt</h3>
+                <p id="switch-prompt-status" style="font-size: 13px; height: 16px; text-align: left; color: green;"></p>
+                <div class="form-group">
+                    <label for="prompt-select" style="font-weight: normal;">为当前用户选择一个新的Prompt:</label>
+                    <select id="prompt-select" style="width: 100%; padding: 10px; margin-top: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px;">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div class="modal-actions" style="text-align: right; margin-top: 20px;">
+                    <button type="button" id="cancel-switch-prompt-btn" class="nav-button" style="background-color: #f1f1f1; color: #333; margin-left: 10px;">取消</button>
+                    <button type="button" id="save-switch-prompt-btn" class="nav-button" style="background-color: #4CAF50;">保存并应用</button>
+                </div>
+            </div>
+        </div>
 </body>
 </html>

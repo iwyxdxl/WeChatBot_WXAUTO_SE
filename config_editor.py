@@ -144,6 +144,49 @@ log_queue = Queue()
 CHAT_CONTEXTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_contexts.json')
 CHAT_CONTEXTS_LOCK_FILE = CHAT_CONTEXTS_FILE + '.lock'
 
+MEMORY_SUMMARIES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Memory_Summaries')
+MEMORY_SUMMARIES_LOCK_FILE = MEMORY_SUMMARIES_DIR + '.lock'
+
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+SETTINGS_LOCK_FILE = SETTINGS_FILE + '.lock'
+
+def parse_dynamic_settings():
+    """从 settings.json 读取动态设置"""
+    # 提供默认值
+    settings = {'emoji_tag_max_length': 10}
+    if not os.path.exists(SETTINGS_FILE):
+        return settings
+    try:
+        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # 安全地获取值并转换类型
+        settings['emoji_tag_max_length'] = int(data.get('emoji_tag_max_length', 10))
+    except (json.JSONDecodeError, ValueError, IOError) as e:
+        app.logger.error(f"读取动态设置文件 ({SETTINGS_FILE}) 失败: {e}, 将使用默认值。")
+    return settings
+
+def save_dynamic_settings(new_settings_data):
+    """使用文件锁安全地保存动态设置到 settings.json"""
+    with FileLock(SETTINGS_LOCK_FILE):
+        try:
+            current_settings = {}
+            if os.path.exists(SETTINGS_FILE):
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    # 避免空文件导致json解析错误
+                    content = f.read()
+                    if content:
+                        current_settings = json.loads(content)
+            
+            # 更新设置
+            current_settings.update(new_settings_data)
+
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(current_settings, f, ensure_ascii=False, indent=4)
+            return True, "设置已保存"
+        except Exception as e:
+            app.logger.error(f"保存动态设置文件 ({SETTINGS_FILE}) 失败: {e}")
+            return False, str(e)
+
 last_heartbeat_time = 0  # 上次收到心跳的时间戳
 HEARTBEAT_TIMEOUT = 15   # 心跳超时阈值（秒），应大于 bot.py 的 HEARTBEAT_INTERVAL
 current_bot_pid = None
@@ -158,6 +201,29 @@ def get_chat_context_users():
         return list(data.keys())
     except (json.JSONDecodeError, IOError) as e:
         app.logger.error(f"读取 chat_contexts.json 失败: {e}")
+        return []
+
+def get_memory_summary_users():
+    """从 Memory_Summaries 文件夹读取用户列表 (即json文件名)"""
+    if not os.path.isdir(MEMORY_SUMMARIES_DIR):
+        return []
+    try:
+        # 只返回以.json结尾且不是锁文件的文件名
+        files = [f for f in os.listdir(MEMORY_SUMMARIES_DIR) if f.endswith('.json')]
+        unique_users = set()
+        for f in files:
+            # 兼容旧格式 "用户名.json" 和新格式 "用户名_角色名.json"
+            if '_' in f:
+                # 提取"用户名"部分
+                username = f.rsplit('_', 1)[0]
+                unique_users.add(username)
+            else:
+                # 旧格式，直接去掉 .json
+                username = f[:-5]
+                unique_users.add(username)
+        return sorted(list(unique_users))
+    except OSError as e:
+        app.logger.error(f"读取 Memory_Summaries 目录失败: {e}")
         return []
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -473,24 +539,42 @@ def submit_config():
         config_path = os.path.join(script_dir, 'config.py')
         validate_config_types(config_path)
 
+        # 2024-05-24: 新增 - 在用户切换Prompt时，执行一次性的旧格式上下文迁移
         if users_whose_prompt_changed:
             with FileLock(CHAT_CONTEXTS_LOCK_FILE):
                 try:
                     if os.path.exists(CHAT_CONTEXTS_FILE):
+                        # 使用'r+'模式读取并准备写入
                         with open(CHAT_CONTEXTS_FILE, 'r+', encoding='utf-8') as f:
-                            chat_data = json.load(f)
-                            modified_chat_data = False
-                            for user_to_clear in users_whose_prompt_changed:
-                                if user_to_clear in chat_data:
-                                    del chat_data[user_to_clear]
-                                    modified_chat_data = True
-                                    app.logger.info(f"因Prompt文件变更，用户 '{user_to_clear}' 的聊天上下文已清除。")
-                            if modified_chat_data:
+                            content = f.read()
+                            if not content:
+                                chat_data = {}
+                            else:
+                                chat_data = json.loads(content)
+                            
+                            modified = False
+                            # 获取切换前后的prompt映射
+                            old_prompt_map = {item[0]: item[1] for item in current_config_before_update.get('LISTEN_LIST', [])}
+
+                            for user_to_migrate in users_whose_prompt_changed:
+                                user_data = chat_data.get(user_to_migrate)
+                                # 只处理旧格式的列表类型数据
+                                if isinstance(user_data, list):
+                                    old_prompt = old_prompt_map.get(user_to_migrate)
+                                    if old_prompt:
+                                        app.logger.info(f"检测到用户 '{user_to_migrate}' 的旧格式上下文，将在切换角色时自动迁移到与旧角色 '{old_prompt}' 关联。")
+                                        chat_data[user_to_migrate] = {old_prompt: user_data}
+                                        modified = True
+                                    else:
+                                        app.logger.warning(f"无法为用户 '{user_to_migrate}' 迁移旧格式上下文，因为找不到其旧的Prompt配置。")
+
+                            # 如果数据被修改，则写回文件
+                            if modified:
                                 f.seek(0)
                                 json.dump(chat_data, f, ensure_ascii=False, indent=4)
                                 f.truncate()
                 except (json.JSONDecodeError, IOError) as e:
-                    app.logger.error(f"清除因Prompt变更导致的聊天上下文时出错: {e}")
+                    app.logger.error(f"迁移因Prompt变更导致的聊天上下文时出错: {e}")
                     
         return '', 204 
     except Exception as e:
@@ -880,12 +964,17 @@ def index():
             os.makedirs(prompt_files_dir)
         prompt_files = [f[:-3] for f in os.listdir(prompt_files_dir) if f.endswith('.md')]
         config = parse_config() # 重新解析以获取最新配置
+        # --- 新增：加载动态设置并合并到主配置中 ---
+        dynamic_settings = parse_dynamic_settings()
+        config.update(dynamic_settings)
         chat_context_users = get_chat_context_users()
+        memory_summary_users = get_memory_summary_users()
 
         return render_template('config_editor.html',
                              config=config,
                              prompt_files=prompt_files,
-                             chat_context_users=chat_context_users)
+                             chat_context_users=chat_context_users,
+                             memory_summary_users=memory_summary_users)
     except Exception as e:
         app.logger.error(f"加载主配置页面错误: {e}")
         return "加载配置页面错误，请检查日志。"
@@ -1014,7 +1103,11 @@ def generate_prompt():
             api_key=DEEPSEEK_API_KEY
         )
         
-        prompt = request.json.get('prompt', '')
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON request'}), 400
+        prompt = data.get('prompt', '')
+        
         FixedPrompt = (
             "\n请严格按照以下格式生成提示词（仅参考以下格式，将...替换为合适的内容，不要输出其他多余内容）。"
             "\n注意：仅在<# 输出示例>部分需要输出以'\\'进行分隔的短句，且不输出逗号和句号，其它部分应当正常输出。"
@@ -1029,8 +1122,8 @@ def generate_prompt():
             "\n\n# 性格"
             "\n...。"
             "\n\n# 输出示例"
-            "\n...\...\..."
-            "\n...\..."
+            "\n...\\...\\..."
+            "\n...\\..."
             "\n\n# 喜好"
             "\n...。\n"
         )  # 固定提示词
@@ -1049,7 +1142,7 @@ def generate_prompt():
         )
         
         reply = completion.choices[0].message.content
-        if "</think>" in reply:
+        if reply and "</think>" in reply:
             reply = reply.split("</think>", 1)[1].strip()
 
         return jsonify({
@@ -1058,6 +1151,40 @@ def generate_prompt():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# 添加一个新的API接口来保存设置
+@app.route('/save_dynamic_settings', methods=['POST'])
+@login_required
+def handle_save_dynamic_settings():
+    """处理并保存动态设置的API接口"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': '请求数据为空'}), 400
+
+        updates = {}
+        if 'emoji_tag_max_length' in data:
+            try:
+                limit = int(data['emoji_tag_max_length'])
+                if limit <= 0:
+                    return jsonify({'error': '字符限制必须为正整数'}), 400
+                updates['emoji_tag_max_length'] = limit
+            except (ValueError, TypeError):
+                 return jsonify({'error': '无效的数值格式'}), 400
+
+        if not updates:
+            return jsonify({'error': '没有有效的设置项需要更新'}), 400
+
+        success, message = save_dynamic_settings(updates)
+        if success:
+            return jsonify({'status': 'success', 'message': message}), 200
+        else:
+            return jsonify({'error': f'保存失败: {message}'}), 500
+
+    except Exception as e:
+        app.logger.error(f"处理 /save_dynamic_settings 失败: {e}", exc_info=True)
+        return jsonify({'error': '服务器内部错误'}), 500
+
 
 # 获取所有提醒 
 @app.route('/get_all_reminders')
@@ -1188,7 +1315,7 @@ def import_config():
             return jsonify({'error': '未找到上传的配置文件'}), 400
             
         config_file = request.files['config_file']
-        if not config_file.filename.endswith('.py'):
+        if not config_file or not config_file.filename or not config_file.filename.endswith('.py'):
             return jsonify({'error': '请上传.py格式的配置文件'}), 400
             
         # 创建临时文件用于解析配置
@@ -1312,9 +1439,13 @@ def receive_bot_log():
         if not request.is_json:
             return jsonify({'error': 'Unsupported Media Type'}), 415
 
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing log data'}), 400
+
         # 支持两种格式：单个日志或日志数组
-        if 'logs' in request.json:  # 批量日志
-            logs_data = request.json.get('logs', [])
+        if 'logs' in data:  # 批量日志
+            logs_data = data.get('logs', [])
             if isinstance(logs_data, list):
                 for log_entry in logs_data:
                     if log_entry:
@@ -1324,8 +1455,8 @@ def receive_bot_log():
                 return jsonify({'status': 'success', 'processed': len(logs_data)})
             return jsonify({'error': 'Invalid logs format'}), 400
             
-        elif 'log' in request.json:  # 兼容单条日志格式
-            log_data = request.json.get('log')
+        elif 'log' in data:  # 兼容单条日志格式
+            log_data = data.get('log')
             if log_data:
                 # 添加进程标识和颜色标记
                 colored_log = f"[BOT] \033[34m{log_data.strip()}\033[0m"
@@ -1513,6 +1644,263 @@ def kill_process_using_port(port):
                     print(f"进程 {conn.pid} 已被成功结束。")
                 except Exception as e:
                     print(f"结束进程 {conn.pid} 时出现异常：{e}")
+
+# =========================================================================
+# ===== 新增：聊天上下文编辑 API (添加到 config_editor.py 文件) =====
+# =========================================================================
+
+
+@app.route('/api/get_chat_context/<username>', methods=['GET'])
+@login_required
+def get_user_chat_context(username):
+    """获取指定用户的、与其当前活动Prompt关联的聊天上下文"""
+    if not os.path.exists(CHAT_CONTEXTS_FILE):
+        return jsonify({'status': 'success', 'context': '[]'})
+
+    try:
+        config = parse_config()
+        listen_list = config.get('LISTEN_LIST', [])
+        current_prompt = next((item[1] for item in listen_list if item[0] == username), None)
+        
+        if not current_prompt:
+            return jsonify({'error': f"在配置中未找到用户 '{username}' 的活动Prompt"}), 404
+
+    except Exception as e:
+        app.logger.error(f"解析配置文件以查找用户Prompt时出错: {e}")
+        return jsonify({'error': '解析配置文件失败'}), 500
+
+    with FileLock(CHAT_CONTEXTS_LOCK_FILE):
+        try:
+            if not os.path.exists(CHAT_CONTEXTS_FILE):
+                return jsonify({'status': 'success', 'context': '[]'})
+
+            with open(CHAT_CONTEXTS_FILE, 'r', encoding='utf-8') as f:
+                content = f.read()
+                contexts = json.loads(content) if content else {}
+            
+            user_contexts_by_prompt = contexts.get(username)
+            user_context_for_prompt = []
+            
+            if user_contexts_by_prompt is None:
+                pass  # No context for this user, will return empty list
+            elif isinstance(user_contexts_by_prompt, dict):
+                # New structure: {"prompt1.md": [...]}
+                user_context_for_prompt = user_contexts_by_prompt.get(current_prompt, [])
+            elif isinstance(user_contexts_by_prompt, list):
+                # Old structure: [...], show it for editing. Saving will migrate it.
+                user_context_for_prompt = user_contexts_by_prompt
+            
+            # 增加健壮性：如果由于历史bug导致存储的是字符串，尝试解析它
+            if isinstance(user_context_for_prompt, str):
+                try:
+                    user_context_for_prompt = json.loads(user_context_for_prompt)
+                except json.JSONDecodeError:
+                    # 如果无法解析，则按原样返回，让前端作为纯文本处理
+                    app.logger.warning(f"用户 '{username}' 的上下文无法解析为JSON，将以纯文本形式返回。")
+            
+            pretty_context = json.dumps(user_context_for_prompt, ensure_ascii=False, indent=4)
+            return jsonify({'status': 'success', 'context': pretty_context})
+
+        except (json.JSONDecodeError, IOError) as e:
+            app.logger.error(f"读取或解析聊天上下文文件失败: {e}")
+            return jsonify({'error': f'读取或解析文件失败: {e}'}), 500
+
+@app.route('/api/save_chat_context/<username>', methods=['POST'])
+@login_required
+def save_user_chat_context(username):
+    """保存指定用户修改后的、与其当前活动Prompt关联的聊天上下文"""
+    if bot_process and bot_process.poll() is None:
+        return jsonify({'error': '程序正在运行，请先停止再保存上下文'}), 400
+        
+    data = request.get_json()
+    if not data or 'context' not in data:
+        return jsonify({'status': 'error', 'error': '请求数据无效'}), 400
+    
+    new_context_str = data['context']
+    
+    # 验证并解析前端传来的字符串为Python对象
+    try:
+        new_context_data = json.loads(new_context_str)
+        if not isinstance(new_context_data, list):
+            raise ValueError("上下文数据必须是一个JSON数组 (list)")
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'status': 'error', 'message': f'格式错误，无法保存: {str(e)}'}), 400
+    
+    # 获取该用户当前使用的prompt文件
+    config = parse_config()
+    listen_list = config.get('LISTEN_LIST', [])
+    current_prompt = next((item[1] for item in listen_list if item[0] == username), None)
+    
+    if not current_prompt:
+        app.logger.warning(f"无法找到用户 '{username}' 的当前Prompt，上下文保存可能不准确。")
+        # 即使找不到，也应以用户名作为顶级键保存
+    
+    with FileLock(CHAT_CONTEXTS_LOCK_FILE):
+        try:
+            all_contexts = {}
+            if os.path.exists(CHAT_CONTEXTS_FILE):
+                with open(CHAT_CONTEXTS_FILE, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content:
+                        all_contexts = json.loads(content)
+
+            user_contexts_by_prompt = all_contexts.get(username)
+
+            if user_contexts_by_prompt is None or isinstance(user_contexts_by_prompt, list):
+                all_contexts[username] = {current_prompt: new_context_data}
+                if isinstance(user_contexts_by_prompt, list):
+                    app.logger.info(f"用户 '{username}' 的上下文已从旧格式迁移到新格式。")
+            elif isinstance(user_contexts_by_prompt, dict):
+                user_contexts_by_prompt[current_prompt] = new_context_data
+            else:
+                app.logger.warning(f"用户 '{username}' 的上下文数据格式未知，将直接覆盖。")
+                all_contexts[username] = {current_prompt: new_context_data}
+
+            temp_file_path = CHAT_CONTEXTS_FILE + ".tmp"
+            with open(temp_file_path, 'w', encoding='utf-8') as f:
+                json.dump(all_contexts, f, ensure_ascii=False, indent=4)
+            shutil.move(temp_file_path, CHAT_CONTEXTS_FILE)
+
+        except Exception as e:
+            app.logger.error(f"保存聊天上下文失败: {e}")
+            return jsonify({'status': 'error', 'message': f'保存失败: {str(e)}'}), 500
+
+ 
+    return jsonify({'status': 'success', 'message': f"用户 '{username}' 的上下文已更新"})
+
+@app.route('/api/get_memory_summary/<username>', methods=['GET'])
+@login_required
+def get_user_memory_summary(username):
+    """获取单个用户的、与其当前活动Prompt关联的核心记忆内容"""
+    try:
+        config = parse_config()
+        listen_list = config.get('LISTEN_LIST', [])
+        current_prompt_name = next((item[1] for item in listen_list if item[0] == username), None)
+        if not current_prompt_name:
+             return jsonify({'error': f"在配置中未找到用户 '{username}' 的活动Prompt，无法获取核心记忆"}), 404
+    except Exception as e:
+        app.logger.error(f"解析配置文件以查找用户Prompt时出错: {e}")
+        return jsonify({'error': '解析配置文件失败'}), 500
+
+    # 新的文件名格式: 用户名_角色名.json
+    safe_user_filename_part = safe_filename(username)
+    safe_prompt_filename_part = safe_filename(current_prompt_name)
+    target_filename = f"{safe_user_filename_part}_{safe_prompt_filename_part}.json"
+    file_path = os.path.join(MEMORY_SUMMARIES_DIR, target_filename)
+    
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # 确保返回的是JSON字符串化的列表
+                if not content.strip():
+                    return jsonify({'summary': '[]'})
+                
+                # 直接将文件内容作为summary返回，因为前端会解析
+                # 为了美观，可以重新格式化
+                try:
+                    data = json.loads(content)
+                    pretty_summary = json.dumps(data, ensure_ascii=False, indent=4)
+                    return jsonify({'summary': pretty_summary})
+                except json.JSONDecodeError:
+                     # 如果内容不是有效的JSON，按原样返回给前端处理
+                    return jsonify({'summary': content})
+        except IOError as e:
+            app.logger.error(f"读取核心记忆文件失败 ({file_path}): {e}")
+            return jsonify({'error': f'读取文件失败: {str(e)}'}), 500
+    else:
+        # 文件不存在时，返回一个代表空列表的JSON字符串
+        return jsonify({'summary': '[]'})
+
+@app.route('/api/save_memory_summary/<username>', methods=['POST'])
+@login_required
+def save_user_memory_summary(username):
+    """保存指定用户修改后的、与其当前活动Prompt关联的记忆片段总结"""
+    if bot_process and bot_process.poll() is None:
+        return jsonify({'error': '程序正在运行，请先停止再保存记忆'}), 400
+        
+    data = request.get_json()
+    if not data or 'summary' not in data:
+        return jsonify({'status': 'error', 'message': '请求无效，缺少 "summary" 字段'}), 400
+
+    new_summary_str = data['summary']
+    
+    try:
+        new_summary_list = json.loads(new_summary_str)
+        if not isinstance(new_summary_list, list):
+            raise ValueError("记忆数据必须是一个JSON数组 (list)")
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'status': 'error', 'message': f'格式错误: {str(e)}'}), 400
+    
+    # 获取用户当前使用的Prompt
+    try:
+        config = parse_config()
+        listen_list = config.get('LISTEN_LIST', [])
+        current_prompt_name = next((item[1] for item in listen_list if item[0] == username), None)
+        if not current_prompt_name:
+             return jsonify({'error': f"在配置中未找到用户 '{username}' 的活动Prompt，无法保存核心记忆"}), 404
+    except Exception as e:
+        app.logger.error(f"解析配置文件以查找用户Prompt时出错: {e}")
+        return jsonify({'error': '解析配置文件失败'}), 500
+
+    # 新的文件名格式: 用户名_角色名.json
+    safe_user_filename_part = safe_filename(username)
+    safe_prompt_filename_part = safe_filename(current_prompt_name)
+    target_filename = f"{safe_user_filename_part}_{safe_prompt_filename_part}.json"
+    file_path = os.path.join(MEMORY_SUMMARIES_DIR, target_filename)
+    lock_path = file_path + '.lock'
+
+    with FileLock(lock_path):
+        try:
+            os.makedirs(MEMORY_SUMMARIES_DIR, exist_ok=True)
+            
+            # 直接覆盖写入到独立文件
+            temp_file_path = file_path + ".tmp"
+            with open(temp_file_path, 'w', encoding='utf-8') as f:
+                json.dump(new_summary_list, f, ensure_ascii=False, indent=4)
+            shutil.move(temp_file_path, file_path)
+
+        except Exception as e:
+            app.logger.error(f"保存记忆文件 {target_filename} 失败: {e}")
+            return jsonify({'status': 'error', 'message': f'保存失败: {str(e)}'}), 500
+
+    return jsonify({'status': 'success', 'message': f"用户 '{username}' 的记忆已更新"})
+
+@app.route('/api/delete_memory_summary/<username>', methods=['POST'])
+@login_required
+def delete_user_memory_summary(username):
+    """删除指定用户的所有核心记忆文件"""
+    if not os.path.exists(MEMORY_SUMMARIES_DIR):
+        return jsonify({'status': 'success', 'message': '记忆目录不存在，无需操作'})
+
+    safe_username_prefix = safe_filename(username) + '_'
+    deleted_count = 0
+    errors = []
+
+    for filename in os.listdir(MEMORY_SUMMARIES_DIR):
+        if filename.startswith(safe_username_prefix) and filename.endswith('.json'):
+            file_path = os.path.join(MEMORY_SUMMARIES_DIR, filename)
+            lock_path = file_path + '.lock'
+            try:
+                with FileLock(lock_path, timeout=1):
+                     os.remove(file_path)
+                     deleted_count += 1
+            except Exception as e:
+                app.logger.error(f"删除记忆文件 {filename} 失败: {e}")
+                errors.append(filename)
+
+    if errors:
+        return jsonify({'status': 'error', 'message': f'部分文件删除失败: {", ".join(errors)}'}), 500
+    
+    if deleted_count > 0:
+        return jsonify({'status': 'success', 'message': f"用户 '{username}' 的 {deleted_count} 个核心记忆文件已清除"})
+    else:
+        return jsonify({'status': 'success', 'message': f"未找到用户 '{username}' 的核心记忆文件"})
+
+# =========================================================================
+# ===== 新增代码结束 =====
+# =========================================================================
+
 
 if __name__ == '__main__':
     class BotStatusFilter(logging.Filter):
