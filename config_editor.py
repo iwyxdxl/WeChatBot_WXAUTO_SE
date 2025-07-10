@@ -1649,6 +1649,7 @@ def kill_process_using_port(port):
 # ===== 新增：聊天上下文编辑 API (添加到 config_editor.py 文件) =====
 # =========================================================================
 
+
 @app.route('/api/get_chat_context/<username>', methods=['GET'])
 @login_required
 def get_user_chat_context(username):
@@ -1689,6 +1690,14 @@ def get_user_chat_context(username):
                 # Old structure: [...], show it for editing. Saving will migrate it.
                 user_context_for_prompt = user_contexts_by_prompt
             
+            # 增加健壮性：如果由于历史bug导致存储的是字符串，尝试解析它
+            if isinstance(user_context_for_prompt, str):
+                try:
+                    user_context_for_prompt = json.loads(user_context_for_prompt)
+                except json.JSONDecodeError:
+                    # 如果无法解析，则按原样返回，让前端作为纯文本处理
+                    app.logger.warning(f"用户 '{username}' 的上下文无法解析为JSON，将以纯文本形式返回。")
+            
             pretty_context = json.dumps(user_context_for_prompt, ensure_ascii=False, indent=4)
             return jsonify({'status': 'success', 'context': pretty_context})
 
@@ -1707,7 +1716,15 @@ def save_user_chat_context(username):
     if not data or 'context' not in data:
         return jsonify({'status': 'error', 'error': '请求数据无效'}), 400
     
-    new_context_data = data['context']
+    new_context_str = data['context']
+    
+    # 验证并解析前端传来的字符串为Python对象
+    try:
+        new_context_data = json.loads(new_context_str)
+        if not isinstance(new_context_data, list):
+            raise ValueError("上下文数据必须是一个JSON数组 (list)")
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'status': 'error', 'message': f'格式错误，无法保存: {str(e)}'}), 400
     
     # 获取该用户当前使用的prompt文件
     config = parse_config()
@@ -1748,6 +1765,7 @@ def save_user_chat_context(username):
             app.logger.error(f"保存聊天上下文失败: {e}")
             return jsonify({'status': 'error', 'message': f'保存失败: {str(e)}'}), 500
 
+ 
     return jsonify({'status': 'success', 'message': f"用户 '{username}' 的上下文已更新"})
 
 @app.route('/api/get_memory_summary/<username>', methods=['GET'])
