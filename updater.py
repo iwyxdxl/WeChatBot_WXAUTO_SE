@@ -29,7 +29,7 @@ import zipfile
 import shutil
 import json
 import logging
-from typing import Tuple
+from typing import Tuple, Optional
 import sys
 import datetime
 import time
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 class Updater:
     # GitHub仓库信息
-    REPO_OWNER = "iwyxdxl"
+    REPO_OWNER = "butteryiyi"
     REPO_NAME = "WeChatBot_WXAUTO_SE"
     REPO_BRANCH = "main"
     GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
@@ -90,7 +90,7 @@ class Updater:
             logger.error(f"读取版本文件失败: {str(e)}")
         return '0.0.0'
 
-    def format_version_info(self, current_version: str, update_info: dict = None) -> str:
+    def format_version_info(self, current_version: str, update_info: Optional[dict] = None) -> str:
         """格式化版本信息输出"""
         output = (
             "\n" + "=" * 50 + "\n"
