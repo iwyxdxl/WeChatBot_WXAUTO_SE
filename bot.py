@@ -349,22 +349,30 @@ class AsyncHTTPHandler(logging.Handler):
 # 创建日志格式器
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-# 初始化异步HTTP处理器
-async_http_handler = AsyncHTTPHandler(
-    url=f'http://localhost:{PORT}/api/log',
-    batch_size=20,  # 一次发送20条日志
-    batch_timeout=1  # 即使不满20条，最多等待1秒也发送
-)
-async_http_handler.setFormatter(formatter)
-async_http_handler.addFilter(NoSelfLoggingFilter())
-
 # 配置根Logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.handlers.clear()
 
-# 添加异步HTTP日志处理器
-logger.addHandler(async_http_handler)
+# 初始化异步HTTP处理器
+# 检查本地日志服务器是否可用，如果不可用则禁用HTTP日志处理器
+async_http_handler = None
+try:
+    test_response = requests.get(f'http://localhost:{PORT}/api/health', timeout=2)
+    if test_response.status_code == 200:
+        async_http_handler = AsyncHTTPHandler(
+            url=f'http://localhost:{PORT}/api/log',
+            batch_size=20,  # 一次发送20条日志
+            batch_timeout=1  # 即使不满20条，最多等待1秒也发送
+        )
+        async_http_handler.setFormatter(formatter)
+        async_http_handler.addFilter(NoSelfLoggingFilter())
+        logger.addHandler(async_http_handler)
+        logger.info(f"本地日志服务器可用，已启用HTTP日志处理器 (端口: {PORT})")
+    else:
+        logger.warning(f"本地日志服务器响应异常 (状态码: {test_response.status_code})，禁用HTTP日志处理器")
+except Exception as e:
+    logger.warning(f"本地日志服务器不可用 ({e})，禁用HTTP日志处理器，仅使用控制台日志")
 
 # 同时可以保留控制台日志处理器
 console_handler = logging.StreamHandler()
@@ -1247,6 +1255,7 @@ def message_listener(msg, chat):
 def recognize_image_with_moonshot(image_path, is_emoji=False):
     # 先暂停向API发送消息队列
     global can_send_messages
+    original_can_send_messages = can_send_messages
     can_send_messages = False
 
     """使用AI识别图片内容并返回文本"""
@@ -1302,24 +1311,31 @@ def recognize_image_with_moonshot(image_path, is_emoji=False):
                 logger.warning(f"清理临时表情图片失败: {clean_err}")
                 
         # 恢复向Deepseek发送消息队列
-        can_send_messages = True
+        can_send_messages = original_can_send_messages
         return recognized_text
 
     except Exception as e:
         logger.error(f"调用AI识别图片失败: {str(e)}", exc_info=True)
         # 恢复向Deepseek发送消息队列
-        can_send_messages = True
+        can_send_messages = original_can_send_messages
         return ""
 
 def handle_emoji_message(msg, who):
     global emoji_timer
     global can_send_messages
+    original_can_send_messages = can_send_messages
     can_send_messages = False
 
     def timer_callback():
-        with emoji_timer_lock:           
-            handle_wxauto_message(msg, who)   
-            emoji_timer = None       
+        try:
+            with emoji_timer_lock:           
+                handle_wxauto_message(msg, who)   
+                emoji_timer = None
+        except Exception as e:
+            logger.error(f"表情处理回调出错: {e}")
+        finally:
+            # 确保状态恢复
+            can_send_messages = original_can_send_messages
 
     with emoji_timer_lock:
         if emoji_timer is not None:
@@ -1576,18 +1592,31 @@ def handle_wxauto_message(msg, who):
 def check_inactive_users():
     global can_send_messages
     while True:
-        current_time = time.time()
-        inactive_users = []
-        with queue_lock:
-            for username, user_data in user_queues.items():
-                last_time = user_data.get('last_message_time', 0)
-                if current_time - last_time > QUEUE_WAITING_TIME and can_send_messages and not is_sending_message: 
-                    inactive_users.append(username)
+        try:
+            current_time = time.time()
+            inactive_users = []
+            with queue_lock:
+                for username, user_data in user_queues.items():
+                    last_time = user_data.get('last_message_time', 0)
+                    if current_time - last_time > QUEUE_WAITING_TIME and can_send_messages and not is_sending_message: 
+                        inactive_users.append(username)
 
-        for username in inactive_users:
-            process_user_messages(username)
+            for username in inactive_users:
+                try:
+                    process_user_messages(username)
+                except Exception as e:
+                    logger.error(f"处理用户 {username} 消息时出错: {e}")
+                    # 确保状态恢复
+                    can_send_messages = True
+                    is_sending_message = False
 
-        time.sleep(1)  # 每秒检查一次
+            time.sleep(1)  # 每秒检查一次
+        except Exception as e:
+            logger.error(f"check_inactive_users 发生错误: {e}")
+            # 重置状态
+            can_send_messages = True
+            is_sending_message = False
+            time.sleep(5)  # 出错后暂停一下
 
 def process_user_messages(user_id):
     """处理指定用户的消息队列，包括可能的联网搜索。"""
@@ -1817,6 +1846,8 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
 
     except Exception as e:
         logger.error(f"向 {user_id} 发送回复失败: {str(e)}", exc_info=True)
+        # 确保在异常情况下也能恢复状态
+        can_send_messages = True
     finally:
         is_sending_message = False
 
@@ -3354,11 +3385,42 @@ def initialize_all_user_timers():
         reset_user_timer(user)
     logger.info("所有用户计时器已重新初始化")
 
+# --- 新增：状态管理函数 ---
+def reset_send_status():
+    """重置发送状态标志"""
+    global can_send_messages, is_sending_message
+    can_send_messages = True
+    is_sending_message = False
+    logger.info("发送状态标志已重置")
+
+def monitor_send_status():
+    """监控发送状态，防止卡死"""
+    global can_send_messages, is_sending_message
+    
+    while True:
+        try:
+            # 检查 can_send_messages 是否被错误设置为 False
+            if not can_send_messages:
+                logger.warning("检测到 can_send_messages 为 False，尝试重置")
+                can_send_messages = True
+            
+            # 检查 is_sending_message 是否卡死超过30秒
+            # 这里可以添加更复杂的检查逻辑
+            
+            time.sleep(30)  # 每30秒检查一次
+        except Exception as e:
+            logger.error(f"状态监控出错: {e}")
+            # 出错时强制重置状态
+            reset_send_status()
+            time.sleep(60)  # 出错后等待更长时间
 
 def main():
     try:
         # --- 启动前检查 ---
         logger.info("\033[32m进行启动前检查...\033[0m")
+        
+        # 重置发送状态标志
+        reset_send_status()
 
         # 预检查所有用户prompt文件
         for user in user_names:
@@ -3473,6 +3535,12 @@ def main():
         monitor_memory_usage_thread.daemon = True
         monitor_memory_usage_thread.start()
         logger.info("内存使用监控线程已启动。")
+
+        # 启动发送状态监控线程
+        status_monitor_thread = threading.Thread(target=monitor_send_status, name="SendStatusMonitor")
+        status_monitor_thread.daemon = True
+        status_monitor_thread.start()
+        logger.info("发送状态监控线程已启动。")
 
         wx.KeepRunning()
 
