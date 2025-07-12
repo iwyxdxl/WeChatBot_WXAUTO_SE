@@ -40,6 +40,22 @@ import json
 
 app = Flask(__name__)
 
+def hide_api_key(api_key):
+    """
+    隐藏API Key，只显示前4位和后4位，中间用*替代
+    """
+    if not api_key or len(api_key) <= 8:
+        return api_key  # 太短的key不处理
+    
+    # 显示前4位和后4位，中间用*替代
+    return api_key[:4] + '*' * max(4, len(api_key) - 8) + api_key[-4:]
+
+def is_hidden_api_key(api_key):
+    """
+    检查API Key是否是隐藏版本
+    """
+    return api_key and '*' in api_key
+
 def safe_type_convert(value, target_type, default_value=None, field_name=""):
     """
     安全的类型转换函数，防止整数转换为字符串
@@ -304,6 +320,18 @@ def submit_config():
         old_listen_list_map = {item[0]: item[1] for item in current_config_before_update.get('LISTEN_LIST', [])}
 
         new_values_for_config_py = {}
+        
+        # 处理API Key字段的特殊逻辑
+        api_key_fields = ['DEEPSEEK_API_KEY', 'MOONSHOT_API_KEY', 'ONLINE_API_KEY', 'ASSISTANT_API_KEY']
+        for field in api_key_fields:
+            if field in request.form:
+                submitted_value = request.form[field].strip()
+                if is_hidden_api_key(submitted_value):
+                    # 如果提交的是隐藏版本，保持原值不变
+                    new_values_for_config_py[field] = current_config_before_update.get(field, '')
+                else:
+                    # 如果提交的是新值，使用新值
+                    new_values_for_config_py[field] = submitted_value
 
         nicknames_from_form = request.form.getlist('nickname')
         prompt_files_from_form = request.form.getlist('prompt_file')
@@ -338,7 +366,7 @@ def submit_config():
             new_values_for_config_py[field] = field in request.form
 
         for key_from_form in request.form:
-            if key_from_form in ['nickname', 'prompt_file'] or key_from_form in boolean_fields:
+            if key_from_form in ['nickname', 'prompt_file'] or key_from_form in boolean_fields or key_from_form in api_key_fields:
                 continue 
 
             value_from_form = request.form[key_from_form].strip()
@@ -656,7 +684,13 @@ def quick_start():
             new_values = {}
 
             api_provider = request.form.get('quick_start_api_provider', 'weapis')
-            api_key = request.form.get('quick_start_api_key', '').strip()
+            api_key_raw = request.form.get('quick_start_api_key', '').strip()
+            
+            # 处理API Key，如果是隐藏版本则保持原值
+            if is_hidden_api_key(api_key_raw):
+                api_key = config.get('DEEPSEEK_API_KEY', '')
+            else:
+                api_key = api_key_raw
 
             keys_to_clear_for_non_weapis = [
                 'MOONSHOT_API_KEY', 'ONLINE_API_KEY',
@@ -740,8 +774,15 @@ def quick_start():
             current_api_provider = 'other'
             current_custom_base_url = deepseek_url
 
+        # 为快速配置页面也隐藏API Key
+        display_config = config.copy()
+        api_key_fields = ['DEEPSEEK_API_KEY']
+        for field in api_key_fields:
+            if field in display_config:
+                display_config[field] = hide_api_key(display_config[field])
+
         return render_template('quick_start.html',
-                               config=config,
+                               config=display_config,
                                prompt_files=prompt_files_list,
                                current_api_provider=current_api_provider,
                                current_custom_base_url=current_custom_base_url)
@@ -882,8 +923,15 @@ def index():
         config = parse_config() # 重新解析以获取最新配置
         chat_context_users = get_chat_context_users()
 
+        # 创建一个隐藏API Key的配置副本用于显示
+        display_config = config.copy()
+        api_key_fields = ['DEEPSEEK_API_KEY', 'MOONSHOT_API_KEY', 'ONLINE_API_KEY', 'ASSISTANT_API_KEY']
+        for field in api_key_fields:
+            if field in display_config:
+                display_config[field] = hide_api_key(display_config[field])
+
         return render_template('config_editor.html',
-                             config=config,
+                             config=display_config,
                              prompt_files=prompt_files,
                              chat_context_users=chat_context_users)
     except Exception as e:

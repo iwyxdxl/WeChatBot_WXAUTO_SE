@@ -1599,17 +1599,47 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
         # --- 发送混合消息队列 ---
         for idx, (action_type, content) in enumerate(message_actions):
             if action_type == 'emoji':
-                try:
-                    wx.SendFiles(filepath=content, who=user_id)
-                    logger.info(f"已向 {user_id} 发送表情包")
+                # 表情包发送三次重试
+                success = False
+                for attempt in range(3):
+                    try:
+                        if wx.SendFiles(filepath=content, who=user_id):
+                            logger.info(f"已向 {user_id} 发送表情包")
+                            success = True
+                            break
+                        else:
+                            logger.warning(f"发送表情包失败，尝试第 {attempt + 1} 次")
+                    except Exception as e:
+                        logger.warning(f"发送表情包异常，尝试第 {attempt + 1} 次: {str(e)}")
+                    
+                    if attempt < 2:  # 不是最后一次尝试
+                        time.sleep(0.5)  # 短暂等待后重试
+                
+                if not success:
+                    logger.error(f"表情包发送失败，已重试3次")
+                else:
                     time.sleep(random.uniform(0.5, 1.5))  # 表情包发送后随机延迟
-                except Exception as e:
-                    logger.error(f"发送表情包失败: {str(e)}")
             else:
-                wx.SendMsg(msg=content, who=user_id)
-                logger.info(f"分段回复 {idx+1}/{len(message_actions)} 给 {sender_name}: {content[:50]}...")
-                if ENABLE_MEMORY:
-                    log_ai_reply_to_memory(username, content)
+                # 文本消息发送三次重试
+                success = False
+                for attempt in range(3):
+                    try:
+                        if wx.SendMsg(msg=content, who=user_id):
+                            logger.info(f"分段回复 {idx+1}/{len(message_actions)} 给 {sender_name}: {content[:50]}...")
+                            if ENABLE_MEMORY:
+                                log_ai_reply_to_memory(username, content)
+                            success = True
+                            break
+                        else:
+                            logger.warning(f"发送文本消息失败，尝试第 {attempt + 1} 次")
+                    except Exception as e:
+                        logger.warning(f"发送文本消息异常，尝试第 {attempt + 1} 次: {str(e)}")
+                    
+                    if attempt < 2:  # 不是最后一次尝试
+                        time.sleep(0.5)  # 短暂等待后重试
+                
+                if not success:
+                    logger.error(f"文本消息发送失败，已重试3次: {content[:50]}...")
 
             # 处理分段延迟（仅当下一动作为文本时计算）
             if idx < len(message_actions) - 1:

@@ -218,6 +218,12 @@
         .entry button:hover {
             background-color: #d32f2f;
         }
+        
+        .api-key-hint {
+            color: #ff9800 !important;
+            font-weight: bold;
+            margin-top: 5px !important;
+        }
         button.add-user-btn {
              margin-top:10px;
              background-color: #5cb85c;
@@ -323,7 +329,8 @@
 
             <div class="form-group">
                 <label for="quick_start_api_key">API Key:</label>
-                <input type="text" id="quick_start_api_key" name="quick_start_api_key" value="{{ config.DEEPSEEK_API_KEY or '' }}" placeholder="请输入 API Key">
+                <input type="text" id="quick_start_api_key" name="quick_start_api_key" value="{{ config.DEEPSEEK_API_KEY or '' }}" placeholder="请输入 API Key" class="api-key-input">
+                <small class="api-key-hint">{{ "出于安全考虑，已隐藏完整API Key。如需修改，请直接输入新的API Key。" if "*" in (config.DEEPSEEK_API_KEY or '') else "" }}</small>
                 <small id="api_key_note">申请 WeAPIs 密钥后，聊天、图片识别、联网搜索功能将使用此 Key 和推荐配置。</small>
             </div>
 
@@ -421,7 +428,51 @@
     </div>
 
     <script>
+        // 设置API Key输入字段的交互逻辑
+        function setupApiKeyInputs() {
+            const apiKeyInputs = document.querySelectorAll('.api-key-input');
+            
+            apiKeyInputs.forEach(input => {
+                const isHidden = input.value && input.value.includes('*');
+                
+                if (isHidden) {
+                    // 为隐藏的API Key添加特殊样式
+                    input.style.backgroundColor = '#fff3e0';
+                    input.style.border = '2px solid #ff9800';
+                    
+                    // 添加焦点事件
+                    input.addEventListener('focus', function() {
+                        if (this.value && this.value.includes('*')) {
+                            this.placeholder = '请输入新的API Key来替换隐藏的密钥';
+                            this.style.backgroundColor = '#e8f5e9';
+                            this.style.border = '2px solid #4caf50';
+                        }
+                    });
+                    
+                    input.addEventListener('blur', function() {
+                        if (this.value && this.value.includes('*')) {
+                            this.style.backgroundColor = '#fff3e0';
+                            this.style.border = '2px solid #ff9800';
+                            this.placeholder = '请输入 API Key';
+                        }
+                    });
+                    
+                    // 添加输入事件，清除隐藏样式
+                    input.addEventListener('input', function() {
+                        if (this.value && !this.value.includes('*')) {
+                            this.style.backgroundColor = '';
+                            this.style.border = '';
+                            this.placeholder = '请输入 API Key';
+                        }
+                    });
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            // 初始化API Key输入字段
+            setupApiKeyInputs();
+            
             const apiProviderSelect = document.getElementById('quick_start_api_provider');
             const customBaseUrlGroup = document.getElementById('custom_base_url_group');
             const customBaseUrlInput = document.getElementById('quick_start_custom_base_url');

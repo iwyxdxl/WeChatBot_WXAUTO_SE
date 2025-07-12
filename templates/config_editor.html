@@ -578,6 +578,11 @@
                  padding: 8px 10px; font-size: 13px;
             }
         }
+        @media (max-width: 480px) {
+            #oneKeyDiagnosticButton {
+                display: none !important;
+            }
+        }
         .file-list {
             list-style: none;
             padding: 0;
@@ -615,6 +620,12 @@
         }
         .delete-btn:hover {
             color: #d32f2f;
+        }
+        
+        .api-key-hint {
+            color: #ff9800 !important;
+            font-weight: bold;
+            margin-top: 5px !important;
         }
         .generator-box {
             display: flex;
@@ -693,6 +704,47 @@
             return 'https://vg.v1api.cc/v1'; // 默认返回第一个节点
         }
         
+        // 设置API Key输入字段的交互逻辑
+        function setupApiKeyInputs() {
+            const apiKeyInputs = document.querySelectorAll('.api-key-input');
+            
+            apiKeyInputs.forEach(input => {
+                const isHidden = input.value && input.value.includes('*');
+                
+                if (isHidden) {
+                    // 为隐藏的API Key添加特殊样式
+                    input.style.backgroundColor = '#fff3e0';
+                    input.style.border = '2px solid #ff9800';
+                    
+                    // 添加焦点事件
+                    input.addEventListener('focus', function() {
+                        if (this.value && this.value.includes('*')) {
+                            this.placeholder = '请输入新的API Key来替换隐藏的密钥';
+                            this.style.backgroundColor = '#e8f5e9';
+                            this.style.border = '2px solid #4caf50';
+                        }
+                    });
+                    
+                    input.addEventListener('blur', function() {
+                        if (this.value && this.value.includes('*')) {
+                            this.style.backgroundColor = '#fff3e0';
+                            this.style.border = '2px solid #ff9800';
+                            this.placeholder = 'sk-xxxxxxxxxx';
+                        }
+                    });
+                    
+                    // 添加输入事件，清除隐藏样式
+                    input.addEventListener('input', function() {
+                        if (this.value && !this.value.includes('*')) {
+                            this.style.backgroundColor = '';
+                            this.style.border = '';
+                            this.placeholder = 'sk-xxxxxxxxxx';
+                        }
+                    });
+                }
+            });
+        }
+        
         // 更新所有WeAPIs相关的URL配置
         async function updateWeAPIsUrls() {
             const availableUrl = await selectAvailableWeAPIsNode();
@@ -717,6 +769,9 @@
         document.addEventListener('DOMContentLoaded', function () {
             // 初始化时检测WeAPIs节点
             updateWeAPIsUrls();
+            
+            // 处理API Key输入字段的交互
+            setupApiKeyInputs();
             
             loadReminders();
             startReminderRefresh();
@@ -2158,7 +2213,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.22</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.22.1</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -2314,7 +2369,8 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>API Key:</label>
-                        <input type="text" placeholder="sk-xxxxxxxxxx" name="DEEPSEEK_API_KEY" value="{{ config.DEEPSEEK_API_KEY }}">
+                        <input type="text" placeholder="sk-xxxxxxxxxx" name="DEEPSEEK_API_KEY" value="{{ config.DEEPSEEK_API_KEY }}" class="api-key-input">
+                        <small class="api-key-hint">{{ "出于安全考虑，已隐藏完整API Key。如需修改，请直接输入新的API Key。" if "*" in config.DEEPSEEK_API_KEY else "" }}</small>
                     </div>
                     <div class="form-group">
                         <label>回复最大Token:</label>
@@ -2341,12 +2397,12 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     <h3 style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">辅助模型配置</h3>
                     <div class="form-group">
                         <div class="switch-item">
-                            <label>启用辅助模型功能</label>
+                            <label>启用辅助模型功能（可选）</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" id="enableAssistantModel" name="ENABLE_ASSISTANT_MODEL" {% if config.ENABLE_ASSISTANT_MODEL %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                         <small>
                             启用后，表情判断、联网检测、提醒解析等功能将使用辅助模型处理，主模型专注于对话生成。<br>
-                            辅助模型通常使用较小且成本更低的模型（如gpt-4o-mini），可提高效率并降低成本。
+                            辅助模型通常使用较小且成本更低的模型（如gpt-4o-mini），可提高效率并降低主模型使用成本。
                         </small>
                     </div>
 
@@ -2371,7 +2427,8 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                         </div>
                         <div class="form-group">
                             <label>辅助模型API Key:</label>
-                            <input type="text" placeholder="sk-xxxxxxxxxx" name="ASSISTANT_API_KEY" value="{{ config.ASSISTANT_API_KEY }}">
+                            <input type="text" placeholder="sk-xxxxxxxxxx" name="ASSISTANT_API_KEY" value="{{ config.ASSISTANT_API_KEY }}" class="api-key-input">
+                            <small class="api-key-hint">{{ "出于安全考虑，已隐藏完整API Key。如需修改，请直接输入新的API Key。" if "*" in config.ASSISTANT_API_KEY else "" }}</small>
                             <small>可与主模型使用相同的API Key，或使用单独的API Key以分别管理成本。</small>
                         </div>
                         <div class="form-group">
@@ -2389,7 +2446,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                                 <label>使用辅助模型进行记忆总结</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="USE_ASSISTANT_FOR_MEMORY_SUMMARY" {% if config.USE_ASSISTANT_FOR_MEMORY_SUMMARY %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
-                            <small>启用后，记忆总结和重要性评估也将使用辅助模型，进一步降低主模型调用成本。</small>
+                            <small>启用后，记忆总结和重要性评估也将使用辅助模型，进一步降低主模型调用成本，但可能降低总结质量。</small>
                         </div>
                     </div>
                 </div>
@@ -2428,7 +2485,8 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>API Key:</label>
-                        <input type="text" placeholder="sk-xxxxxxxxxx" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}">
+                        <input type="text" placeholder="sk-xxxxxxxxxx" name="MOONSHOT_API_KEY" value="{{ config.MOONSHOT_API_KEY }}" class="api-key-input">
+                        <small class="api-key-hint">{{ "出于安全考虑，已隐藏完整API Key。如需修改，请直接输入新的API Key。" if "*" in config.MOONSHOT_API_KEY else "" }}</small>
                     </div>
                     <div class="form-group">
                         <label>温度 (0-1):</label>
@@ -2466,7 +2524,8 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>联网API Key:</label>
-                        <input type="text" placeholder="sk-xxxxxxxxxx" name="ONLINE_API_KEY" value="{{ config.ONLINE_API_KEY }}">
+                        <input type="text" placeholder="sk-xxxxxxxxxx" name="ONLINE_API_KEY" value="{{ config.ONLINE_API_KEY }}" class="api-key-input">
+                        <small class="api-key-hint">{{ "出于安全考虑，已隐藏完整API Key。如需修改，请直接输入新的API Key。" if "*" in config.ONLINE_API_KEY else "" }}</small>
                     </div>
                     <div class="form-group">
                         <label>联网API温度 (0-1):</label>
