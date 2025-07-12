@@ -1912,7 +1912,9 @@ if __name__ == '__main__':
                '/save_all_reminders' in msg or \
                '/get_all_reminders' in msg or \
                '/api/get_chat_context_users' in msg or \
-               '/bot_heartbeat' in msg:
+               '/bot_heartbeat' in msg or \
+               'Bad request version' in msg or \
+               'Bad request syntax' in msg:
                 return False
             return True
 
