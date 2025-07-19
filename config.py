@@ -145,3 +145,9 @@ USE_ASSISTANT_FOR_MEMORY_SUMMARY = False
 # 开启后遇到敏感词时自动清除Memory_Temp文件和聊天上下文
 ENABLE_SENSITIVE_CONTENT_CLEARING = True
 
+ENABLE_TTS = False
+TTS_PROBABILITY = 100
+TTS_API_KEY = ''
+TTS_BASE_URL = 'https://gemini.nkbpal.cn/v1'
+TTS_MODEL = ''
+TTS_VOICE = ''

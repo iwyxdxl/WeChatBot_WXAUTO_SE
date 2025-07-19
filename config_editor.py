@@ -39,118 +39,6 @@ import time
 import json
 
 app = Flask(__name__)
-
-def hide_api_key(api_key):
-    """
-    隐藏API Key，只显示前4位和后4位，中间用*替代
-    """
-    if not api_key or len(api_key) <= 8:
-        return api_key  # 太短的key不处理
-    
-    # 显示前4位和后4位，中间用*替代
-    return api_key[:4] + '*' * max(4, len(api_key) - 8) + api_key[-4:]
-
-def is_hidden_api_key(api_key):
-    """
-    检查API Key是否是隐藏版本
-    """
-    return api_key and '*' in api_key
-
-def safe_type_convert(value, target_type, default_value=None, field_name=""):
-    """
-    安全的类型转换函数，防止整数转换为字符串
-    
-    Args:
-        value: 要转换的值
-        target_type: 目标类型 (int, float, bool)
-        default_value: 转换失败时的默认值
-        field_name: 字段名，用于日志记录
-    
-    Returns:
-        转换后的值或默认值
-    """
-    try:
-        str_value = str(value).strip()
-        
-        if target_type == int:
-            if str_value and str_value.isdigit():
-                return int(str_value)
-            elif str_value == '':
-                return 0 if default_value is None else default_value
-            else:
-                if field_name:
-                    app.logger.warning(f"配置项 {field_name} 的值 '{value}' 包含非数字字符，使用默认值。")
-                return default_value if default_value is not None else 0
-                
-        elif target_type == float:
-            if str_value:
-                import re
-                if re.match(r'^-?\d+(\.\d+)?$', str_value):
-                    return float(str_value)
-                else:
-                    if field_name:
-                        app.logger.warning(f"配置项 {field_name} 的值 '{value}' 不是有效的数字格式，使用默认值。")
-                    return default_value if default_value is not None else 0.0
-            else:
-                return 0.0 if default_value is None else default_value
-                
-        elif target_type == bool:
-            return str_value.lower() in ('on', 'true', '1', 'yes')
-            
-    except (ValueError, TypeError) as e:
-        if field_name:
-            app.logger.warning(f"配置项 {field_name} 类型转换失败: {e}，使用默认值。")
-        return default_value if default_value is not None else (0 if target_type == int else 0.0 if target_type == float else False)
-    
-    return value
-
-def validate_config_types(config_path):
-    """
-    验证config.py中的数据类型是否正确
-    """
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # 检查是否有字符串形式的数字
-        import re
-        
-        # 查找可能的问题配置项
-        issues = []
-        
-        # 检查应该是整数但被保存为字符串的配置项
-        int_fields = ['MAX_GROUPS', 'MAX_TOKEN', 'QUEUE_WAITING_TIME', 'EMOJI_SENDING_PROBABILITY', 
-                     'MAX_MESSAGE_LOG_ENTRIES', 'MAX_MEMORY_NUMBER', 'PORT', 'ONLINE_API_MAX_TOKEN',
-                     'REQUESTS_TIMEOUT', 'MAX_WEB_CONTENT_LENGTH', 'RESTART_INACTIVITY_MINUTES',
-                     'GROUP_CHAT_RESPONSE_PROBABILITY', 'ASSISTANT_MAX_TOKEN']
-        
-        # 检查应该是浮点数但被保存为字符串的配置项  
-        float_fields = ['TEMPERATURE', 'MOONSHOT_TEMPERATURE', 'MIN_COUNTDOWN_HOURS', 'MAX_COUNTDOWN_HOURS',
-                       'AVERAGE_TYPING_SPEED', 'RANDOM_TYPING_SPEED_MIN', 'RANDOM_TYPING_SPEED_MAX',
-                       'ONLINE_API_TEMPERATURE', 'RESTART_INTERVAL_HOURS', 'ASSISTANT_TEMPERATURE']
-        
-        for field in int_fields:
-            pattern = rf'{field}\s*=\s*[\'"](\d+)[\'"]'
-            matches = re.findall(pattern, content)
-            if matches:
-                issues.append(f"{field} 被保存为字符串 '{matches[0]}'，应为整数 {matches[0]}")
-        
-        for field in float_fields:
-            pattern = rf'{field}\s*=\s*[\'"](\d+\.?\d*)[\'"]'
-            matches = re.findall(pattern, content)
-            if matches:
-                issues.append(f"{field} 被保存为字符串 '{matches[0]}'，应为浮点数 {matches[0]}")
-        
-        if issues:
-            app.logger.warning(f"配置文件类型验证发现问题: {'; '.join(issues)}")
-            return False
-        
-        return True
-        
-    except Exception as e:
-        app.logger.error(f"配置文件类型验证失败: {e}")
-        return False
-
 app.secret_key = os.urandom(24).hex()  # 48位十六进制字符串
 bot_process = None
 
@@ -296,9 +184,12 @@ def bot_status():
 
     if process_alive_via_flask_obj:
         current_status = "running"
+        # app.logger.debug("Bot status: running (Flask process object active)")
     elif heartbeat_is_recent and process_alive_via_current_pid: # 优先检查通过PID确认的存活
         current_status = "running"
+        # app.logger.debug(f"Bot status: running (Recent heartbeat AND PID {current_bot_pid} exists. Last heartbeat: {time.time() - last_heartbeat_time:.1f}s ago)")
     elif heartbeat_is_recent and not process_alive_via_current_pid and current_bot_pid is not None:
+        # 心跳最近，但PID不存在了，可能是机器人刚崩溃但心跳消息还在路上，或者PID记录过时
         app.logger.warning(f"Bot status: Heartbeat recent, but PID {current_bot_pid} does not exist. Marking as stopped for now. Last heartbeat: {time.time() - last_heartbeat_time:.1f}s ago")
         current_status = "stopped" # 倾向于保守
     elif heartbeat_is_recent : # 心跳最近，但没有 current_bot_pid 信息 (例如 bot.py 未发送PID)
@@ -320,18 +211,6 @@ def submit_config():
         old_listen_list_map = {item[0]: item[1] for item in current_config_before_update.get('LISTEN_LIST', [])}
 
         new_values_for_config_py = {}
-        
-        # 处理API Key字段的特殊逻辑
-        api_key_fields = ['DEEPSEEK_API_KEY', 'MOONSHOT_API_KEY', 'ONLINE_API_KEY', 'ASSISTANT_API_KEY']
-        for field in api_key_fields:
-            if field in request.form:
-                submitted_value = request.form[field].strip()
-                if is_hidden_api_key(submitted_value):
-                    # 如果提交的是隐藏版本，保持原值不变
-                    new_values_for_config_py[field] = current_config_before_update.get(field, '')
-                else:
-                    # 如果提交的是新值，使用新值
-                    new_values_for_config_py[field] = submitted_value
 
         nicknames_from_form = request.form.getlist('nickname')
         prompt_files_from_form = request.form.getlist('prompt_file')
@@ -359,14 +238,13 @@ def submit_config():
             'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
             'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
-            'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
+            'ENABLE_TTS'
         ]
         for field in boolean_fields:
             new_values_for_config_py[field] = field in request.form
 
         for key_from_form in request.form:
-            if key_from_form in ['nickname', 'prompt_file'] or key_from_form in boolean_fields or key_from_form in api_key_fields:
+            if key_from_form in ['nickname', 'prompt_file'] or key_from_form in boolean_fields:
                 continue 
 
             value_from_form = request.form[key_from_form].strip()
@@ -384,57 +262,24 @@ def submit_config():
                 original_type_source = current_config_before_update[key_from_form]
                 if isinstance(original_type_source, bool):
                     new_values_for_config_py[key_from_form] = (value_from_form.lower() == 'true')
-                elif key_from_form in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS", "AVERAGE_TYPING_SPEED", "RANDOM_TYPING_SPEED_MIN", "RANDOM_TYPING_SPEED_MAX", "TEMPERATURE", "MOONSHOT_TEMPERATURE", "ONLINE_API_TEMPERATURE", "ASSISTANT_TEMPERATURE", "RESTART_INTERVAL_HOURS"]: 
+                elif key_from_form in ["MIN_COUNTDOWN_HOURS", "MAX_COUNTDOWN_HOURS", "AVERAGE_TYPING_SPEED", "RANDOM_TYPING_SPEED_MIN", "RANDOM_TYPING_SPEED_MAX", "TEMPERATURE", "MOONSHOT_TEMPERATURE", "ONLINE_API_TEMPERATURE", "RESTART_INTERVAL_HOURS"]: 
                     try:
-                        # 先确保值是字符串类型，然后进行转换
-                        str_value = str(value_from_form).strip()
-                        if str_value:
-                            # 验证是否为有效的数字格式
-                            import re
-                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
-                                new_values_for_config_py[key_from_form] = float(str_value)
-                            else:
-                                # 如果不是有效数字格式，保留原值
-                                new_values_for_config_py[key_from_form] = original_type_source
-                                app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 不是有效的数字格式，已保留旧值。")
-                        else:
-                            new_values_for_config_py[key_from_form] = 0.0
-                    except (ValueError, TypeError) as e: 
+                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
+                    except ValueError: 
                         new_values_for_config_py[key_from_form] = original_type_source 
-                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。错误: {e}")
-                elif isinstance(original_type_source, int) or key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "RESTART_INACTIVITY_MINUTES", "ASSISTANT_MAX_TOKEN"]:
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
+                elif isinstance(original_type_source, int) or key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "RESTART_INACTIVITY_MINUTES", "TTS_PROBABILITY"]:
                     try:
-                        # 先确保值是字符串类型，然后进行转换
-                        str_value = str(value_from_form).strip()
-                        if str_value and str_value.isdigit():
-                            new_values_for_config_py[key_from_form] = int(str_value)
-                        elif str_value == '':
-                            new_values_for_config_py[key_from_form] = 0
-                        else:
-                            # 如果包含非数字字符，保留原值
-                            new_values_for_config_py[key_from_form] = original_type_source
-                            app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 包含非数字字符，已保留旧值。")
-                    except (ValueError, TypeError) as e:
+                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
+                    except ValueError:
                         new_values_for_config_py[key_from_form] = original_type_source
-                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。错误: {e}")
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。")
                 elif isinstance(original_type_source, float):
                      try:
-                        # 先确保值是字符串类型，然后进行转换
-                        str_value = str(value_from_form).strip()
-                        if str_value:
-                            # 验证是否为有效的数字格式
-                            import re
-                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
-                                new_values_for_config_py[key_from_form] = float(str_value)
-                            else:
-                                # 如果不是有效数字格式，保留原值
-                                new_values_for_config_py[key_from_form] = original_type_source
-                                app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 不是有效的数字格式，已保留旧值。")
-                        else:
-                            new_values_for_config_py[key_from_form] = 0.0
-                     except (ValueError, TypeError) as e:
+                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 0.0
+                     except ValueError:
                         new_values_for_config_py[key_from_form] = original_type_source
-                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。错误: {e}")
+                        app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
                 elif isinstance(original_type_source, list):
                     try:
                         evaluated_list = ast.literal_eval(value_from_form)
@@ -444,62 +289,33 @@ def submit_config():
                             new_values_for_config_py[key_from_form] = original_type_source
                             app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 解析后不是列表，已保留旧值。")
                     except:
-                        new_values_for_config_py[key_from_form] = original_type_source
                         app.logger.warning(f"配置项 {key_from_form} 的值 '{value_from_form}' 无法解析为列表，已保留旧值。")
                 else: 
                     new_values_for_config_py[key_from_form] = value_from_form
             else: 
-                if key_from_form == "GROUP_CHAT_RESPONSE_PROBABILITY":
+                if key_from_form in ["GROUP_CHAT_RESPONSE_PROBABILITY", "TTS_PROBABILITY"]:
                     try:
-                        str_value = str(value_from_form).strip()
-                        if str_value and str_value.isdigit():
-                            new_values_for_config_py[key_from_form] = int(str_value)
-                        elif str_value == '':
-                            new_values_for_config_py[key_from_form] = 0
-                        else:
-                            new_values_for_config_py[key_from_form] = 100
-                            app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 包含非数字字符，已设为默认值100。")
-                    except (ValueError, TypeError) as e:
+                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 0
+                    except ValueError:
                         new_values_for_config_py[key_from_form] = 100
-                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值100。错误: {e}")
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值100。")
                 elif key_from_form == "RESTART_INACTIVITY_MINUTES":
                      try:
-                        str_value = str(value_from_form).strip()
-                        if str_value and str_value.isdigit():
-                            new_values_for_config_py[key_from_form] = int(str_value)
-                        elif str_value == '':
-                            new_values_for_config_py[key_from_form] = 15
-                        else:
-                            new_values_for_config_py[key_from_form] = 15
-                            app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 包含非数字字符，已设为默认值15。")
-                     except (ValueError, TypeError) as e:
+                        new_values_for_config_py[key_from_form] = int(value_from_form) if value_from_form else 15
+                     except ValueError:
                         new_values_for_config_py[key_from_form] = 15 
-                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值15。错误: {e}")
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为整数，已设为默认值15。")
 
                 elif key_from_form == "RESTART_INTERVAL_HOURS":
                      try:
-                        str_value = str(value_from_form).strip()
-                        if str_value:
-                            import re
-                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
-                                new_values_for_config_py[key_from_form] = float(str_value)
-                            else:
-                                new_values_for_config_py[key_from_form] = 2.0
-                                app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 不是有效的数字格式，已设为默认值2.0。")
-                        else:
-                            new_values_for_config_py[key_from_form] = 2.0
-                     except (ValueError, TypeError) as e:
+                        new_values_for_config_py[key_from_form] = float(value_from_form) if value_from_form else 2.0
+                     except ValueError:
                         new_values_for_config_py[key_from_form] = 2.0
-                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已设为默认值2.0。错误: {e}")
+                        app.logger.warning(f"新配置项 {key_from_form} 的值 '{value_from_form}' 无法转换为浮点数，已设为默认值2.0。")
                 else:
                     new_values_for_config_py[key_from_form] = value_from_form
         
         update_config(new_values_for_config_py)
-        
-        # 验证配置文件类型正确性
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, 'config.py')
-        validate_config_types(config_path)
 
         if users_whose_prompt_changed:
             with FileLock(CHAT_CONTEXTS_LOCK_FILE):
@@ -684,13 +500,7 @@ def quick_start():
             new_values = {}
 
             api_provider = request.form.get('quick_start_api_provider', 'weapis')
-            api_key_raw = request.form.get('quick_start_api_key', '').strip()
-            
-            # 处理API Key，如果是隐藏版本则保持原值
-            if is_hidden_api_key(api_key_raw):
-                api_key = config.get('DEEPSEEK_API_KEY', '')
-            else:
-                api_key = api_key_raw
+            api_key = request.form.get('quick_start_api_key', '').strip()
 
             keys_to_clear_for_non_weapis = [
                 'MOONSHOT_API_KEY', 'ONLINE_API_KEY',
@@ -698,38 +508,18 @@ def quick_start():
                 'MOONSHOT_MODEL', 'ONLINE_MODEL'
             ]
 
-            if api_provider == 'weapis':
-                if api_key:
-                    new_values['DEEPSEEK_API_KEY'] = api_key
-                    new_values['MOONSHOT_API_KEY'] = api_key
-                    new_values['ONLINE_API_KEY'] = api_key
-                new_values['DEEPSEEK_BASE_URL'] = 'https://vg.v1api.cc/v1'
-                new_values['MOONSHOT_BASE_URL'] = 'https://vg.v1api.cc/v1'
-                new_values['ONLINE_BASE_URL'] = 'https://vg.v1api.cc/v1'
-                new_values['MOONSHOT_MODEL'] = 'gpt-4o'
-                new_values['ONLINE_MODEL'] = 'net-gpt-4o-mini'
-                if not config.get('MODEL','').strip():
-                    new_values['MODEL'] = 'deepseek-ai/DeepSeek-V3'
-                new_values['ENABLE_ONLINE_API'] = 'ENABLE_ONLINE_API' in request.form
+            if api_provider == 'CottonAPI':
+                new_values['DEEPSEEK_BASE_URL'] = 'https://gemini.nkbpal.cn/v1'
+            elif api_provider == 'other':
+                custom_base_url = request.form.get('quick_start_custom_base_url', '').strip()
+                new_values['DEEPSEEK_BASE_URL'] = custom_base_url or ""
             
-            else:
-                if api_provider == 'siliconflow':
-                    new_values['DEEPSEEK_BASE_URL'] = 'https://api.siliconflow.cn/v1/'
-                elif api_provider == 'deepseek_official':
-                    new_values['DEEPSEEK_BASE_URL'] = 'https://api.deepseek.com'
-                elif api_provider == 'other':
-                    custom_base_url = request.form.get('quick_start_custom_base_url', '').strip()
-                    if custom_base_url:
-                        new_values['DEEPSEEK_BASE_URL'] = custom_base_url
-                    else:
-                        new_values['DEEPSEEK_BASE_URL'] = ""
-                
-                if api_key:
-                    new_values['DEEPSEEK_API_KEY'] = api_key
-                
-                for key_to_clear in keys_to_clear_for_non_weapis:
-                    new_values[key_to_clear] = "" 
-                new_values['ENABLE_ONLINE_API'] = False
+            if api_key:
+                new_values['DEEPSEEK_API_KEY'] = api_key
+
+            for key_to_clear in keys_to_clear_for_non_weapis:
+                new_values[key_to_clear] = ""
+            new_values['ENABLE_ONLINE_API'] = False
 
             nicknames = request.form.getlist('nickname')
             prompt_files_form = request.form.getlist('prompt_file')
@@ -753,36 +543,19 @@ def quick_start():
             os.makedirs(prompt_files_dir)
         prompt_files_list = [f[:-3] for f in os.listdir(prompt_files_dir) if f.endswith('.md')]
         
-        current_api_provider = 'weapis'
+        current_api_provider = 'other' # Default
         current_custom_base_url = ''
         
         deepseek_url = config.get('DEEPSEEK_BASE_URL', '')
         
-        is_weapis_setup = (
-            deepseek_url == 'https://vg.v1api.cc/v1' and
-            config.get('MOONSHOT_BASE_URL') == 'https://vg.v1api.cc/v1' and
-            config.get('ONLINE_BASE_URL') == 'https://vg.v1api.cc/v1'
-        )
-
-        if is_weapis_setup:
-            current_api_provider = 'weapis'
-        elif deepseek_url == 'https://api.siliconflow.cn/v1/':
-            current_api_provider = 'siliconflow'
-        elif deepseek_url == 'https://api.deepseek.com':
-            current_api_provider = 'deepseek_official'
-        elif deepseek_url and deepseek_url != 'https://vg.v1api.cc/v1': 
+        if deepseek_url == 'https://gemini.nkbpal.cn/v1':
+            current_api_provider = 'CottonAPI'
+        elif deepseek_url:
             current_api_provider = 'other'
             current_custom_base_url = deepseek_url
 
-        # 为快速配置页面也隐藏API Key
-        display_config = config.copy()
-        api_key_fields = ['DEEPSEEK_API_KEY']
-        for field in api_key_fields:
-            if field in display_config:
-                display_config[field] = hide_api_key(display_config[field])
-
         return render_template('quick_start.html',
-                               config=display_config,
+                               config=config,
                                prompt_files=prompt_files_list,
                                current_api_provider=current_api_provider,
                                current_custom_base_url=current_custom_base_url)
@@ -849,32 +622,16 @@ def index():
                     new_values[var] = value_from_form.lower() in ('on', 'true', '1', 'yes')
                 elif isinstance(original_value, int):
                     try:
-                        str_value = str(value_from_form).strip()
-                        if str_value and str_value.isdigit():
-                            new_values[var] = int(str_value)
-                        elif str_value == '':
-                            new_values[var] = 0
-                        else:
-                            new_values[var] = original_value
-                            app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 包含非数字字符，已保留旧值。")
-                    except (ValueError, TypeError) as e:
+                        new_values[var] = int(value_from_form) if value_from_form else 0
+                    except ValueError:
                         new_values[var] = original_value # 保留旧值
-                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。错误: {e}")
+                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为整数，已保留旧值。")
                 elif isinstance(original_value, float):
                     try:
-                        str_value = str(value_from_form).strip()
-                        if str_value:
-                            import re
-                            if re.match(r'^-?\d+(\.\d+)?$', str_value):
-                                new_values[var] = float(str_value)
-                            else:
-                                new_values[var] = original_value
-                                app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 不是有效的数字格式，已保留旧值。")
-                        else:
-                            new_values[var] = 0.0
-                    except (ValueError, TypeError) as e:
+                        new_values[var] = float(value_from_form) if value_from_form else 0.0
+                    except ValueError:
                         new_values[var] = original_value # 保留旧值
-                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。错误: {e}")
+                        app.logger.warning(f"配置项 {var} 的值 '{value_from_form}' 无法转换为浮点数，已保留旧值。")
 
                 elif original_value is None and value_from_form: # 如果原配置中某项不存在 (None), 但表单提交了值
                      # 尝试推断类型或默认为字符串
@@ -892,9 +649,7 @@ def index():
                 'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
                 'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
-                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
-                'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
+                'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES'
             ]
             for field in boolean_fields_from_editor:
                  # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
@@ -902,12 +657,6 @@ def index():
                     new_values[field] = field in request.form # 统一处理，在表单中出现即为True
 
             update_config(new_values)
-            
-            # 验证配置文件类型正确性
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(script_dir, 'config.py')
-            validate_config_types(config_path)
-            
             return redirect(url_for('index')) # 保存后重定向到自身以刷新GET请求
         except Exception as e:
             app.logger.error(f"主配置页保存配置错误: {e}")
@@ -923,15 +672,8 @@ def index():
         config = parse_config() # 重新解析以获取最新配置
         chat_context_users = get_chat_context_users()
 
-        # 创建一个隐藏API Key的配置副本用于显示
-        display_config = config.copy()
-        api_key_fields = ['DEEPSEEK_API_KEY', 'MOONSHOT_API_KEY', 'ONLINE_API_KEY', 'ASSISTANT_API_KEY']
-        for field in api_key_fields:
-            if field in display_config:
-                display_config[field] = hide_api_key(display_config[field])
-
         return render_template('config_editor.html',
-                             config=display_config,
+                             config=config,
                              prompt_files=prompt_files,
                              chat_context_users=chat_context_users)
     except Exception as e:
@@ -1284,35 +1026,6 @@ def import_config():
         app.logger.error(f"配置导入失败: {str(e)}")
         return jsonify({'error': f'导入失败: {str(e)}'}), 500
 
-@app.route('/reset_default_config', methods=['POST'])
-@login_required
-def reset_default_config():
-    global bot_process
-    if bot_process and bot_process.poll() is None:
-        return jsonify({'error': '程序正在运行，请先停止再恢复默认配置'}), 400
-    
-    try:
-        # 获取默认配置
-        default_config = get_default_config()
-        
-        # 保留当前的端口号和登录密码设置（避免被锁在外）
-        current_config = parse_config()
-        if 'PORT' in current_config:
-            default_config['PORT'] = current_config['PORT']
-        if 'LOGIN_PASSWORD' in current_config:
-            default_config['LOGIN_PASSWORD'] = current_config['LOGIN_PASSWORD']
-        if 'ENABLE_LOGIN_PASSWORD' in current_config:
-            default_config['ENABLE_LOGIN_PASSWORD'] = current_config['ENABLE_LOGIN_PASSWORD']
-        
-        # 使用 update_config 函数来保留原有的注释和格式
-        update_config(default_config)
-        
-        app.logger.info("配置已恢复到默认值")
-        return jsonify({'message': '配置已恢复到默认值'}), 200
-        
-    except Exception as e:
-        app.logger.error(f"恢复默认配置失败: {e}")
-        return jsonify({'error': f'恢复默认配置失败: {str(e)}'}), 500
 
 class WebLogHandler(logging.Handler):
     def emit(self, record):
@@ -1416,56 +1129,18 @@ def clear_chat_context(username):
             app.logger.error(f"处理 chat_contexts.json 失败: {e}")
             return jsonify({'status': 'error', 'message': '处理聊天上下文文件失败'}), 500
 
-
-
-def run_bat_file():
-    bat_file_path = "一键检测.bat"
-    if os.path.exists(bat_file_path):
-        os.system(f"start {bat_file_path}")
-
-from multiprocessing import Process
-@app.route('/run_one_key_detection', methods=['GET'])
-def run_one_key_detection():
-    bat_file_path = "一键检测.bat"
-    if os.path.exists(bat_file_path):
-        # 使用独立的进程运行 .bat 文件
-        p = Process(target=run_bat_file)
-        p.start()
-        return """
-        <h2>启动成功！</h2>
-        <p>一键检测工具已成功启动！</p>
-        <ul>
-            <li>检测工具将在单独的端口上运行，并自动打开浏览器窗口显示检测结果。</li>
-            <li>启动后，检测工具将在3分钟后自动关闭进程。</li>
-        </ul>
-        <h3>检测功能：</h3>
-        <ul>
-            <li>微信环境检测：检查微信版本、登录状态和窗口状态。</li>
-            <li>API配置检测：验证API密钥和连接状态。</li>
-            <li>系统资源检测：分析CPU、内存使用情况。</li>
-            <li>生成详细的诊断报告：提供问题解决建议。</li>
-        </ul>
-        <p style="color: green; font-weight: bold;">提示：本页面可以安全关闭，检测工具将在后台运行。</p>
-        """
-    return """
-    <h2>启动失败</h2>
-    <p style="color: red;">未找到一键检测.bat，请检查路径是否正确。</p>
-    <p>请确保<b>一键检测.bat</b>文件位于程序当前运行目录下。</p>
-    """
-
-
 def get_default_config():
     return {
         "LISTEN_LIST": [['微信名1', '角色1']],
         "DEEPSEEK_API_KEY": '',
-        "DEEPSEEK_BASE_URL": 'https://vg.v1api.cc/v1',
-        "MODEL": 'deepseek-v3-0324',
+        "DEEPSEEK_BASE_URL": 'https://gemini.nkbpal.cn/v1',
+        "MODEL": 'gemini-2.5-pro',
         "MAX_GROUPS": 5,
         "MAX_TOKEN": 2000,
         "TEMPERATURE": 1.1,
         "MOONSHOT_API_KEY": '',
-        "MOONSHOT_BASE_URL": 'https://vg.v1api.cc/v1',
-        "MOONSHOT_MODEL": 'gpt-4o',
+        "MOONSHOT_BASE_URL": 'https://gemini.nkbpal.cn/v1',
+        "MOONSHOT_MODEL": 'gemini-2.0-flash',
         "MOONSHOT_TEMPERATURE": 0.8,
         "ENABLE_IMAGE_RECOGNITION": True,
         "ENABLE_EMOJI_RECOGNITION": True,
@@ -1501,8 +1176,8 @@ def get_default_config():
         "ALLOW_REMINDERS_IN_QUIET_TIME": True,
         "USE_VOICE_CALL_FOR_REMINDERS": False,
         "ENABLE_ONLINE_API": False,
-        "ONLINE_BASE_URL": 'https://vg.v1api.cc/v1',
-        "ONLINE_MODEL": 'net-gpt-4o-mini',
+        "ONLINE_BASE_URL": 'https://gemini.nkbpal.cn/v1',
+        "ONLINE_MODEL": 'gemini-2.0-flash',
         "ONLINE_API_KEY": '',
         "ONLINE_API_TEMPERATURE": 0.7,
         "ONLINE_API_MAX_TOKEN": 2000,
@@ -1516,15 +1191,12 @@ def get_default_config():
         "RESTART_INTERVAL_HOURS": 2.0,
         "RESTART_INACTIVITY_MINUTES": 15,
         "REMOVE_PARENTHESES": False,
-        "ENABLE_ASSISTANT_MODEL": False,
-        "ASSISTANT_BASE_URL": 'https://vg.v1api.cc/v1',
-        "ASSISTANT_MODEL": 'gpt-4o-mini',
-        "ASSISTANT_API_KEY": '',
-        "ASSISTANT_TEMPERATURE": 0.3,
-        "ASSISTANT_MAX_TOKEN": 1000,
-        "USE_ASSISTANT_FOR_MEMORY_SUMMARY": False,
-        "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": False,
-        "ENABLE_SENSITIVE_CONTENT_CLEARING": True
+        "ENABLE_TTS": True,
+        "TTS_PROBABILITY": 100,
+        "TTS_API_KEY": '',
+        "TTS_BASE_URL": 'https://gemini.nkbpal.cn/v1',
+        "TTS_MODEL": 'MiniMax',
+        "TTS_VOICE": 'female-yaoyao-hd',
     }
 
 def validate_config():
@@ -1643,4 +1315,3 @@ if __name__ == '__main__':
     Timer(1, open_browser).start()  # 延迟1秒确保服务器已启动
     
     app.run(host="0.0.0.0", debug=False, port=PORT)
-    
