@@ -1416,7 +1416,60 @@ def clear_chat_context(username):
             app.logger.error(f"处理 chat_contexts.json 失败: {e}")
             return jsonify({'status': 'error', 'message': '处理聊天上下文文件失败'}), 500
 
+# 聊天上下文编辑API
+@app.route('/api/get_chat_context/<username>', methods=['GET'])
+@login_required
+def get_user_chat_context(username):
+    """获取指定用户的聊天上下文"""
+    if not os.path.exists(CHAT_CONTEXTS_FILE):
+        return jsonify({'error': '聊天上下文文件未找到'}), 404
 
+    with FileLock(CHAT_CONTEXTS_LOCK_FILE):
+        try:
+            with open(CHAT_CONTEXTS_FILE, 'r', encoding='utf-8') as f:
+                contexts = json.load(f)
+            user_context = contexts.get(username)
+            if user_context is None:
+                return jsonify({'error': f"用户 '{username}' 在上下文中不存在"}), 404
+            pretty_context = json.dumps(user_context, ensure_ascii=False, indent=4)
+            return jsonify({'status': 'success', 'context': pretty_context})
+        except (json.JSONDecodeError, IOError) as e:
+            app.logger.error(f"读取或解析聊天上下文文件失败: {e}")
+            return jsonify({'error': f'读取或解析文件失败: {e}'}), 500
+
+@app.route('/api/save_chat_context/<username>', methods=['POST'])
+@login_required
+def save_user_chat_context(username):
+    """保存指定用户修改后的聊天上下文"""
+    if bot_process and bot_process.poll() is not None:
+        return jsonify({'error': '程序正在运行，请先停止再保存上下文'}), 400
+    data = request.get_json()
+    if not data or 'context' not in data:
+        return jsonify({'status': 'error', 'message': '请求无效，缺少 "context" 字段'}), 400
+    new_context_str = data['context']
+    try:
+        new_context_data = json.loads(new_context_str)
+        if not isinstance(new_context_data, list):
+            raise ValueError("上下文数据必须是一个JSON数组 (list)")
+    except (json.JSONDecodeError, ValueError) as e:
+        return jsonify({'status': 'error', 'message': f'格式错误: {str(e)}'}), 400
+    with FileLock(CHAT_CONTEXTS_LOCK_FILE):
+        try:
+            if not os.path.exists(CHAT_CONTEXTS_FILE):
+                return jsonify({'status': 'error', 'message': '聊天上下文文件未找到'}), 404
+            with open(CHAT_CONTEXTS_FILE, 'r', encoding='utf-8') as f:
+                all_contexts = json.load(f)
+            if username not in all_contexts:
+                return jsonify({'status': 'error', 'message': '用户在上下文中不存在'}), 404
+            all_contexts[username] = new_context_data
+            temp_file_path = CHAT_CONTEXTS_FILE + ".tmp"
+            with open(temp_file_path, 'w', encoding='utf-8') as f:
+                json.dump(all_contexts, f, ensure_ascii=False, indent=4)
+            shutil.move(temp_file_path, CHAT_CONTEXTS_FILE)
+        except Exception as e:
+            app.logger.error(f"保存聊天上下文失败: {e}")
+            return jsonify({'status': 'error', 'message': f'保存失败: {str(e)}'}), 500
+    return jsonify({'status': 'success', 'message': f"用户 '{username}' 的上下文已更新"})
 
 def run_bat_file():
     bat_file_path = "一键检测.bat"

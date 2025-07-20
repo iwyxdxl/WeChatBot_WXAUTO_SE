@@ -665,6 +665,10 @@
         .context-user-item button:hover {
             background-color: #ffa000;
         }
+        .context-user-actions {
+            display: flex;
+            gap: 10px;
+        }
     </style>
 
     <script>
@@ -2084,7 +2088,7 @@
             const noDataDiv = document.querySelector('#section-memory p.no-context-data'); 
 
             if (!listContainer || !noDataDiv) {
-                console.error("聊天上下文列表容器或“无数据”提示元素未找到!");
+                console.error('聊天上下文列表容器或"无数据"提示元素未找到!');
                 return;
             }
 
@@ -2110,18 +2114,21 @@
                     listItem.className = 'context-user-item';
                     listItem.innerHTML = `
                         <span>${user}</span>
-                        <button type="button" onclick="clearUserChatContext('${user}')">清除临时记忆</button>
+                        <div class="context-user-actions">
+                            <button type="button" onclick="editUserChatContext('${user}')">编辑</button>
+                            <button type="button" onclick="clearUserChatContext('${user}')">清除临时记忆</button>
+                        </div>
                     `;
                     listContainer.appendChild(listItem);
                 }
             });
             
-            // 根据用户列表是否有数据，更新“暂无记录”提示和列表本身的显示状态
+            // 根据用户列表是否有数据，更新"暂无记录"提示和列表本身的显示状态
             if (usersFromServer.length === 0) {
-                noDataDiv.style.display = 'block'; // 显示“暂无记录”
+                noDataDiv.style.display = 'block'; // 显示"暂无记录"
                 listContainer.style.display = 'none'; // 隐藏空列表容器
             } else {
-                noDataDiv.style.display = 'none'; // 隐藏“暂无记录”
+                noDataDiv.style.display = 'none'; // 隐藏"暂无记录"
                 listContainer.style.display = 'block'; // 显示列表容器
             }
         }
@@ -2203,6 +2210,140 @@
                 acceptAllSelect.addEventListener('change', toggleOptions);
                 toggleOptions();
             }
+        }
+
+        // 聊天上下文编辑功能
+        function renderChatContextRounds(rounds) {
+            const container = document.getElementById('chatContextRoundsContainer');
+            container.innerHTML = '';
+            if (!Array.isArray(rounds)) return;
+            rounds.forEach((item, idx) => {
+                // item: {role: 'user'|'assistant', content: '...'}
+                // 每两条为一轮
+                if (idx % 2 === 0) {
+                    const userMsg = item && item.role === 'user' ? item.content : '';
+                    const aiMsg = (rounds[idx+1] && rounds[idx+1].role === 'assistant') ? rounds[idx+1].content : '';
+                    const roundIdx = Math.floor(idx/2);
+                    const card = document.createElement('div');
+                    card.className = 'chat-round-card';
+                    card.innerHTML = `
+                        <div class="chat-round-label">第${roundIdx+1}轮 用户发言：</div>
+                        <textarea class="chat-round-textarea user-msg" placeholder="用户发言...">${userMsg.replace(/</g,'&lt;')}</textarea>
+                        <div class="chat-round-label" style="color:#1976d2;">AI回复：</div>
+                        <textarea class="chat-round-textarea ai-msg" placeholder="AI回复...">${aiMsg.replace(/</g,'&lt;')}</textarea>
+                        <button type="button" class="delete-round-btn" onclick="deleteChatRound(${roundIdx})">删除本轮</button>
+                    `;
+                    container.appendChild(card);
+                }
+            });
+        }
+        function getChatContextRoundsFromUI() {
+            const container = document.getElementById('chatContextRoundsContainer');
+            const cards = container.querySelectorAll('.chat-round-card');
+            const result = [];
+            cards.forEach(card => {
+                const userMsg = card.querySelector('.user-msg').value.trim();
+                const aiMsg = card.querySelector('.ai-msg').value.trim();
+                if (userMsg) result.push({role:'user', content:userMsg});
+                if (aiMsg) result.push({role:'assistant', content:aiMsg});
+            });
+            return result;
+        }
+        function addChatRound(userMsg='', aiMsg='') {
+            const container = document.getElementById('chatContextRoundsContainer');
+            const roundIdx = container.querySelectorAll('.chat-round-card').length;
+            const card = document.createElement('div');
+            card.className = 'chat-round-card';
+            card.innerHTML = `
+                <div class="chat-round-label">第${roundIdx+1}轮 用户发言：</div>
+                <textarea class="chat-round-textarea user-msg" placeholder="用户发言...">${userMsg.replace(/</g,'&lt;')}</textarea>
+                <div class="chat-round-label" style="color:#1976d2;">AI回复：</div>
+                <textarea class="chat-round-textarea ai-msg" placeholder="AI回复...">${aiMsg.replace(/</g,'&lt;')}</textarea>
+                <button type="button" class="delete-round-btn" onclick="deleteChatRound(${roundIdx})">删除本轮</button>
+            `;
+            container.appendChild(card);
+        }
+        function deleteChatRound(idx) {
+            const container = document.getElementById('chatContextRoundsContainer');
+            const cards = Array.from(container.querySelectorAll('.chat-round-card'));
+            if (cards[idx]) {
+                cards[idx].remove();
+                // 重新编号
+                Array.from(container.querySelectorAll('.chat-round-card')).forEach((card, i) => {
+                    card.querySelector('.chat-round-label').textContent = `第${i+1}轮 用户发言：`;
+                    card.querySelector('.delete-round-btn').setAttribute('onclick', `deleteChatRound(${i})`);
+                });
+            }
+        }
+        function editUserChatContext(username) {
+            document.getElementById('editChatContextUser').textContent = username;
+            document.getElementById('editChatContextError').style.display = 'none';
+            document.getElementById('editChatContextModal').style.display = 'block';
+            const container = document.getElementById('chatContextRoundsContainer');
+            container.innerHTML = '<div style="color:#888; padding:30px 0; text-align:center;">加载中...</div>';
+            fetch(`/api/get_chat_context/${encodeURIComponent(username)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        let arr = [];
+                        try { arr = JSON.parse(data.context); } catch(e) { arr = []; }
+                        if (!Array.isArray(arr)) arr = [];
+                        renderChatContextRounds(arr);
+                    } else {
+                        container.innerHTML = '<div style="color:#f44336; padding:30px 0; text-align:center;">加载失败</div>';
+                        document.getElementById('editChatContextError').textContent = data.error || '加载失败';
+                        document.getElementById('editChatContextError').style.display = 'block';
+                    }
+                    // 事件绑定放这里，确保每次弹窗打开都能绑定
+                    const addBtn = document.getElementById('addChatRoundBtn');
+                    if (addBtn) addBtn.onclick = function() { addChatRound(); };
+                })
+                .catch(err => {
+                    container.innerHTML = '<div style="color:#f44336; padding:30px 0; text-align:center;">加载失败</div>';
+                    document.getElementById('editChatContextError').textContent = '加载失败: ' + err;
+                    document.getElementById('editChatContextError').style.display = 'block';
+                    const addBtn = document.getElementById('addChatRoundBtn');
+                    if (addBtn) addBtn.onclick = function() { addChatRound(); };
+                });
+        }
+        document.getElementById('addChatRoundBtn').onclick = function() { addChatRound(); };
+        function saveUserChatContext() {
+            const username = document.getElementById('editChatContextUser').textContent;
+            document.getElementById('editChatContextError').style.display = 'none';
+            const arr = getChatContextRoundsFromUI();
+            try {
+                if (!Array.isArray(arr)) throw new Error('内容必须是JSON数组');
+                // 检查格式
+                arr.forEach(item => {
+                    if (!item.role || !item.content) throw new Error('每条对话必须有角色和内容');
+                });
+            } catch (e) {
+                document.getElementById('editChatContextError').textContent = '格式错误：' + e.message;
+                document.getElementById('editChatContextError').style.display = 'block';
+                return;
+            }
+            fetch(`/api/save_chat_context/${encodeURIComponent(username)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ context: JSON.stringify(arr) })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    closeEditChatContextModal();
+                    alert('保存成功！');
+                } else {
+                    document.getElementById('editChatContextError').textContent = data.message || '保存失败';
+                    document.getElementById('editChatContextError').style.display = 'block';
+                }
+            })
+            .catch(err => {
+                document.getElementById('editChatContextError').textContent = '保存失败: ' + err;
+                document.getElementById('editChatContextError').style.display = 'block';
+            });
+        }
+        function closeEditChatContextModal() {
+            document.getElementById('editChatContextModal').style.display = 'none';
         }
     </script>
 </head>
@@ -2582,7 +2723,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                                 <label>被@时回复</label>
                                 <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_GROUP_AT_REPLY" {% if config.ENABLE_GROUP_AT_REPLY %}checked{% endif %}><span class="slider round"></span></label></div>
                             </div>
-                            <small>启用后，当机器人在群聊中被@时会作出回应。此选项在“接收所有群聊消息”模式下无效。</small>
+                            <small>启用后，当机器人在群聊中被@时会作出回应。此选项在"接收所有群聊消息"模式下无效。</small>
                         </div>
 
                         <div class="form-group">
@@ -2614,7 +2755,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                             <label>关键词触发时忽略回复概率</label>
                             <div class="switch"><label class="switch-label"><input type="checkbox" name="GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY" {% if config.GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
-                        <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的“群聊回复概率”，必定进行回复。此选项优先于“群聊回复概率”。</small>
+                        <small>启用后，如果群聊消息触发了关键词回复，将无视上方设置的"群聊回复概率"，必定进行回复。此选项优先于"群聊回复概率"。</small>
                     </div>
                 </div>
 
@@ -2688,13 +2829,16 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                                 {% for user in chat_context_users %}
                                 <li class="context-user-item">
                                     <span>{{ user }}</span>
-                                    <button type="button" onclick="clearUserChatContext('{{ user }}')">清除临时记忆</button>
+                                    <div class="context-user-actions">
+                                        <button type="button" onclick="editUserChatContext('{{ user }}')">编辑</button>
+                                        <button type="button" onclick="clearUserChatContext('{{ user }}')">清除临时记忆</button>
+                                    </div>
                                 </li>
                                 {% endfor %}
                             {% endif %}
                         </ul>
                         <p class="no-context-data" style="font-size: 14px; color: #777;" {% if chat_context_users %}style="display: none;"{% else %}style="display: block;"{% endif %}>暂无聊天上下文记录。</p>
-                        <small>此处的“临时记忆”指的是保存在 <code>chat_contexts.json</code> 文件中的短期对话历史，用于维持对话的连贯性。清除后，与该用户的下一次对话将不包含之前的短期上下文，但不会影响Prompt中长期记忆的总结。</small>
+                        <small>此处的"临时记忆"指的是保存在 <code>chat_contexts.json</code> 文件中的短期对话历史，用于维持对话的连贯性。清除后，与该用户的下一次对话将不包含之前的短期上下文，但不会影响Prompt中长期记忆的总结。</small>
                     </div>                 
                 </div>
 
@@ -2709,7 +2853,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     <div class="form-group">
                         <label>主动消息内容(发送给ai获取回复):</label>
                         <input type="text" name="AUTO_MESSAGE" value="{{ config.AUTO_MESSAGE }}">
-                        <small>如果开启了联网功能，您也可以在这里设置联网请求比如“获取最新的新闻资讯”。</small>
+                        <small>如果开启了联网功能，您也可以在这里设置联网请求比如"获取最新的新闻资讯"。</small>
                     </div>
                     <div class="form-group">
                         <label>主动消息触发时间(小时):</label>
@@ -2745,8 +2889,8 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                         </div>
                     </div>
                     <p style="font-size:14px; line-height:1.6; color:#555;">
-                    开启后，您可以给AI发送指令如“15分钟后提醒我出门”、“下午3点叫我开会”、“每天早上8点跟我道早安”来生成临时一次性定时/重复定时消息。<br>
-                    如果开启了联网搜索功能，你还可以通过指令如“每天早上10点跟我讲讲今天的新闻”来生成定时联网消息。<br>
+                    开启后，您可以给AI发送指令如"15分钟后提醒我出门"、"下午3点叫我开会"、"每天早上8点跟我道早安"来生成临时一次性定时/重复定时消息。<br>
+                    如果开启了联网搜索功能，你还可以通过指令如"每天早上10点跟我讲讲今天的新闻"来生成定时联网消息。<br>
                     定时消息将储存在目录下的<code>recurring_reminders.json</code> 文件中并在程序运行时调用。<br>
                     推荐使用云部署的方式来运行本程序，这样可以保持程序24h运行以获得更好的体验：<a href="https://www.bilibili.com/video/BV11x9vYnEbC/" target="_blank">[查看教程]</a>
                     </p>
@@ -2868,7 +3012,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
             原项目版权: Copyright (C) 2025, umaru<br>
             修改版本版权: Copyright (C) 2025, iwyxdxl</p>
             <p>本软件是自由软件，您可以根据 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">GNU 通用公共许可证 第3版 (或更高版本)</a> 的条款重新发布和修改本软件。</p>
-            <p>本软件按“现状”提供，不提供任何明示或暗示的担保 (包括适销性或特定用途适用性)。<br>
+            <p>本软件按"现状"提供，不提供任何明示或暗示的担保 (包括适销性或特定用途适用性)。<br>
             如您未收到完整的许可证副本，请访问 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">GNU GPL 3.0 中文版</a> 获取。</p>
             <p>源代码获取：<br>
             原项目源代码：<a href="https://github.com/KouriChat/KouriChat" target="_blank">https://github.com/KouriChat/KouriChat</a><br>
@@ -2876,6 +3020,80 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
             <p>本软件仅供学习和娱乐使用，请勿用于违法用途，否则产生的一切法律责任均与任何作者无关。</p>
         </div>
     </div>
+
+    <!-- 聊天上下文编辑弹窗 -->
+    <div id="editChatContextModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:2000;">
+        <div style="background:#fff; width:90%; max-width:1200px; margin:2vh auto; padding:25px 20px 18px 20px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.2); position:relative; max-height:90vh; overflow-y:auto;">
+            <h3 style="margin-top:0; font-size:18px;">编辑用户聊天上下文</h3>
+            <div style="margin-bottom:10px; color:#555;">
+                <span id="editChatContextUser" style="font-weight:bold;"></span>
+            </div>
+            <!-- 新增多轮对话渲染容器 -->
+            <div id="chatContextRoundsContainer"></div>
+            <div style="margin:18px 0 0 0; text-align:right;">
+                <button type="button" class="nav-button" style="background:#2196F3;" id="addChatRoundBtn">添加一轮对话</button>
+            </div>
+            <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" class="nav-button" style="background:#4caf50;" onclick="saveUserChatContext()">保存</button>
+                <button type="button" class="nav-button" style="background:#aaa;" onclick="closeEditChatContextModal()">取消</button>
+            </div>
+            <div id="editChatContextError" style="color:#f44336; margin-top:8px; display:none;"></div>
+        </div>
+    </div>
+    <style>
+    .chat-round-card {
+        background: #f7f8fc;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        margin-bottom: 22px;
+        padding: 18px 18px 12px 18px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        position: relative;
+    }
+    .chat-round-card .delete-round-btn {
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        background: #f44336;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .chat-round-card .delete-round-btn:hover {
+        background: #d32f2f;
+    }
+    .chat-round-label {
+        font-weight: bold;
+        color: #388e3c;
+        margin-bottom: 6px;
+        font-size: 15px;
+    }
+    .chat-round-textarea {
+        width: 100%;
+        min-height: 70px;
+        height: 110px;
+        max-height: 220px;
+        font-size: 16px;
+        font-family: monospace;
+        padding: 12px;
+        border-radius: 6px;
+        border: 1.5px solid #bdbdbd;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+        resize: vertical;
+        background: #fff;
+        transition: border 0.2s;
+    }
+    .chat-round-textarea:focus {
+        border: 1.5px solid #4caf50;
+        outline: none;
+        background: #e8f5e9;
+    }
+    </style>
 
     <script>
         let userHoveringLogs = false;
