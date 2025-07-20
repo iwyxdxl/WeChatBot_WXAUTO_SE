@@ -1440,7 +1440,7 @@ def get_user_chat_context(username):
 @app.route('/api/save_chat_context/<username>', methods=['POST'])
 @login_required
 def save_user_chat_context(username):
-    """保存指定用户修改后的聊天上下文"""
+    """保存指定用户修改后的聊天上下文，强制合并连续user消息，确保user→assistant结构"""
     if bot_process and bot_process.poll() is not None:
         return jsonify({'error': '程序正在运行，请先停止再保存上下文'}), 400
     data = request.get_json()
@@ -1451,6 +1451,20 @@ def save_user_chat_context(username):
         new_context_data = json.loads(new_context_str)
         if not isinstance(new_context_data, list):
             raise ValueError("上下文数据必须是一个JSON数组 (list)")
+        # --- 强制合并连续user，保证user→assistant结构 ---
+        merged_context = []
+        user_buffer = []
+        for item in new_context_data:
+            if item.get('role') == 'user':
+                user_buffer.append(item.get('content', ''))
+            elif item.get('role') == 'assistant':
+                if user_buffer:
+                    merged_context.append({'role': 'user', 'content': '\n'.join(user_buffer)})
+                    user_buffer = []
+                merged_context.append(item)
+        if user_buffer:
+            merged_context.append({'role': 'user', 'content': '\n'.join(user_buffer)})
+        # --- END ---
     except (json.JSONDecodeError, ValueError) as e:
         return jsonify({'status': 'error', 'message': f'格式错误: {str(e)}'}), 400
     with FileLock(CHAT_CONTEXTS_LOCK_FILE):
@@ -1461,7 +1475,7 @@ def save_user_chat_context(username):
                 all_contexts = json.load(f)
             if username not in all_contexts:
                 return jsonify({'status': 'error', 'message': '用户在上下文中不存在'}), 404
-            all_contexts[username] = new_context_data
+            all_contexts[username] = merged_context
             temp_file_path = CHAT_CONTEXTS_FILE + ".tmp"
             with open(temp_file_path, 'w', encoding='utf-8') as f:
                 json.dump(all_contexts, f, ensure_ascii=False, indent=4)
