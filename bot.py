@@ -567,6 +567,29 @@ def load_chat_contexts():
         logger.error(f"加载聊天上下文失败: {e}", exc_info=True)
         chat_contexts = {} # 出现其他错误也重置为空，保证程序能启动
 
+def merge_context(context_list):
+    """
+    合并连续相同 role 的消息，保证 user/assistant 交替。
+    """
+    if not context_list:
+        return []
+    merged = []
+    last_role = None
+    buffer = []
+    for item in context_list:
+        role = item.get('role')
+        content = item.get('content', '')
+        if role == last_role:
+            buffer.append(content)
+        else:
+            if buffer:
+                merged.append({'role': last_role, 'content': '\n'.join(buffer)})
+            buffer = [content]
+            last_role = role
+    if buffer:
+        merged.append({'role': last_role, 'content': '\n'.join(buffer)})
+    return merged
+
 # 保存聊天上下文
 def save_chat_contexts():
     """将当前聊天上下文保存到文件。"""
@@ -576,7 +599,10 @@ def save_chat_contexts():
         # 创建要保存的上下文副本，以防在写入时被其他线程修改
         # 如果在 queue_lock 保护下调用，则直接使用全局 chat_contexts 即可
         contexts_to_save = dict(chat_contexts) # 创建浅拷贝
-
+        # --- 新增：保存前合并每个用户的上下文 ---
+        for user in contexts_to_save:
+            contexts_to_save[user] = merge_context(contexts_to_save[user])
+        # --- END ---
         with open(temp_file_path, 'w', encoding='utf-8') as f:
             json.dump(contexts_to_save, f, ensure_ascii=False, indent=4)
         shutil.move(temp_file_path, CHAT_CONTEXTS_FILE) # 原子替换
