@@ -43,6 +43,11 @@ class Updater:
     REPO_BRANCH = "main"
     GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
     
+    # Gitee备选源
+    GITEE_REPO_OWNER = "iwyxdxl"
+    GITEE_REPO_NAME = "WeChatBot_WXAUTO_SE"
+    GITEE_API = f"https://gitee.com/api/v5/repos/{GITEE_REPO_OWNER}/{GITEE_REPO_NAME}"
+    
     # 需要跳过的文件和文件夹（不会被更新）
     SKIP_FILES = [
         "prompts",      # 聊天提示词
@@ -56,9 +61,21 @@ class Updater:
     # GitHub代理列表
     PROXY_SERVERS = [
         "",  # 空字符串表示直接使用原始GitHub地址
+        # 镜像站
         "https://ghfast.top/",
         "https://github.moeyy.xyz/", 
         "https://git.886.be/",
+        # "https://ghproxy.com/",           # GitHub代理
+        # "https://mirror.ghproxy.com/",    # ghproxy镜像
+        # "https://github.com.cnpmjs.org/", # cnpmjs镜像
+        # "https://hub.fastgit.xyz/",       # FastGit镜像
+        # "https://download.fastgit.org/",  # FastGit下载镜像
+        # "https://github.bajins.com/",     # bajins镜像
+        # "https://pd.zwc365.com/",         # zwc365镜像
+        # "https://ghps.cc/",               # ghps镜像
+        # "https://gh.con.sh/",             # con.sh镜像
+        # "https://cors.isteed.cc/github.com/", # isteed镜像
+        # "https://hub.yzuu.cf/",           # yzuu镜像
     ]
 
     def __init__(self):
@@ -128,6 +145,17 @@ class Updater:
             'User-Agent': f'{self.REPO_NAME}-UpdateChecker'
         }
         
+        # 首先尝试从GitHub获取更新
+        github_result = self._check_github_updates(headers)
+        if github_result['has_update'] or not github_result.get('error'):
+            return github_result
+            
+        # 如果GitHub失败，尝试从Gitee获取更新
+        logger.info("GitHub检查失败，尝试从Gitee获取更新...")
+        return self._check_gitee_updates()
+    
+    def _check_github_updates(self, headers: dict) -> dict:
+        """从GitHub检查更新"""
         while True:
             try:
                 version_url = f"https://raw.githubusercontent.com/{self.REPO_OWNER}/{self.REPO_NAME}/{self.REPO_BRANCH}/version.json"
@@ -180,7 +208,8 @@ class Updater:
                         'download_url': download_url,  # 直接返回GitHub原始URL
                         'description': remote_version_info.get('description', '无更新说明'),
                         'last_update': remote_version_info.get('last_update', ''),
-                        'output': self.format_version_info(current_version, remote_version_info)
+                        'output': self.format_version_info(current_version, remote_version_info),
+                        'source': 'GitHub'
                     }
                 
                 return {
@@ -193,12 +222,66 @@ class Updater:
                     logger.info("正在切换到下一个代理服务器检查更新，请稍候...")
                     continue
                 else:
-                    logger.error("所有代理服务器均已尝试失败，将跳过更新直接启动程序")
+                    logger.error("所有代理服务器均已尝试失败")
                     return {
                         'has_update': False,
-                        'error': "检查更新失败：无法连接到更新服务器",
-                        'output': "检查更新失败：无法连接到更新服务器"
+                        'error': "检查更新失败：无法连接到GitHub服务器",
+                        'output': "检查更新失败：无法连接到GitHub服务器"
                     }
+    
+    def _check_gitee_updates(self) -> dict:
+        """从Gitee检查更新（备选方案）"""
+        try:
+            logger.info("正在从Gitee获取版本信息...")
+            
+            # 获取版本信息
+            version_url = f"https://gitee.com/{self.GITEE_REPO_OWNER}/{self.GITEE_REPO_NAME}/raw/{self.REPO_BRANCH}/version.json"
+            response = requests.get(version_url, timeout=10)
+            response.raise_for_status()
+            
+            remote_version_info = response.json()
+            current_version = self.get_current_version()
+            latest_version = remote_version_info.get('version', '0.0.0')
+            
+            def parse_version(version: str) -> tuple:
+                version = version.lower().strip('v')
+                try:
+                    parts = version.split('.')
+                    while len(parts) < 3:
+                        parts.append('0')
+                    return tuple(map(int, parts[:3]))
+                except (ValueError, AttributeError):
+                    return (0, 0, 0)
+            
+            current_ver_tuple = parse_version(current_version)
+            latest_ver_tuple = parse_version(latest_version)
+            
+            if latest_ver_tuple > current_ver_tuple:
+                # Gitee下载链接
+                download_url = f"https://gitee.com/{self.GITEE_REPO_OWNER}/{self.GITEE_REPO_NAME}/repository/archive/{self.REPO_BRANCH}.zip"
+                
+                return {
+                    'has_update': True,
+                    'version': latest_version,
+                    'download_url': download_url,
+                    'description': remote_version_info.get('description', '无更新说明'),
+                    'last_update': remote_version_info.get('last_update', ''),
+                    'output': self.format_version_info(current_version, remote_version_info) + "\n[使用Gitee源]",
+                    'source': 'Gitee'
+                }
+            
+            return {
+                'has_update': False,
+                'output': self.format_version_info(current_version) + "\n[使用Gitee源]"
+            }
+            
+        except Exception as e:
+            logger.error(f"从Gitee检查更新失败: {str(e)}")
+            return {
+                'has_update': False,
+                'error': "检查更新失败：无法连接到更新服务器",
+                'output': "检查更新失败：无法连接到更新服务器"
+            }
 
     def backup_important_files(self) -> bool:
         """在更新前备份重要文件和文件夹到数据备份/{时间}目录"""
@@ -367,10 +450,19 @@ class Updater:
             'User-Agent': f'{self.REPO_NAME}-UpdateChecker'
         }
         
+        # 检查是否为Gitee链接，如果是则不使用代理
+        is_gitee = 'gitee.com' in download_url
+        
         while True:
             try:
-                proxied_url = self.get_proxy_url(download_url)
-                logger.info(f"正在从 {proxied_url} 下载更新...")
+                if is_gitee:
+                    # Gitee链接直接使用，不应用代理
+                    proxied_url = download_url
+                    logger.info(f"正在从Gitee下载更新: {proxied_url}")
+                else:
+                    # GitHub链接使用代理
+                    proxied_url = self.get_proxy_url(download_url)
+                    logger.info(f"正在从 {proxied_url} 下载更新...")
                 
                 response = requests.get(
                     proxied_url,
@@ -408,13 +500,19 @@ class Updater:
                 return True
                     
             except requests.RequestException as e:
-                logger.warning(f"使用当前代理下载更新失败: {str(e)}")
-                if self.try_next_proxy():
-                    logger.info("正在切换到下一个代理服务器...")
-                    continue
-                else:
-                    logger.error("所有代理服务器均已尝试失败")
+                if is_gitee:
+                    # Gitee下载失败，直接返回失败
+                    logger.error(f"Gitee下载失败: {str(e)}")
                     return False
+                else:
+                    # GitHub下载失败，尝试下一个代理
+                    logger.warning(f"使用当前代理下载更新失败: {str(e)}")
+                    if self.try_next_proxy():
+                        logger.info("正在切换到下一个代理服务器...")
+                        continue
+                    else:
+                        logger.error("所有代理服务器均已尝试失败")
+                        return False
 
     def update(self, callback=None) -> dict:
         """执行更新"""
@@ -432,6 +530,10 @@ class Updater:
                 log_progress("检查更新完成", True, "当前已是最新版本")
                 print("\n当前已是最新版本，无需更新")
                 return {'success': True, 'output': '\n'.join(progress)}
+            
+            # 显示更新源信息
+            update_source = update_info.get('source', 'Unknown')
+            log_progress(f"发现新版本", True, f"来源: {update_source}")
             
             if not self.prompt_update(update_info):
                 log_progress("提示用户是否更新", True, "用户取消更新")

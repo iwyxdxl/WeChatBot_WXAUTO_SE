@@ -394,11 +394,10 @@ def get_chat_type_info(user_name):
         chats = wx.GetAllSubWindow()
         for chat in chats:
             chat_info = chat.ChatInfo()
-            if chat_info.get('chat_name') == user_name:
-                chat_type = chat_info.get('chat_type')
-                is_group = (chat_type == 'group')
-                logger.info(f"检测到用户 '{user_name}' 的聊天类型: {chat_type} ({'群聊' if is_group else '私聊'})")
-                return is_group
+            chat_type = chat_info.get('chat_type')
+            is_group = (chat_type == 'group')
+            logger.info(f"检测到用户 '{user_name}' 的聊天类型: {chat_type} ({'群聊' if is_group else '私聊'})")
+            return is_group
         
         logger.warning(f"未找到用户 '{user_name}' 的聊天窗口信息")
         return None
