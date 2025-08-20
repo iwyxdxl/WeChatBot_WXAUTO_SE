@@ -93,6 +93,10 @@ ENABLE_LOGIN_PASSWORD = False
 LOGIN_PASSWORD = '123456'
 PORT = 5000
 
+# 文字指令识别开关
+# 开启后，私聊/群聊（满足触发条件）中以“/”开头的指令将被解析并执行
+ENABLE_TEXT_COMMANDS = True
+
 # 定时器/提醒设置
 # 启用提醒功能
 ENABLE_REMINDERS = True
@@ -144,4 +148,13 @@ USE_ASSISTANT_FOR_MEMORY_SUMMARY = False
 # 敏感词处理配置
 # 开启后遇到敏感词时自动清除Memory_Temp文件和聊天上下文
 ENABLE_SENSITIVE_CONTENT_CLEARING = True
+
+# 论坛自定义模型配置（可选）
+ENABLE_FORUM_CUSTOM_MODEL = False
+FORUM_BASE_URL = 'https://vg.v1api.cc/v1'
+FORUM_MODEL = ''
+FORUM_API_KEY = ''
+FORUM_TEMPERATURE = 1.0
+FORUM_MAX_TOKEN = 1200
+
 

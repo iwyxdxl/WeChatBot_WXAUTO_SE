@@ -53,9 +53,15 @@ class Updater:
         "prompts",      # 聊天提示词
         "Memory_Temp",  # 临时记忆文件
         "emojis",      # 表情包
+        "forum_data",  # 论坛数据
         "recurring_reminders.json",  # 定时提醒
         "config.py",    # 配置文件(单独处理)
         "数据备份",  # 数据备份
+        ".git",        # Git仓库文件（避免权限问题）
+        "__pycache__", # Python缓存文件
+        "*.pyc",       # Python编译文件
+        "temp_update", # 临时更新文件夹
+        "backup",      # 备份文件夹
     ]
 
     # GitHub代理列表
@@ -170,9 +176,21 @@ class Updater:
                 )
                 response.raise_for_status()
                 
-                remote_version_info = response.json()
-                current_version = self.get_current_version()
-                latest_version = remote_version_info.get('version', '0.0.0')
+                try:
+                    remote_version_info = response.json()
+                    current_version = self.get_current_version()
+                    latest_version = remote_version_info.get('version', '0.0.0')
+                except json.JSONDecodeError as e:
+                    logger.error(f"解析版本信息JSON失败: {str(e)}")
+                    if self.try_next_proxy():
+                        logger.info("正在切换到下一个代理服务器检查更新，请稍候...")
+                        continue
+                    else:
+                        return {
+                            'has_update': False,
+                            'error': "检查更新失败：无法解析版本信息",
+                            'output': "检查更新失败：无法解析版本信息"
+                        }
                 
                 def parse_version(version: str) -> tuple:
                     version = version.lower().strip('v')
@@ -198,8 +216,13 @@ class Updater:
                     if response.status_code == 404:
                         download_url = f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}"
                     else:
-                        release_info = response.json()
-                        download_url = release_info['zipball_url']
+                        try:
+                            release_info = response.json()
+                            # 安全地获取 zipball_url，如果不存在则使用分支下载
+                            download_url = release_info.get('zipball_url', f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}")
+                        except (json.JSONDecodeError, KeyError, TypeError) as e:
+                            logger.warning(f"解析release信息失败: {str(e)}，使用分支下载")
+                            download_url = f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}"
                     
                     # 返回原始下载URL（关键修改点）
                     return {
@@ -239,9 +262,17 @@ class Updater:
             response = requests.get(version_url, timeout=10)
             response.raise_for_status()
             
-            remote_version_info = response.json()
-            current_version = self.get_current_version()
-            latest_version = remote_version_info.get('version', '0.0.0')
+            try:
+                remote_version_info = response.json()
+                current_version = self.get_current_version()
+                latest_version = remote_version_info.get('version', '0.0.0')
+            except json.JSONDecodeError as e:
+                logger.error(f"解析Gitee版本信息JSON失败: {str(e)}")
+                return {
+                    'has_update': False,
+                    'error': "检查更新失败：无法解析Gitee版本信息",
+                    'output': "检查更新失败：无法解析Gitee版本信息"
+                }
             
             def parse_version(version: str) -> tuple:
                 version = version.lower().strip('v')
@@ -329,13 +360,53 @@ class Updater:
         """检查是否应该跳过更新某个文件"""
         return any(skip_file in file_path for skip_file in self.SKIP_FILES)
 
+    def _safe_remove_tree(self, path: str) -> bool:
+        """安全地删除目录树，处理权限问题"""
+        try:
+            # 首先尝试普通删除
+            shutil.rmtree(path)
+            return True
+        except Exception as e:
+            logger.warning(f"普通删除失败: {str(e)}，尝试强制删除...")
+            try:
+                # 在Windows上，尝试更改权限后删除
+                if os.name == 'nt':
+                    import stat
+                    def handle_remove_readonly(func, path, exc):
+                        if os.path.exists(path):
+                            os.chmod(path, stat.S_IWRITE)
+                            func(path)
+                    shutil.rmtree(path, onerror=handle_remove_readonly)
+                else:
+                    # 在Unix系统上，尝试使用rm命令
+                    os.system(f'rm -rf "{path}"')
+                return True
+            except Exception as e2:
+                logger.error(f"强制删除也失败: {str(e2)}")
+                return False
+
     def backup_current_version(self) -> bool:
         """备份当前版本"""
         try:
             backup_dir = os.path.join(self.root_dir, 'backup')
             if os.path.exists(backup_dir):
-                shutil.rmtree(backup_dir)
-            shutil.copytree(self.root_dir, backup_dir, ignore=shutil.ignore_patterns(*self.SKIP_FILES))
+                self._safe_remove_tree(backup_dir)
+            
+            # 使用自定义的忽略函数，更安全地处理文件权限问题
+            def ignore_func(dir_path, filenames):
+                ignored = []
+                for name in filenames:
+                    full_path = os.path.join(dir_path, name)
+                    # 检查是否应该跳过
+                    if any(skip_pattern in full_path for skip_pattern in self.SKIP_FILES):
+                        ignored.append(name)
+                    # 跳过可能有权限问题的文件
+                    elif name.startswith('.git') or name.endswith('.lock'):
+                        ignored.append(name)
+                return ignored
+            
+            shutil.copytree(self.root_dir, backup_dir, ignore=ignore_func)
+            logger.info(f"当前版本已备份到: {backup_dir}")
             return True
         except Exception as e:
             logger.error(f"备份失败: {str(e)}")
@@ -349,16 +420,31 @@ class Updater:
                 logger.error("备份目录不存在")
                 return False
                 
+            logger.info("开始从备份恢复...")
             for root, dirs, files in os.walk(backup_dir):
                 relative_path = os.path.relpath(root, backup_dir)
                 target_dir = os.path.join(self.root_dir, relative_path)
                 
                 for file in files:
                     if not self.should_skip_file(file):
-                        src_file = os.path.join(root, file)
-                        dst_file = os.path.join(target_dir, file)
-                        os.makedirs(os.path.dirname(dst_file), exist_ok=True)
-                        shutil.copy2(src_file, dst_file)
+                        try:
+                            src_file = os.path.join(root, file)
+                            dst_file = os.path.join(target_dir, file)
+                            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+                            
+                            # 如果目标文件存在，尝试删除
+                            if os.path.exists(dst_file):
+                                try:
+                                    os.remove(dst_file)
+                                except OSError:
+                                    logger.warning(f"无法删除现有文件: {dst_file}")
+                            
+                            shutil.copy2(src_file, dst_file)
+                        except Exception as file_error:
+                            logger.warning(f"恢复文件失败 {file}: {str(file_error)}")
+                            continue
+            
+            logger.info("从备份恢复完成")
             return True
         except Exception as e:
             logger.error(f"恢复失败: {str(e)}")
@@ -408,27 +494,24 @@ class Updater:
         try:
             if os.path.exists(self.temp_dir):
                 logger.info(f"正在删除临时目录: {self.temp_dir}")
-                shutil.rmtree(self.temp_dir, ignore_errors=True)
+                self._safe_remove_tree(self.temp_dir)
             backup_dir = os.path.join(self.root_dir, 'backup')
             if os.path.exists(backup_dir):
                 logger.info(f"正在删除备份目录: {backup_dir}")
-                shutil.rmtree(backup_dir, ignore_errors=True)
+                self._safe_remove_tree(backup_dir)
             extract_dir = os.path.join(self.temp_dir, 'extracted')
             if os.path.exists(extract_dir):
                 logger.info(f"正在删除解压目录: {extract_dir}")
-                shutil.rmtree(extract_dir, ignore_errors=True)
+                self._safe_remove_tree(extract_dir)
             temp_zip = os.path.join(self.root_dir, 'update.zip')
             if os.path.exists(temp_zip):
                 logger.info(f"正在删除残留zip文件: {temp_zip}")
-                os.remove(temp_zip)
+                try:
+                    os.remove(temp_zip)
+                except OSError:
+                    logger.warning(f"无法删除 {temp_zip}，可能被占用")
         except Exception as e:
             logger.error(f"清理失败: {str(e)}")
-            if os.name == 'nt':
-                try:
-                    os.system(f'rmdir /s /q "{self.temp_dir}" 2>nul')
-                    os.system(f'rmdir /s /q "{backup_dir}" 2>nul')
-                except:
-                    pass
 
     def prompt_update(self, update_info: dict) -> bool:
         """提示用户是否更新"""

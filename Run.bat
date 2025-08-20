@@ -21,14 +21,14 @@ for %%K in (
 )
 if not defined wxversion (
     echo ⚠️ 警告：未检测到微信安装或无法读取注册表！
-    echo    这可能是由于以下原因：
-    echo    1. 微信未正确安装
-    echo    2. 注册表访问权限不足
-    echo    3. 微信版本过老或过新
-    echo    4. 您使用的是便携版微信
+    echo ⚠️ 这可能是由于以下原因：
+    echo ⚠️ 1. 微信未正确安装
+    echo ⚠️ 2. 注册表访问权限不足
+    echo ⚠️ 3. 微信版本过老或过新
+    echo ⚠️ 4. 您使用的是便携版微信
     echo.
-    echo    程序将跳过微信版本检查并继续运行。
-    echo    如果程序启动后无法控制微信，请下载微信3.9版本：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo ⚠️ 程序将跳过微信版本检查并继续运行。
+    echo ⚠️ 如果程序启动后无法控制微信，请下载微信3.9版本：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
     echo.
     echo 🔄3秒后自动继续...
     timeout /t 3 /nobreak >nul
@@ -38,8 +38,8 @@ if not defined wxversion (
 
 if not defined wxversion (
     echo ⚠️ 警告：无法获取微信版本号！
-    echo    程序将跳过微信版本检查并继续运行，但建议检查微信安装状态。
-    echo    如果程序启动后无法控制微信，请下载微信3.9版本：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo ⚠️ 程序将跳过微信版本检查并继续运行，但建议检查微信安装状态。
+    echo ⚠️ 如果程序启动后无法控制微信，请下载微信3.9版本：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
     echo.
     echo 🔄3秒后自动继续...
     timeout /t 3 /nobreak >nul
@@ -54,8 +54,8 @@ for /f "tokens=1 delims=." %%a in ("!wxversion!") do (
 :: 只判断主版本
 if !major! lss 3 (
     echo ❌ 当前微信版本 !wxversion!，版本过低！
-    echo    请下载微信3.9版本
-    echo    下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo ⚠️ 请下载微信3.9版本
+    echo ⚠️ 下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
     echo.
     echo 🔄如果您确信已经安装了正确版本的微信，请按下键盘任意键继续运行程序，否则关闭窗口退出。
     pause
@@ -63,9 +63,9 @@ if !major! lss 3 (
 )
 if !major! geq 4 (
     echo ❌ 当前微信版本 !wxversion!，版本过高！
-    echo    软件暂不支持微信4.x及以上版本，可能导致兼容性问题
-    echo    请下载微信3.9版本
-    echo    下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
+    echo ⚠️ 软件暂不支持微信4.x及以上版本，可能导致兼容性问题
+    echo ⚠️ 请下载微信3.9版本
+    echo ⚠️ 下载地址：https://dldir1v6.qq.com/weixin/Windows/WeChatSetup.exe
     echo.
     echo 🔄如果您确信已经安装了正确版本的微信，请按下键盘任意键继续运行程序，否则关闭窗口退出。
     pause

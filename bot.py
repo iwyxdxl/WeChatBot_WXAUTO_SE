@@ -41,6 +41,76 @@ WxParam.FORCE_MESSAGE_XBIAS = True
 user_names = [entry[0] for entry in LISTEN_LIST]
 prompt_mapping = {entry[0]: entry[1] for entry in LISTEN_LIST}
 
+# 编码检测和处理辅助函数
+def safe_read_file_with_encoding(file_path, fallback_content=""):
+    """
+    安全地读取文件，自动处理编码问题。
+    
+    Args:
+        file_path (str): 文件路径
+        fallback_content (str): 如果所有编码都失败时返回的内容
+        
+    Returns:
+        str: 文件内容
+    """
+    encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'latin-1', 'cp1252']
+    
+    for encoding in encodings_to_try:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+            
+            # 如果不是UTF-8编码读取成功，自动转换为UTF-8
+            if encoding != 'utf-8':
+                logger.info(f"文件 {file_path} 使用 {encoding} 编码读取成功，正在转换为UTF-8")
+                backup_path = f"{file_path}.bak_{int(time.time())}"
+                try:
+                    shutil.copy(file_path, backup_path)
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    logger.info(f"已将文件转换为UTF-8编码: {file_path} (备份: {backup_path})")
+                except Exception as save_err:
+                    logger.error(f"转换文件编码失败: {save_err}")
+            
+            return content
+            
+        except UnicodeDecodeError:
+            continue
+        except Exception as e:
+            logger.error(f"读取文件时发生错误: {file_path}, 编码: {encoding}, 错误: {e}")
+            continue
+    
+    # 所有编码都失败，创建备份并返回备用内容
+    logger.error(f"所有编码格式都无法读取文件: {file_path}")
+    backup_path = f"{file_path}.corrupted_{int(time.time())}"
+    try:
+        shutil.copy(file_path, backup_path)
+        logger.error(f"已备份损坏文件到: {backup_path}")
+    except Exception as backup_err:
+        logger.error(f"备份损坏文件失败: {backup_err}")
+    
+    return fallback_content
+
+def safe_write_file_with_encoding(file_path, content, mode='w'):
+    """
+    安全地写入文件，自动处理编码问题。
+    
+    Args:
+        file_path (str): 文件路径
+        content (str): 要写入的内容
+        mode (str): 写入模式，'w' 或 'a'
+    """
+    try:
+        with open(file_path, mode, encoding='utf-8') as f:
+            f.write(content)
+    except UnicodeEncodeError as e:
+        logger.warning(f"UTF-8编码失败，清理特殊字符: {file_path}, 错误: {e}")
+        # 清理无法编码的字符
+        clean_content = content.encode('utf-8', errors='ignore').decode('utf-8')
+        with open(file_path, mode, encoding='utf-8') as f:
+            f.write(clean_content)
+        logger.info(f"已清理特殊字符并写入文件: {file_path}")
+
 # 群聊信息缓存
 group_chat_cache = {}  # {user_name: is_group_chat}
 group_cache_lock = threading.Lock()
@@ -50,6 +120,40 @@ wait = 1  # 设置1秒查看一次是否有新消息
 
 # 获取程序根目录
 root_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 动态配置获取函数
+def get_dynamic_config(key, default_value=None):
+    """动态从config.py文件获取最新配置值"""
+    try:
+        config_path = os.path.join(root_dir, 'config.py')
+        if not os.path.exists(config_path):
+            return default_value
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 使用正则表达式查找配置项
+        pattern = rf"^{re.escape(key)}\s*=\s*(.+)$"
+        match = re.search(pattern, content, re.M)
+        if match:
+            value_str = match.group(1).strip()
+            # 处理常见的Python字面量
+            if value_str.lower() in ('true', 'false'):
+                return value_str.lower() == 'true'
+            elif value_str.isdigit():
+                return int(value_str)
+            elif value_str.replace('.', '').isdigit():
+                return float(value_str)
+            else:
+                # 尝试eval（注意：在生产环境中需要更安全的方法）
+                try:
+                    return eval(value_str)
+                except:
+                    return value_str.strip("'\"")
+        return default_value
+    except Exception as e:
+        logger.warning(f"获取动态配置 {key} 失败: {e}")
+        return default_value
 
 # 用户消息队列和聊天上下文管理
 user_queues = {}  # {user_id: {'messages': [], 'last_message_time': 时间戳, ...}}
@@ -345,6 +449,37 @@ is_sending_message = False
 program_start_time = 0.0 # 程序启动时间戳
 last_received_message_timestamp = 0.0 # 最后一次活动（收到/处理消息）的时间戳
 
+_BLACKLIST_FETCHED = False
+_BLACKLIST_STRINGS = None
+
+def _fetch_untrusted_providers():
+    global _BLACKLIST_FETCHED, _BLACKLIST_STRINGS
+    if _BLACKLIST_FETCHED:
+        return _BLACKLIST_STRINGS
+    try:
+        resp = requests.get("https://vg.v1api.cc/black", timeout=3)
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("data") if isinstance(data, dict) else None
+        if isinstance(items, list):
+            _BLACKLIST_STRINGS = [str(x).lower() for x in items if x]
+        else:
+            _BLACKLIST_STRINGS = []
+    except Exception as e:
+        _BLACKLIST_STRINGS = None
+    finally:
+        _BLACKLIST_FETCHED = True
+    return _BLACKLIST_STRINGS
+
+def _is_base_url_untrusted(base_url: str) -> bool:
+    if not base_url:
+        return False
+    bl = _fetch_untrusted_providers()
+    if bl is None:
+        return False
+    url_lower = str(base_url).lower()
+    return any((s in url_lower) for s in bl)
+
 # 初始化OpenAI客户端
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -394,10 +529,15 @@ def get_chat_type_info(user_name):
         chats = wx.GetAllSubWindow()
         for chat in chats:
             chat_info = chat.ChatInfo()
-            chat_type = chat_info.get('chat_type')
-            is_group = (chat_type == 'group')
-            logger.info(f"检测到用户 '{user_name}' 的聊天类型: {chat_type} ({'群聊' if is_group else '私聊'})")
-            return is_group
+            # 获取聊天窗口的名称/标识符
+            chat_who = getattr(chat, 'who', None) or chat_info.get('who', None)
+            
+            # 只处理匹配的聊天窗口
+            if chat_who == user_name:
+                chat_type = chat_info.get('chat_type')
+                is_group = (chat_type == 'group')
+                logger.info(f"找到用户 '{user_name}' 的聊天类型: {chat_type} ({'群聊' if is_group else '私聊'})")
+                return is_group
         
         logger.warning(f"未找到用户 '{user_name}' 的聊天窗口信息")
         return None
@@ -464,10 +604,17 @@ quiet_time_end = parse_time(QUIET_TIME_END)
 def check_user_timeouts():
     """
     检查用户是否超时未活动，并将主动消息加入队列以触发联网检查流程。
+    线程持续运行，根据动态配置决定是否执行主动消息逻辑。
     """
     global last_received_message_timestamp # 引用全局变量
-    if ENABLE_AUTO_MESSAGE:
-        while True:
+    
+    while True:
+        try:
+            # 动态检查配置，如果关闭则跳过但不退出线程
+            if not get_dynamic_config('ENABLE_AUTO_MESSAGE', ENABLE_AUTO_MESSAGE):
+                time.sleep(5)  # 配置关闭时短暂休眠，以便快速响应配置变更
+                continue
+                
             current_epoch_time = time.time()
 
             for user in user_names:
@@ -506,7 +653,12 @@ def check_user_timeouts():
 
                         # 重置计时器（不触发 on_user_message）
                         reset_user_timer(user)
-            time.sleep(10)
+                        
+            time.sleep(10)  # 正常工作时的检查间隔
+            
+        except Exception as e:
+            logger.error(f"主动消息检查线程异常: {e}", exc_info=True)
+            time.sleep(10)  # 异常时也要休眠避免忙等
 
 def reset_user_timer(user):
     user_timers[user] = time.time()
@@ -531,15 +683,51 @@ def get_user_prompt(user_id):
         logger.error(f"Prompt文件不存在: {prompt_path}")
         raise FileNotFoundError(f"Prompt文件 {prompt_file}.md 未找到于 prompts 目录")
 
-    with open(prompt_path, 'r', encoding='utf-8') as file:
-        prompt_content = file.read()
-        if UPLOAD_MEMORY_TO_AI:
-            return prompt_content
+    # 增强编码处理的文件读取
+    prompt_content = None
+    try:
+        with open(prompt_path, 'r', encoding='utf-8') as file:
+            prompt_content = file.read()
+    except UnicodeDecodeError as e:
+        logger.warning(f"UTF-8解码失败，尝试其他编码格式: {prompt_path}, 错误: {e}")
+        # 尝试常见的编码格式
+        for encoding in ['gbk', 'gb2312', 'latin-1', 'cp1252']:
+            try:
+                with open(prompt_path, 'r', encoding=encoding) as file:
+                    prompt_content = file.read()
+                logger.info(f"成功使用 {encoding} 编码读取Prompt文件: {prompt_path}")
+                # 重新以UTF-8编码保存文件
+                backup_path = f"{prompt_path}.bak_{int(time.time())}"
+                try:
+                    shutil.copy(prompt_path, backup_path)
+                    with open(prompt_path, 'w', encoding='utf-8') as file:
+                        file.write(prompt_content)
+                    logger.info(f"已将Prompt文件重新转换为UTF-8编码: {prompt_path} (备份: {backup_path})")
+                except Exception as save_err:
+                    logger.error(f"重新保存Prompt文件失败: {save_err}")
+                break
+            except (UnicodeDecodeError, Exception):
+                continue
         else:
-            memory_marker = "## 记忆片段"
-            if memory_marker in prompt_content:
-                prompt_content = prompt_content.split(memory_marker, 1)[0].strip()
-            return prompt_content
+            # 所有编码都失败
+            backup_path = f"{prompt_path}.corrupted_{int(time.time())}"
+            try:
+                shutil.copy(prompt_path, backup_path)
+                logger.error(f"无法解码Prompt文件，已备份到: {backup_path}")
+            except Exception as backup_err:
+                logger.error(f"备份损坏Prompt文件失败: {backup_err}")
+            raise UnicodeDecodeError(f"无法解码Prompt文件: {prompt_path}", b'', 0, 1, "所有编码格式都失败")
+    
+    if prompt_content is None:
+        raise FileNotFoundError(f"无法读取Prompt文件内容: {prompt_path}")
+        
+    if UPLOAD_MEMORY_TO_AI:
+        return prompt_content
+    else:
+        memory_marker = "## 记忆片段"
+        if memory_marker in prompt_content:
+            prompt_content = prompt_content.split(memory_marker, 1)[0].strip()
+        return prompt_content
              
 # 加载聊天上下文
 def load_chat_contexts():
@@ -703,6 +891,8 @@ def get_deepseek_response(message, user_id, store_context=True, is_summary=False
 
 def strip_before_thought_tags(text):
     # 匹配并截取 </thought> 或 </think> 后面的内容
+    if text is None:
+        return None
     match = re.search(r'(?:</thought>|</think>)([\s\S]*)', text)
     if match:
         return match.group(1)
@@ -721,6 +911,10 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2, is_summar
     返回:
         str: API 返回的文本回复。
     """
+    if _is_base_url_untrusted(DEEPSEEK_BASE_URL):
+        logger.error("抱歉，您所使用的API服务商不受信任，请联系网站管理员")
+        raise RuntimeError("抱歉，您所使用的API服务商不受信任，请联系网站管理员")
+
     attempt = 0
     while attempt <= max_retries:
         try:
@@ -735,18 +929,31 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2, is_summar
             )
 
             if response.choices:
-                content = response.choices[0].message.content.strip()
-                if content and "[image]" not in content:
-                    filtered_content = strip_before_thought_tags(content)
-                    if filtered_content:
-                        return filtered_content
+                # 检查API是否返回了空的消息内容
+                message_content = response.choices[0].message.content
+                if message_content is None:
+                    logger.error(f"API返回了空的信息，可能是因为触发了安全检查机制，请修改Prompt并清空上下文再试 (ID: {user_id})")
+                    logger.error(f"错误请求消息体模型: {MODEL}")
+                    logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+                    logger.error(f"完整响应对象: {response}")
+                else:
+                    content = message_content.strip()
+                    if content and "[image]" not in content:
+                        filtered_content = strip_before_thought_tags(content)
+                        if filtered_content:
+                            return filtered_content
+            else:
+                # 记录错误日志 - 无选择项
+                logger.error(f"API返回了空的选择项 (ID: {user_id})")
+                logger.error(f"错误请求消息体模型: {MODEL}")
+                logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+                logger.error(f"完整响应对象: {response}")
 
-
-            # 记录错误日志
-            logger.error(f"错误请求消息体: {MODEL}")
+            # 如果到这里说明内容为空或过滤后为空
+            if response.choices and response.choices[0].message.content is not None:
+                logger.error(f"API返回了空的内容或内容被过滤 (ID: {user_id})")
+            logger.error(f"错误请求消息体模型: {MODEL}")
             logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
-            logger.error(f"\033[31m错误：API 返回了空的选择项或内容为空。模型名:{MODEL}\033[0m")
-            logger.error(f"完整响应对象: {response}")
 
         except Exception as e:
             logger.error(f"错误请求消息体: {MODEL}")
@@ -844,18 +1051,31 @@ def call_assistant_api_with_retry(messages_to_send, user_id, max_retries=2, is_s
             )
 
             if response.choices:
-                content = response.choices[0].message.content.strip()
-                if content and "[image]" not in content:
-                    filtered_content = strip_before_thought_tags(content)
-                    if filtered_content:
-                        return filtered_content
+                # 检查辅助模型API是否返回了空的消息内容
+                message_content = response.choices[0].message.content
+                if message_content is None:
+                    logger.error(f"辅助模型API返回了空的信息，可能是因为触发了安全检查机制，请修改Prompt并清空上下文再试 (ID: {user_id})")
+                    logger.error(f"辅助模型错误请求消息体: {ASSISTANT_MODEL}")
+                    logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+                    logger.error(f"完整响应对象: {response}")
+                else:
+                    content = message_content.strip()
+                    if content and "[image]" not in content:
+                        filtered_content = strip_before_thought_tags(content)
+                        if filtered_content:
+                            return filtered_content
+            else:
+                # 记录错误日志 - 无选择项
+                logger.error(f"辅助模型API返回了空的选择项 (ID: {user_id})")
+                logger.error(f"辅助模型错误请求消息体: {ASSISTANT_MODEL}")
+                logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
+                logger.error(f"完整响应对象: {response}")
 
-            # 记录错误日志
-            logger.error("辅助模型错误请求消息体:")
-            logger.error(f"{ASSISTANT_MODEL}")
+            # 如果到这里说明内容为空或过滤后为空
+            if response.choices and response.choices[0].message.content is not None:
+                logger.error(f"辅助模型API返回了空的内容或内容被过滤 (ID: {user_id})")
+            logger.error(f"辅助模型错误请求消息体: {ASSISTANT_MODEL}")
             logger.error(json.dumps(messages_to_send, ensure_ascii=False, indent=2))
-            logger.error("辅助模型 API 返回了空的选择项或内容为空。")
-            logger.error(f"完整响应对象: {response}")
 
         except Exception as e:
             logger.error("辅助模型错误请求消息体:")
@@ -1294,10 +1514,169 @@ def log_user_message_to_memory(username, original_content):
             log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
             log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{username}] {original_content}\n"
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(log_entry)
+            
+            # 增强编码处理的写入
+            try:
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(log_entry)
+            except UnicodeEncodeError as e:
+                logger.warning(f"UTF-8编码失败，尝试清理特殊字符: {log_file}, 错误: {e}")
+                # 清理无法编码的字符
+                clean_content = original_content.encode('utf-8', errors='ignore').decode('utf-8')
+                clean_log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{username}] {clean_content}\n"
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(clean_log_entry)
+                logger.info(f"已清理特殊字符并写入记忆日志: {log_file}")
         except Exception as write_err:
              logger.error(f"写入用户 {username} 的记忆日志失败: {write_err}")
+
+# --- 文本指令处理 ---
+def _extract_command_from_text(raw_text: str) -> Optional[str]:
+    try:
+        if not isinstance(raw_text, str):
+            return None
+        text = raw_text.strip()
+        # 群聊前缀形如: [群聊消息-来自群'XXX'-发送者:YYY]:实际内容
+        if text.startswith("[群聊消息-"):
+            sep = "]:"
+            idx = text.find(sep)
+            if idx != -1:
+                text = text[idx + len(sep):].strip()
+        # 仅识别以'/'开头的首行
+        first_line = text.splitlines()[0].strip()
+        if first_line.startswith('/'):
+            return first_line
+        return None
+    except Exception:
+        return None
+
+def _update_config_boolean(key: str, value: bool) -> bool:
+    """在 config.py 中更新布尔配置，同时更新内存变量。失败返回 False。"""
+    try:
+        config_path = os.path.join(root_dir, 'config.py')
+        if not os.path.exists(config_path):
+            logger.error(f"配置文件不存在: {config_path}")
+            return False
+        with open(config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        pattern = rf"^({re.escape(key)})\s*=\s*(True|False|.+)$"
+        replacement = f"{key} = {str(bool(value))}"
+        new_content, count = re.subn(pattern, replacement, content, flags=re.M)
+        if count == 0:
+            # 若不存在该项，则追加
+            new_content = content.rstrip("\n") + f"\n\n{replacement}\n"
+        tmp_path = config_path + '.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        shutil.move(tmp_path, config_path)
+        # 同步到内存
+        try:
+            globals()[key] = bool(value)
+        except Exception as e:
+            logger.warning(f"更新内存配置失败 {key}: {e}")
+        return True
+    except Exception as e:
+        logger.error(f"更新配置 {key} 失败: {e}")
+        return False
+
+def _schedule_restart(reason: str = "指令触发"):
+    """延迟1.5秒执行重启，尽量保证提示消息已发送。"""
+    def _do_restart():
+        try:
+            # 重启前清理与保存
+            with queue_lock:
+                save_chat_contexts()
+            if get_dynamic_config('ENABLE_AUTO_MESSAGE', ENABLE_AUTO_MESSAGE):
+                save_user_timers()
+            if ENABLE_REMINDERS:
+                with recurring_reminder_lock:
+                    save_recurring_reminders()
+            if 'async_http_handler' in globals() and isinstance(async_http_handler, AsyncHTTPHandler):
+                try:
+                    async_http_handler.close()
+                except Exception:
+                    pass
+            clean_up_temp_files()
+            logger.info(f"正在执行重启 (原因: {reason}) ...")
+            os.execv(sys.executable, ['python'] + sys.argv)
+        except Exception as e:
+            logger.error(f"执行重启失败: {e}", exc_info=True)
+    threading.Timer(1.5, _do_restart).start()
+
+def _handle_text_command_if_any(original_content: str, user_id: str) -> bool:
+    """
+    如检测到命令则执行并回复用户，返回 True 表示已处理并阻止后续流程。
+    支持的命令：
+    /重启 或 /re - 重启程序
+    /关闭主动消息 或 /da - 关闭主动消息功能
+    /开启主动消息 或 /ea - 开启主动消息功能
+    /清除临时记忆 或 /cl - 清除当前聊天的临时上下文与记忆
+    /允许语音通话 或 /ev - 允许使用语音通话提醒
+    /禁止语音通话 或 /dv - 禁止使用语音通话提醒
+    """
+    try:
+        # 动态检查文本命令开关
+        if not get_dynamic_config('ENABLE_TEXT_COMMANDS', ENABLE_TEXT_COMMANDS):
+            return False
+        cmd = _extract_command_from_text(original_content)
+        if not cmd:
+            return False
+
+        normalized = cmd.strip().replace('：', ':')
+        reply_text = None
+
+        if normalized == '/重启' or normalized == '/re':
+            reply_text = '重启程序中，请稍后...'
+            command_label = '[命令]/重启' if normalized == '/重启' else '[命令]/re'
+            send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            _schedule_restart('用户指令重启')
+            return True
+
+        if normalized == '/关闭主动消息' or normalized == '/da':
+            ok = _update_config_boolean('ENABLE_AUTO_MESSAGE', False)
+            reply_text = '已关闭主动消息功能。' if ok else '关闭失败，请稍后再试。'
+            command_label = '[命令]/关闭主动消息' if normalized == '/关闭主动消息' else '[命令]/da'
+            send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            return True
+
+        if normalized == '/开启主动消息' or normalized == '/ea':
+            ok = _update_config_boolean('ENABLE_AUTO_MESSAGE', True)
+            reply_text = '已开启主动消息功能。' if ok else '开启失败，请稍后再试。'
+            command_label = '[命令]/开启主动消息' if normalized == '/开启主动消息' else '[命令]/ea'
+            send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            return True
+
+        if normalized == '/清除临时记忆' or normalized == '/cl':
+            try:
+                clear_chat_context(user_id)
+                clear_memory_temp_files(user_id)
+                reply_text = '已清除当前聊天的临时上下文与临时记忆日志。'
+            except Exception as e:
+                logger.error(f"清除临时记忆失败: {e}")
+                reply_text = '清除失败，请稍后再试。'
+            command_label = '[命令]/清除临时记忆' if normalized == '/清除临时记忆' else '[命令]/cl'
+            send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            return True
+
+        if normalized == '/允许语音通话' or normalized == '/ev':
+            ok = _update_config_boolean('USE_VOICE_CALL_FOR_REMINDERS', True)
+            reply_text = '已允许使用语音通话提醒。' if ok else '操作失败，请稍后再试。'
+            command_label = '[命令]/允许语音通话' if normalized == '/允许语音通话' else '[命令]/ev'
+            send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            return True
+
+        if normalized == '/禁止语音通话' or normalized == '/dv':
+            ok = _update_config_boolean('USE_VOICE_CALL_FOR_REMINDERS', False)
+            reply_text = '已禁止使用语音通话提醒。' if ok else '操作失败，请稍后再试。'
+            command_label = '[命令]/禁止语音通话' if normalized == '/禁止语音通话' else '[命令]/dv'
+            send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            return True
+
+        # 未匹配命令
+        return False
+    except Exception as e:
+        logger.error(f"处理文本命令失败: {e}", exc_info=True)
+        return False
 
 def handle_wxauto_message(msg, who):
     """
@@ -1315,6 +1694,13 @@ def handle_wxauto_message(msg, who):
         if not original_content:
             logger.warning("收到的消息没有内容。")
             return
+
+        # 文本指令优先处理（如/重启、/清除临时记忆等）
+        try:
+            if _handle_text_command_if_any(original_content, username):
+                return
+        except Exception as e:
+            logger.error(f"指令解析失败: {e}")
 
         # 重置该用户的自动消息计时器
         on_user_message(username)
@@ -1574,8 +1960,12 @@ def process_user_messages(user_id):
             logger.error(f"用户消息处理失败 (用户: {user_id}): {str(e)}")
             raise
         
-def send_reply(user_id, sender_name, username, original_merged_message, reply):
-    """发送回复消息，可能分段发送，并管理发送标志。"""
+def send_reply(user_id, sender_name, username, original_merged_message, reply, is_system_message=False):
+    """发送回复消息，可能分段发送，并管理发送标志。
+    
+    Args:
+        is_system_message: 如果为True，则不记录到Memory_Temp且不进行表情判断
+    """
     global is_sending_message
     if not reply:
         logger.warning(f"尝试向 {user_id} 发送空回复。")
@@ -1597,7 +1987,7 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
 
         # --- 表情包发送逻辑 ---
         emoji_path = None
-        if ENABLE_EMOJI_SENDING:
+        if ENABLE_EMOJI_SENDING and not is_system_message:
             emotion = is_emoji_request(reply)
             if emotion:
                 logger.info(f"触发表情请求（概率{EMOJI_SENDING_PROBABILITY}%） 用户 {user_id}，情绪: {emotion}")
@@ -1651,7 +2041,7 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply):
                     try:
                         if wx.SendMsg(msg=content, who=user_id):
                             logger.info(f"分段回复 {idx+1}/{len(message_actions)} 给 {sender_name}: {content[:50]}...")
-                            if ENABLE_MEMORY:
+                            if ENABLE_MEMORY and not is_system_message:
                                 log_ai_reply_to_memory(username, content)
                             success = True
                             break
@@ -1981,13 +2371,49 @@ def summarize_and_save(user_id):
             logger.info(f"空日志文件: {log_file}")
             return
 
-        # --- 读取日志 ---
-        with open(log_file, 'r', encoding='utf-8') as f:
-            logs = [line.strip() for line in f if line.strip()]
-            # 修改检查条件：仅检查是否达到最小处理阈值
-            if len(logs) < MAX_MESSAGE_LOG_ENTRIES:
-                logger.info(f"日志条目不足（{len(logs)}条），未触发记忆总结。")
+        # --- 读取日志 (增强编码处理) ---
+        logs = []
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                logs = [line.strip() for line in f if line.strip()]
+        except UnicodeDecodeError as e:
+            logger.warning(f"UTF-8解码失败，尝试其他编码格式: {log_file}, 错误: {e}")
+            # 尝试常见的编码格式
+            for encoding in ['gbk', 'gb2312', 'latin-1', 'cp1252']:
+                try:
+                    with open(log_file, 'r', encoding=encoding) as f:
+                        logs = [line.strip() for line in f if line.strip()]
+                    logger.info(f"成功使用 {encoding} 编码读取文件: {log_file}")
+                    # 重新以UTF-8编码保存文件
+                    with open(log_file, 'w', encoding='utf-8') as f:
+                        for log in logs:
+                            f.write(log + '\n')
+                    logger.info(f"已将文件重新转换为UTF-8编码: {log_file}")
+                    break
+                except (UnicodeDecodeError, Exception):
+                    continue
+            else:
+                # 所有编码都失败，创建备份并重置文件
+                backup_log_file = f"{log_file}.corrupted_{int(time.time())}"
+                try:
+                    shutil.copy(log_file, backup_log_file)
+                    logger.error(f"无法解码日志文件，已备份到: {backup_log_file}")
+                except Exception as backup_err:
+                    logger.error(f"备份损坏文件失败: {backup_err}")
+                
+                # 重置为空文件
+                with open(log_file, 'w', encoding='utf-8') as f:
+                    f.write("")
+                logger.warning(f"已重置损坏的日志文件: {log_file}")
                 return
+        except Exception as e:
+            logger.error(f"读取日志文件时发生未知错误: {log_file}, 错误: {e}")
+            return
+            
+        # 修改检查条件：仅检查是否达到最小处理阈值
+        if len(logs) < MAX_MESSAGE_LOG_ENTRIES:
+            logger.info(f"日志条目不足（{len(logs)}条），未触发记忆总结。")
+            return
 
         # --- 生成总结 ---
         # 修改为使用全部日志内容
@@ -2097,15 +2523,42 @@ def memory_manager():
                     prompt_name = prompt_mapping.get(user, user)  # 获取配置的文件名，没有则用昵称
                     user_prompt_file = os.path.join(root_dir, 'prompts', f'{prompt_name}.md')
                     manage_memory_capacity(user_prompt_file)
+                except UnicodeDecodeError as ude:
+                    logger.error(f"用户 {user} 的记忆文件编码异常: {str(ude)}")
+                    logger.info(f"跳过用户 {user} 的内存管理，等待下一轮检查")
+                    continue
                 except Exception as e:
-                    logger.error(f"内存管理失败: {str(e)}")
+                    logger.error(f"用户 {user} 内存管理失败: {str(e)}")
+                    continue
 
                 if os.path.exists(log_file):
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        line_count = sum(1 for _ in f)
-                        
-                    if line_count >= MAX_MESSAGE_LOG_ENTRIES:
-                        summarize_and_save(user)
+                    try:
+                        # 增强编码处理的行数统计
+                        line_count = 0
+                        try:
+                            with open(log_file, 'r', encoding='utf-8') as f:
+                                line_count = sum(1 for _ in f)
+                        except UnicodeDecodeError as ude:
+                            logger.warning(f"UTF-8解码失败，尝试其他编码统计行数: {log_file}, 错误: {ude}")
+                            # 尝试用其他编码统计行数
+                            for encoding in ['gbk', 'gb2312', 'latin-1', 'cp1252']:
+                                try:
+                                    with open(log_file, 'r', encoding=encoding) as f:
+                                        line_count = sum(1 for _ in f)
+                                    logger.info(f"成功使用 {encoding} 编码统计行数: {log_file}")
+                                    break
+                                except (UnicodeDecodeError, Exception):
+                                    continue
+                            else:
+                                # 所有编码都失败，跳过这个用户
+                                logger.error(f"无法统计日志文件行数，跳过用户 {user}: {log_file}")
+                                continue
+                                
+                        if line_count >= MAX_MESSAGE_LOG_ENTRIES:
+                            summarize_and_save(user)
+                    except Exception as file_err:
+                        logger.error(f"处理用户 {user} 的日志文件时出错: {file_err}")
+                        continue
     
         except Exception as e:
             logger.error(f"记忆管理异常: {str(e)}")
@@ -2117,8 +2570,45 @@ def manage_memory_capacity(user_file):
     # 允许重要度缺失（使用可选捕获组）
     MEMORY_SEGMENT_PATTERN = r'## 记忆片段 \[(.*?)\]\n(?:\*{2}重要度\*{2}: (\d*)\n)?\*{2}摘要\*{2}:(.*?)(?=\n## 记忆片段 |\Z)'
     try:
-        with open(user_file, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # 增强编码处理的文件读取
+        content = None
+        try:
+            with open(user_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError as e:
+            logger.warning(f"UTF-8解码失败，尝试其他编码格式: {user_file}, 错误: {e}")
+            # 尝试常见的编码格式
+            for encoding in ['gbk', 'gb2312', 'latin-1', 'cp1252']:
+                try:
+                    with open(user_file, 'r', encoding=encoding) as f:
+                        content = f.read()
+                    logger.info(f"成功使用 {encoding} 编码读取用户文件: {user_file}")
+                    # 重新以UTF-8编码保存文件
+                    backup_file = f"{user_file}.bak_{int(time.time())}"
+                    try:
+                        shutil.copy(user_file, backup_file)
+                        with open(user_file, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        logger.info(f"已将用户文件重新转换为UTF-8编码: {user_file} (备份: {backup_file})")
+                    except Exception as save_err:
+                        logger.error(f"重新保存用户文件失败: {save_err}")
+                    break
+                except (UnicodeDecodeError, Exception):
+                    continue
+            else:
+                # 所有编码都失败
+                backup_file = f"{user_file}.corrupted_{int(time.time())}"
+                try:
+                    shutil.copy(user_file, backup_file)
+                    logger.error(f"无法解码用户文件，已备份到: {backup_file}")
+                except Exception as backup_err:
+                    logger.error(f"备份损坏用户文件失败: {backup_err}")
+                logger.error(f"用户文件编码损坏，跳过记忆管理: {user_file}")
+                return
+        
+        if content is None:
+            logger.error(f"无法读取用户文件内容: {user_file}")
+            return
         
         # 解析记忆片段
         segments = re.findall(MEMORY_SEGMENT_PATTERN, content, re.DOTALL)
@@ -2238,7 +2728,7 @@ def send_error_reply(user_id, error_description_for_ai, fallback_message, error_
         logger.error(f"调用AI生成错误回复失败 ({error_context_log}): {ai_err}. 使用备用消息。")
         try:
             # AI失败，使用备用消息通过send_reply发送
-            send_reply(user_id, user_id, user_id, f"[错误处理备用: {error_context_log}]", fallback_message)
+            send_reply(user_id, user_id, user_id, f"[错误处理备用: {error_context_log}]", fallback_message, is_system_message=True)
         except Exception as send_fallback_err:
             # 如果连send_reply都失败了，记录严重错误
             logger.critical(f"发送备用错误消息也失败 ({error_context_log}): {send_fallback_err}")
@@ -2579,9 +3069,18 @@ def log_original_message_to_memory(user_id, message_content):
             # 确保目录存在
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
-            # 以追加模式写入日志条目
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(log_entry)
+            # 增强编码处理的写入
+            try:
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(log_entry)
+            except UnicodeEncodeError as e:
+                logger.warning(f"UTF-8编码失败，尝试清理特殊字符: {log_file}, 错误: {e}")
+                # 清理无法编码的字符
+                clean_content = message_content.encode('utf-8', errors='ignore').decode('utf-8')
+                clean_log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{user_id}] {clean_content}\n"
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    f.write(clean_log_entry)
+                logger.info(f"已清理特殊字符并写入提醒记忆日志: {log_file}")
         except Exception as write_err:
             logger.error(f"写入用户 {user_id} 的提醒设置记忆日志失败: {write_err}")
 
@@ -2600,7 +3099,7 @@ def send_confirmation_reply(user_id, confirmation_prompt, log_context, fallback_
         logger.error(f"调用API为用户 {user_id} 生成提醒确认消息失败: {api_err}. 将使用备用消息。")
         try:
              # 尝试使用 send_reply 发送预设的备用确认消息
-             send_reply(user_id, user_id, user_id, f"{log_context} [备用确认]", fallback_message)
+             send_reply(user_id, user_id, user_id, f"{log_context} [备用确认]", fallback_message, is_system_message=True)
         except Exception as send_fallback_err:
              # 如果连发送备用消息都失败了，记录严重错误
              logger.critical(f"发送备用确认消息也失败 ({log_context}): {send_fallback_err}")
@@ -2646,7 +3145,7 @@ def trigger_reminder(user_id, timer_id, reminder_message):
         logger.info(f"已将提醒消息 '{reminder_message}' 添加到用户 {user_id} 的消息队列，用以执行联网检查流程")
 
         # 可选：如果仍需语音通话功能，保留这部分
-        if USE_VOICE_CALL_FOR_REMINDERS:
+        if get_dynamic_config('USE_VOICE_CALL_FOR_REMINDERS', USE_VOICE_CALL_FOR_REMINDERS):
             try:
                 wx.VoiceCall(user_id)
                 logger.info(f"通过语音通话提醒用户 {user_id} (短期提醒)。")
@@ -2687,8 +3186,18 @@ def log_ai_reply_to_memory(username, reply_part):
         # 确保日志目录存在
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(log_entry)
+        # 增强编码处理的写入
+        try:
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(log_entry)
+        except UnicodeEncodeError as e:
+            logger.warning(f"UTF-8编码失败，尝试清理特殊字符: {log_file}, 错误: {e}")
+            # 清理无法编码的字符
+            clean_reply = reply_part.encode('utf-8', errors='ignore').decode('utf-8')
+            clean_log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{prompt_name}] {clean_reply}\n"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(clean_log_entry)
+            logger.info(f"已清理特殊字符并写入AI回复记忆日志: {log_file}")
     except Exception as log_err:
         logger.error(f"记录 AI 回复到记忆日志失败，用户 {username}: {log_err}")
 
@@ -2874,7 +3383,7 @@ def recurring_reminder_checker():
                                 logger.info(f"已将{reminder_type}提醒 '{content}' 添加到用户 {user_id} 的消息队列，用以执行联网检查流程")
 
                                 # 保留语音通话功能（如果启用）
-                                if USE_VOICE_CALL_FOR_REMINDERS:
+                                if get_dynamic_config('USE_VOICE_CALL_FOR_REMINDERS', USE_VOICE_CALL_FOR_REMINDERS):
                                     try:
                                         wx.VoiceCall(user_id)
                                         logger.info(f"通过语音通话提醒用户 {user_id} ({reminder_type}提醒)。")
@@ -3013,7 +3522,13 @@ def get_online_model_response(query: str, user_id: str) -> Optional[str]:
             logger.error(f"在线 API 返回了空的选择项，用户: {user_id}")
             return None
 
-        reply = response.choices[0].message.content.strip()
+        # 检查在线API是否返回了空的消息内容
+        message_content = response.choices[0].message.content
+        if message_content is None:
+            logger.error(f"在线API返回了空的信息，可能是因为触发了安全检查机制，请修改Prompt并清空上下文再试 (用户: {user_id})")
+            return None
+
+        reply = message_content.strip()
         # 清理回复，去除思考过程
         if "</think>" in reply:
             reply = reply.split("</think>", 1)[1].strip()
@@ -3133,7 +3648,7 @@ def scheduled_restart_checker():
                         save_chat_contexts()
                     
                     # 保存用户计时器状态
-                    if ENABLE_AUTO_MESSAGE:
+                    if get_dynamic_config('ENABLE_AUTO_MESSAGE', ENABLE_AUTO_MESSAGE):
                         logger.info("定时重启前：保存用户计时器状态...")
                         save_user_timers()
                     
@@ -3331,21 +3846,18 @@ def main():
                 exit(1)
         logger.info("监听用户添加完成")
         
-        # 初始化所有用户的自动消息计时器
-        if ENABLE_AUTO_MESSAGE:
-            logger.info("正在加载用户自动消息计时器状态...")
-            load_user_timers()  # 替换原来的初始化代码
-            logger.info("用户自动消息计时器状态加载完成。")
-            
-            # 初始化群聊类型缓存
-            if IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE:
-                logger.info("主动消息群聊忽略功能已启用，正在初始化群聊类型缓存...")
-                update_group_chat_cache()
-                logger.info("群聊类型缓存初始化完成。")
-            else:
-                logger.info("主动消息群聊忽略功能已禁用。")
+        # 初始化所有用户的自动消息计时器 - 总是初始化，以便功能开启时立即可用
+        logger.info("正在加载用户自动消息计时器状态...")
+        load_user_timers()  # 替换原来的初始化代码
+        logger.info("用户自动消息计时器状态加载完成。")
+        
+        # 初始化群聊类型缓存
+        if IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE:
+            logger.info("主动消息群聊忽略功能已启用，正在初始化群聊类型缓存...")
+            update_group_chat_cache()
+            logger.info("群聊类型缓存初始化完成。")
         else:
-            logger.info("自动消息功能已禁用，跳过计时器初始化。")
+            logger.info("主动消息群聊忽略功能已禁用。")
 
         # --- 启动窗口保活线程 ---
         logger.info("\033[32m启动窗口保活线程...\033[0m")
@@ -3384,12 +3896,12 @@ def main():
             reminder_checker_thread.start()
             logger.info("提醒检查线程（重复和长期一次性）已启动。")
 
-        # 自动消息
-        if ENABLE_AUTO_MESSAGE:
-            auto_message_thread = threading.Thread(target=check_user_timeouts, name="AutoMessageChecker")
-            auto_message_thread.daemon = True
-            auto_message_thread.start()
-            logger.info("主动消息检查线程已启动。")
+        # 自动消息 - 线程总是启动，但根据动态配置决定是否工作
+        auto_message_thread = threading.Thread(target=check_user_timeouts, name="AutoMessageChecker")
+        auto_message_thread.daemon = True
+        auto_message_thread.start()
+        current_auto_msg_status = get_dynamic_config('ENABLE_AUTO_MESSAGE', ENABLE_AUTO_MESSAGE)
+        logger.info(f"主动消息检查线程已启动 (当前状态: {'启用' if current_auto_msg_status else '禁用'})。")
         
         # 启动心跳线程
         heartbeat_th = threading.Thread(target=heartbeat_thread_func, name="BotHeartbeatThread", daemon=True)
@@ -3417,7 +3929,7 @@ def main():
         logger.info("程序准备退出，执行清理操作...")
 
         # 保存用户计时器状态（如果启用了自动消息）
-        if ENABLE_AUTO_MESSAGE:
+        if get_dynamic_config('ENABLE_AUTO_MESSAGE', ENABLE_AUTO_MESSAGE):
             logger.info("程序退出前：保存用户计时器状态...")
             save_user_timers()
 

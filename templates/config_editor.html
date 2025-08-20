@@ -196,6 +196,228 @@
             display: block;
         }
 
+        .peek-content {
+            padding: 20px;
+        }
+
+        .peek-section {
+            margin-bottom: 30px;
+        }
+
+        .peek-section h4 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 16px;
+            border-bottom: 2px solid #4caf50;
+            padding-bottom: 8px;
+        }
+
+        .forum-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .forum-selector select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .peek-btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background: #4caf50;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .peek-btn:hover {
+            background: #45a049;
+        }
+
+        .peek-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .forum-view-btn {
+            background: #2196F3;
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            padding: 12px 16px;
+            font-size: 15px;
+            text-align: center;
+        }
+
+        .forum-view-btn:hover:not(:disabled) {
+            background: #1976D2;
+        }
+
+        .forum-view-actions { display: block; }
+        
+        .npc-config {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .npc-selector label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .npc-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .npc-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .npc-name-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .add-npc-btn, .remove-npc-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .add-npc-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        .add-npc-btn:hover {
+            background: #45a049;
+        }
+
+        .remove-npc-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .remove-npc-btn:hover {
+            background: #da190b;
+        }
+
+        .npc-settings {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+
+        .npc-setting-group {
+            margin-bottom: 15px;
+        }
+
+        .npc-setting-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .npc-setting-group select,
+        .npc-setting-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .npc-setting-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .save-npc-btn {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .npc-individual-settings {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .npc-individual-settings h4 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .npc-individual-settings:last-child {
+            margin-bottom: 0;
+        }
+
+        /* NPC 折叠/展开样式 */
+        .npc-individual-settings .npc-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            margin: -15px -15px 0 -15px; /* 抵消容器内边距，使头部横向铺满 */
+            background: #f3f4f6;
+            cursor: pointer;
+            user-select: none;
+        }
+        .npc-individual-settings .npc-card-title {
+            margin: 0;
+            font-size: 15px;
+            color: #333;
+            font-weight: 600;
+        }
+        .npc-individual-settings .chevron {
+            transition: transform 0.2s ease;
+            font-size: 14px;
+            color: #666;
+        }
+        .npc-individual-settings .npc-card-body {
+            padding-top: 12px;
+        }
+        .npc-individual-settings.collapsed .npc-card-body {
+            display: none;
+        }
+        /* 展开时箭头向下，折叠时保持向右 */
+        .npc-individual-settings:not(.collapsed) .chevron {
+            transform: rotate(90deg);
+        }
+
+        /* 已移除偷看TA浮动按钮样式 */
+
+
         .content-panel.active-panel#section-logs {
             display: flex;
             flex-direction: column;
@@ -341,6 +563,39 @@
         }
         .entry button:hover {
             background-color: #d32f2f;
+        }
+        /* NPC 列表行布局，复用 .entry 样式并定制列宽 */
+        .entry.npc-entry {
+            grid-template-columns: 1fr auto auto;
+        }
+        .npc-actions {
+            display: inline-flex;
+            gap: 8px;
+        }
+        .npc-actions .toggle-btn {
+            background-color: #607d8b;
+            height: 38px;
+            color: #fff;
+        }
+        .npc-actions .toggle-btn:hover {
+            background-color: #546e7a;
+        }
+        .npc-detail {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0 14px 0;
+            background: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        }
+        .npc-entry .npc-detail {
+            grid-column: 1 / -1; /* 详情跨越整行 */
+        }
+        .npc-detail .npc-setting-group {
+            margin-bottom: 12px;
+        }
+        .npc-detail .npc-setting-group:last-child {
+            margin-bottom: 0;
         }
         #reminder-list .entry {
             grid-template-columns: 0.75fr 1fr 1.5fr 2.5fr auto;
@@ -558,6 +813,8 @@
             #reminder-list input[type="datetime-local"] {
                 width: 100%;
             }
+                        
+            /* 已移除移动端偷看TA侧边栏与按钮样式 */
         }
         @media (max-width: 520px) {
             .header-bar {
@@ -782,6 +1039,23 @@
             setupReminderInputListeners();
             startChatContextUserPolling();
             setupGroupChatOptionsVisibility();
+                        
+            // 初始化NPC设置区域
+            console.log('初始化NPC设置区域...');
+            
+            // 首先尝试从后端加载NPC配置
+            loadNpcSettingsFromBackend();
+            
+            // 页面加载完成后，手动检查一次NPC设置区域状态
+            setTimeout(() => {
+                console.log('页面加载完成后，手动检查NPC设置区域状态');
+                updateNpcSelection();
+                
+
+            }, 100);
+            
+
+
 
             document.querySelectorAll('#reminder-list').forEach(container => {
                 container.addEventListener('input', debounce(saveReminders, 500));
@@ -911,7 +1185,7 @@
                         { value: "deepseek-ai/DeepSeek-V3", text: "deepseek-ai/DeepSeek-V3 (1226版本，推荐)" },
                         { value: "deepseek-v3-0324", text: "deepseek-v3-0324 (推荐)" },
                         { value: "gemini-2.0-flash-exp", text: "gemini-2.0-flash-exp (推荐)" },     
-                        { value: "gemini-2.5-pro-06-05", text: "gemini-2.5-pro-06-05 * (推荐，体验感更好)" },
+                        { value: "gemini-2.5-pro", text: "gemini-2.5-pro * (推荐，体验感更好)" },
                         { value: "gemini-2.5-pro-exp-03-25", text: "gemini-2.5-pro-exp-03-25 * (推荐)" },
                         { value: "gemini-2.5-pro-05-06", text: "gemini-2.5-pro-05-06 *" },
                         { value: "claude-3-7-sonnet-20250219", text: "claude-3-7-sonnet-20250219 * (推荐)" },
@@ -923,7 +1197,7 @@
                         { value: "claude-3-5-haiku-20241022", text: "claude-3-5-haiku-20241022" },
                         { value: "gemini-2.0-flash-thinking-exp-1219", text: "gemini-2.0-flash-thinking-exp-1219" },
                         { value: "gemini-2.5-flash", text: "gemini-2.5-flash" },                     
-                        { value: "gpt-3.5-turbo", text: "gpt-3.5-turbo" }, 
+                        { value: "gpt-5", text: "gpt-5 *" },
                         { value: "o4-mini", text: "o4-mini" },
                         { value: "gpt-4o", text: "gpt-4o *" },
                         { value: "gpt-4.1", text: "gpt-4.1 *" },
@@ -1236,6 +1510,135 @@
                 });
             }
 
+            // 论坛自定义模型配置逻辑
+            const enableForumCustomModel = document.getElementById('enableForumCustomModel');
+            const forumCustomModelConfig = document.getElementById('forumCustomModelConfig');
+            const forumApiProvider = document.getElementById('forumApiProvider');
+            const customForumApiUrl = document.getElementById('customForumApiUrl');
+            const finalForumApiUrl = document.getElementById('finalForumApiUrl');
+            const forumModelSelect = document.getElementById('forumModelSelect');
+            const customForumModel = document.getElementById('customForumModel');
+            const finalForumModel = document.getElementById('finalForumModel');
+
+            if (enableForumCustomModel && forumCustomModelConfig) {
+                enableForumCustomModel.addEventListener('change', function() {
+                    forumCustomModelConfig.style.display = this.checked ? 'block' : 'none';
+                });
+            }
+
+            function updateForumModelOptions() {
+                if (!forumModelSelect) return;
+                let options = [];
+                const apiUrl = forumApiProvider ? forumApiProvider.value : '';
+                const savedModel = finalForumModel ? finalForumModel.value : '';
+
+                if (apiUrl === 'https://api.siliconflow.cn/v1/') {
+                    options = [
+                        { value: 'deepseek-ai/DeepSeek-V3', text: '硅基DeepSeek V3' },
+                        { value: 'deepseek-ai/DeepSeek-R1', text: '硅基DeepSeek R1' },
+                        { value: 'Pro/deepseek-ai/DeepSeek-V3', text: '硅基DeepSeek V3 Pro' },
+                        { value: 'Pro/deepseek-ai/DeepSeek-R1', text: '硅基DeepSeek R1 Pro' },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else if (apiUrl === 'https://api.deepseek.com') {
+                    options = [
+                        { value: 'deepseek-chat', text: 'DeepSeek官方V3' },
+                        { value: 'deepseek-reasoner', text: 'DeepSeek官方R1' },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else if (apiUrl && (apiUrl === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => apiUrl.startsWith(node)))) {
+                    options = [
+                        { value: 'deepseek-ai/DeepSeek-V3', text: 'deepseek-ai/DeepSeek-V3 (1226版本)' },
+                        { value: 'deepseek-v3-0324', text: 'deepseek-v3-0324' },
+                        { value: 'claude-3-7-sonnet-20250219', text: 'claude-3-7-sonnet-20250219 *' },
+                        { value: 'gemini-2.5-pro', text: 'gemini-2.5-pro *' },
+                        { value: 'deepseek-ai/DeepSeek-R1', text: 'deepseek-ai/DeepSeek-R1' },
+                        { value: 'gpt-5', text: 'gpt-5 *' },
+                        { value: 'o4-mini', text: 'o4-mini' },
+                        { value: 'gpt-4o', text: 'gpt-4o *' },
+                        { value: 'gpt-4o-mini', text: 'gpt-4o-mini' },
+                        { value: 'other', text: '其它' }
+                    ];
+                } else {
+                    options = [ { value: 'other', text: '其它' } ];
+                }
+
+                forumModelSelect.innerHTML = '';
+                let modelInOptions = false;
+                options.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.value;
+                    o.textContent = opt.text;
+                    if (opt.value === savedModel) {
+                        o.selected = true;
+                        modelInOptions = true;
+                    }
+                    forumModelSelect.appendChild(o);
+                });
+
+                if (!modelInOptions && savedModel) {
+                    forumModelSelect.value = 'other';
+                    if (customForumModel) customForumModel.value = savedModel;
+                } else if (modelInOptions && forumModelSelect.value !== 'other') {
+                    if (customForumModel) customForumModel.value = '';
+                }
+
+                if (finalForumModel) finalForumModel.value = savedModel || (forumModelSelect.value === 'other' ? (customForumModel ? customForumModel.value : '') : forumModelSelect.value);
+                forumModelSelect.dispatchEvent(new Event('change'));
+            }
+
+            if (forumApiProvider) {
+                if (forumApiProvider.value === 'other') {
+                    if (customForumApiUrl) customForumApiUrl.style.display = 'block';
+                } else {
+                    if (customForumApiUrl) customForumApiUrl.style.display = 'none';
+                    if (finalForumApiUrl) finalForumApiUrl.value = forumApiProvider.value;
+                }
+                updateForumModelOptions();
+                if (forumModelSelect && forumModelSelect.value === 'other') {
+                    if (customForumModel) customForumModel.style.display = 'block';
+                } else if (customForumModel) {
+                    customForumModel.style.display = 'none';
+                }
+                forumApiProvider.addEventListener('change', async function() {
+                    if (this.value === 'other') {
+                        if (customForumApiUrl) customForumApiUrl.style.display = 'block';
+                        if (finalForumApiUrl) finalForumApiUrl.value = customForumApiUrl ? customForumApiUrl.value : '';
+                    } else {
+                        if (customForumApiUrl) customForumApiUrl.style.display = 'none';
+                        if (this.value === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => this.value.startsWith(node))) {
+                            const availableUrl = await selectAvailableWeAPIsNode();
+                            this.value = availableUrl;
+                            if (finalForumApiUrl) finalForumApiUrl.value = availableUrl;
+                        } else {
+                            if (finalForumApiUrl) finalForumApiUrl.value = this.value;
+                        }
+                    }
+                    updateForumModelOptions();
+                });
+            }
+            if (customForumApiUrl) {
+                customForumApiUrl.addEventListener('input', () => {
+                    if (finalForumApiUrl) finalForumApiUrl.value = customForumApiUrl.value;
+                });
+            }
+            if (forumModelSelect) {
+                forumModelSelect.addEventListener('change', function() {
+                    if (this.value === 'other') {
+                        if (customForumModel) customForumModel.style.display = 'block';
+                        if (finalForumModel) finalForumModel.value = customForumModel ? customForumModel.value : '';
+                    } else {
+                        if (customForumModel) customForumModel.style.display = 'none';
+                        if (finalForumModel) finalForumModel.value = this.value;
+                    }
+                });
+            }
+            if (customForumModel) {
+                customForumModel.addEventListener('input', () => {
+                    if (finalForumModel) finalForumModel.value = customForumModel.value;
+                });
+            }
+
             function addEntry() {
                 const container = document.getElementById('listen-list');
                 const div = document.createElement('div');
@@ -1539,12 +1942,27 @@
                     activatePanel(targetId);
                     localStorage.setItem('activeConfigTab', targetId);
 
+                    if (targetId === 'section-memory') { // 如果切换到记忆tab
+                        pollAndUpdateChatContextUsers(); // 立即更新列表
+                    }
+
                     if (sidebarElement && sidebarOverlayElement && window.innerWidth <= 768) {
                         sidebarElement.classList.remove('sidebar-open');
                         sidebarOverlayElement.classList.remove('active');
                         updateMobileMenuToggleDisplay(); 
                     }
                 });
+            });
+
+            // 页面可见性变化时控制轮询
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                     // 页面变为可见时，如果记忆tab是激活的，立即轮询一次
+                    const activeMemoryTab = document.querySelector('.sidebar a.active[data-target="section-memory"]');
+                    if (activeMemoryTab) {
+                        pollAndUpdateChatContextUsers();
+                    }
+                }
             });
 
             const savedTab = localStorage.getItem('activeConfigTab');
@@ -2161,24 +2579,7 @@
         
         // 当tab切换时，如果切换到记忆配置tab，也应该立即更新一次
         // 修改 sidebarLinks 的点击事件监听器
-        sidebarLinks.forEach(link => {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();
-                const targetId = this.dataset.target;
-                activatePanel(targetId); // activatePanel 会处理 active class
-                localStorage.setItem('activeConfigTab', targetId);
-
-                if (targetId === 'section-memory') { // 如果切换到记忆tab
-                    pollAndUpdateChatContextUsers(); // 立即更新列表
-                }
-
-                if (sidebarElement && sidebarOverlayElement && window.innerWidth <= 768) {
-                    sidebarElement.classList.remove('sidebar-open');
-                    sidebarOverlayElement.classList.remove('active');
-                    updateMobileMenuToggleDisplay(); 
-                }
-            });
-        });
+        // 注意：这里的事件监听器已经在上面设置过了，避免重复设置
 
         // 页面可见性变化时控制轮询
         document.addEventListener('visibilitychange', function() {
@@ -2262,6 +2663,7 @@
                 <button type="button" class="delete-round-btn" onclick="deleteChatRound(${roundIdx})">删除本轮</button>
             `;
             container.appendChild(card);
+            
         }
         function deleteChatRound(idx) {
             const container = document.getElementById('chatContextRoundsContainer');
@@ -2345,6 +2747,58 @@
         function closeEditChatContextModal() {
             document.getElementById('editChatContextModal').style.display = 'none';
         }
+
+        // 从后端加载NPC配置
+        async function loadNpcSettingsFromBackend() {
+            try {
+                console.log('从后端加载NPC配置...');
+                const response = await fetch('/api/npc/get_settings');
+                if (response.ok) {
+                    const npcConfig = await response.json();
+                    console.log('成功从后端加载NPC配置:', npcConfig);
+                    
+                    if (npcConfig.selected_npcs && npcConfig.selected_npcs.length > 0) {
+                        const list = document.getElementById('npc-list');
+                        list.innerHTML = '';
+                        for (const name of npcConfig.selected_npcs) {
+                            const s = (npcConfig.npc_settings && npcConfig.npc_settings[name]) ? npcConfig.npc_settings[name] : null;
+                            list.appendChild(createNpcRow(name, s));
+                        }
+                        updateNpcSelection();
+                    }
+                } else {
+                    console.log('后端没有NPC配置，尝试从localStorage恢复');
+                    loadNpcSettingsFromLocalStorage();
+                }
+            } catch (error) {
+                console.error('从后端加载NPC配置失败:', error);
+                console.log('尝试从localStorage恢复');
+                loadNpcSettingsFromLocalStorage();
+            }
+        }
+
+        // 从localStorage加载NPC配置（作为备选方案）
+        function loadNpcSettingsFromLocalStorage() {
+            const savedSettings = localStorage.getItem('npcSettings');
+            if (savedSettings) {
+                try {
+                    const settings = JSON.parse(savedSettings);
+                    console.log('从localStorage恢复NPC设置:', settings);
+                    
+                    // 恢复选中的NPC（兼容旧 localStorage 结构，仅恢复名字列表）
+                    const list = document.getElementById('npc-list');
+                    list.innerHTML = '';
+                    if (settings.npcs && settings.npcs.length > 0) {
+                        for (const name of settings.npcs) {
+                            list.appendChild(createNpcRow(name));
+                        }
+                    }
+                    updateNpcSelection();
+                } catch (e) {
+                    console.error('从localStorage恢复NPC设置失败:', e);
+                }
+            }
+        }
     </script>
 </head>
 <body>
@@ -2354,7 +2808,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.22.1</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.23</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -2393,11 +2847,14 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                 <li><a href="#" data-target="section-memory">记忆功能配置</a></li>
                 <li><a href="#" data-target="section-active-message">主动消息配置</a></li>
                 <li><a href="#" data-target="section-reminders">定时器与提醒</a></li>
+                <li><a href="#" data-target="section-text-commands">指令设置</a></li>
                 <li><a href="#" data-target="section-scheduled-restart">定时重启Bot配置</a></li>
+                <li><a href="#" data-target="section-fun-lab">趣味实验室</a></li>
                 <li><a href="#" data-target="section-web-editor">网页编辑器配置</a></li>
                 <li><a href="#" data-target="section-logs">程序运行日志</a></li>
             </ul>
         </nav>
+        
 
         <div class="content-area">
             <form method="post" id="configForm">
@@ -2422,6 +2879,92 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                         <button type="button" onclick="addEntry()" style="margin-top:10px;">添加用户</button>
                     </div>
                     <small>提示：修改了用户对应的Prompt文件后保存配置时将自动清除该用户的上下文记忆。</small>
+                </div>
+
+                <div id="section-fun-lab" class="content-panel">
+                    <h2>👀偷看他 - 角色趣味论坛</h2>
+                    <div class="peek-section">
+                        <h4>📱 选择论坛角色</h4>
+                        <div class="forum-selector">
+                            <select id="forumCharacterSelect" onchange="updateForumButtons()" title="选择论坛角色">
+                                <option value="">-- 选择角色 --</option>
+                                {% for file in prompt_files %}
+                                <option value="{{ file }}">{{ file }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="peek-section">
+                        <h4>🤖 NPC人设配置</h4>
+                        <div class="npc-config">
+                            <div class="npc-settings" id="npcSettings">
+                                <div id="npc-list"></div>
+                                <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                                    <button type="button" class="add-npc-btn" onclick="addNpcRow()">添加NPC</button>
+                                    <button type="button" class="remove-npc-btn" onclick="clearAllNpcs()">删除全部NPC</button>
+                                    <button type="button" class="peek-btn save-npc-btn" onclick="saveNpcSettings()">保存NPC设置</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="peek-section">
+                        <h4>🧩 论坛模型设置（可选）</h4>
+                        <div class="form-group">
+                            <div class="switch-item">
+                                <label>启用自定义模型</label>
+                                <div class="switch"><label class="switch-label"><input type="checkbox" id="enableForumCustomModel" name="ENABLE_FORUM_CUSTOM_MODEL" {% if config.ENABLE_FORUM_CUSTOM_MODEL %}checked{% endif %}><span class="slider round"></span></label></div>
+                            </div>
+                            <small>
+                                默认使用主模型生成论坛内容与回复；如果在联网搜索功能中启用联网模型，则论坛模型可能会搜索互联网以生成论坛内容与回复。
+                            </small>
+                            <div style="color: #e67e22; background: #fffbe6; border-left: 4px solid #f1c40f; padding: 8px 12px; margin: 8px 0; border-radius: 4px; font-size: 14px;">
+                                温馨提示：如果出现“帖子内容生成成功，但NPC回复生成失败（此时会自动使用预设的人机评论代替AI生成）”，通常是因为API服务商的请求速率受限。建议更换API服务商，或检查并调整API调用频率设置以解决该问题。
+                            </div>
+                        </div>
+
+                        <div id="forumCustomModelConfig" class="{% if config.ENABLE_FORUM_CUSTOM_MODEL %}assistant-config-visible{% else %}assistant-config-hidden{% endif %}">
+                            <div class="form-group">
+                                <label>API 服务商：</label>
+                                <select id="forumApiProvider" name="temp_FORUM_BASE_URL">
+                                    <option value="https://api.siliconflow.cn/v1/" {% if config.FORUM_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
+                                    <option value="https://api.deepseek.com" {% if config.FORUM_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
+                                    <option value="https://vg.v1api.cc/v1" {% if config.FORUM_BASE_URL == 'https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
+                                    <option value="other" {% if config.FORUM_BASE_URL not in ['https://api.siliconflow.cn/v1/','https://api.deepseek.com','https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
+                                </select>
+                                <input type="text" id="customForumApiUrl" placeholder="请输入自定义API地址" class="custom-input" {% if config.FORUM_BASE_URL not in ['https://api.siliconflow.cn/v1/','https://api.deepseek.com','https://vg.v1api.cc/v1'] %} value="{{ config.FORUM_BASE_URL }}" style="display:block;" {% endif %}>
+                                <input type="hidden" id="finalForumApiUrl" name="FORUM_BASE_URL" value="{{ config.FORUM_BASE_URL }}">
+                            </div>
+
+                            <div class="form-group">
+                                <label>模型选择：</label>
+                                <select id="forumModelSelect" name="temp_FORUM_MODEL"></select>
+                                <input type="text" id="customForumModel" placeholder="请输入自定义模型名称" class="custom-input" value="{% if config.FORUM_MODEL %}{{ config.FORUM_MODEL }}{% endif %}">
+                                <input type="hidden" id="finalForumModel" name="FORUM_MODEL" value="{{ config.FORUM_MODEL }}">
+                            </div>
+
+                            <div class="form-group">
+                                <label>API Key:</label>
+                                <input type="text" placeholder="sk-xxxxxxxxxx" name="FORUM_API_KEY" value="{{ config.FORUM_API_KEY }}" class="api-key-input">
+                                <small class="api-key-hint">{{ "出于安全考虑，已隐藏完整API Key。如需修改，请直接输入新的API Key。" if "*" in config.FORUM_API_KEY else "" }}</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>回复最大Token:</label>
+                                <input type="number" step="100" name="FORUM_MAX_TOKEN" value="{{ config.FORUM_MAX_TOKEN }}">
+                            </div>
+
+                            <div class="form-group">
+                                <label>温度 (0-2):</label>
+                                <input type="number" step="0.1" name="FORUM_TEMPERATURE" value="{{ config.FORUM_TEMPERATURE }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="peek-section forum-view-actions" style="margin-top: 16px;">
+                        <button type="button" class="peek-btn forum-view-btn" onclick="openForum()" disabled>查看论坛</button>
+                    </div>
                 </div>
 
                 <div id="section-prompt-management" class="content-panel">
@@ -2475,12 +3018,12 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                             <input type="text" id="edit-prompt-filename" placeholder="建议以角色名命名，文件名将同时作为记忆中ai扮演的角色的名字。" required>
                         </div>
                         <div class="form-group">
-                        <label>内容:</label>
-                        <div class="textarea-container" style="position: relative; width: 100%;">
-                            <textarea id="edit-prompt-content" style="width: 100%; height: 400px; padding: 15px; font-family: monospace; font-size: 16px; box-sizing: border-box;"></textarea>
-                            <div class="word-counter" id="edit-word-counter" style="position: absolute; bottom: 5px; right: 10px; font-size: 12px; color: #777; background-color: rgba(255, 255, 255, 0.8); padding: 2px 5px; border-radius: 3px;">0 字</div>
+                            <label>内容:</label>
+                            <div class="textarea-container" style="position: relative; width: 100%;">
+                                <textarea id="edit-prompt-content" style="width: 100%; height: 400px; padding: 15px; font-family: monospace; font-size: 16px; box-sizing: border-box;"></textarea>
+                                <div class="word-counter" id="edit-word-counter" style="position: absolute; bottom: 5px; right: 10px; font-size: 12px; color: #777; background-color: rgba(255, 255, 255, 0.8); padding: 2px 5px; border-radius: 3px;">0 字</div>
+                            </div>
                         </div>
-                    </div>
                         <div>
                             <button type="button" id="saveEditPromptBtn" class="nav-button">保存</button>
                             <button type="button" id="cancelEditBtn" class="nav-button" style="background-color: #f44336;">取消</button>
@@ -2491,7 +3034,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                 <div id="section-chat-model" class="content-panel">
                     <h2>Chat 模型配置</h2>
                     <div class="form-group">
-                        <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://linkvg.v1chat.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1vuQeYxEnj/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=108" target="_blank">[查看使用教程]</a> )</label>
+                        <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://linkvg.v1chat.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1JNJczqEd9/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=103" target="_blank">[查看使用教程]</a> )</label>
                         <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
                             <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                             <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
@@ -2915,6 +3458,28 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                 </div>
 
+                <div id="section-text-commands" class="content-panel">
+                    <h2>指令设置</h2>
+                    <div class="form-group">
+                        <div class="switch-item">
+                            <label>启用文字指令</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_TEXT_COMMANDS" {% if config.ENABLE_TEXT_COMMANDS %}checked{% endif %}><span class="slider round"></span></label></div>
+                        </div>
+                        <small>开启后，可在聊天中直接发送以下以“/”开头的指令进行控制。</small>
+                    </div>
+                    <div class="form-group">
+                        <h3>可用指令说明</h3>
+                        <ul style="line-height:1.8;">
+                            <li><code>/重启</code> 或 <code>/re</code>：重新启动程序（将先保存必要数据再重启）。</li>
+                            <li><code>/关闭主动消息</code> 或 <code>/da</code>：关闭主动发消息功能。</li>
+                            <li><code>/开启主动消息</code> 或 <code>/ea</code>：开启主动发消息功能。</li>
+                            <li><code>/清除临时记忆</code> 或 <code>/cl</code>：清理当前聊天窗口对应的短期上下文与临时记忆。适用于AI回复出现异常（如乱码或思维链）时使用。</li>
+                            <li><code>/允许语音通话</code> 或 <code>/ev</code>：允许使用语音通话进行定时提醒（仅私聊提醒有效）。</li>
+                            <li><code>/禁止语音通话</code> 或 <code>/dv</code>：禁止使用语音通话进行定时提醒。</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <div id="section-scheduled-restart" class="content-panel">
                     <h2>定时重启Bot配置</h2>
                     <small>此功能为实验性功能，启用后允许程序在满足特定条件时自动重启，以期解决长时间运行可能导致的性能下降和回复变慢问题。重启前会自动保存聊天上下文及提醒列表。</small>
@@ -3183,6 +3748,211 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                 }
             });
         }
+
+        function updateForumButtons() {
+            const select = document.getElementById('forumCharacterSelect');
+            const viewBtn = document.querySelector('.forum-view-btn');
+            
+            if (select && viewBtn) {
+                if (select.value) {
+                    viewBtn.disabled = false;
+                } else {
+                    viewBtn.disabled = true;
+                }
+            }
+        }
+
+        function openForum() {
+            const select = document.getElementById('forumCharacterSelect');
+            if (!select || !select.value) {
+                alert('请先选择角色');
+                return;
+            }
+            window.open(`/forum/${select.value}`, '_blank');
+        }
+
+        function updateNpcSelection() {
+            // 保持容器常显，仅在需要时用于其他联动
+            const list = document.getElementById('npc-list');
+            if (!list) return;
+        }
+
+        function addNpcInput() {}
+        function removeNpcInput() {}
+
+        function toggleNpcCard(cardId) {
+            const card = document.getElementById(cardId);
+            if (!card) return;
+            card.classList.toggle('collapsed');
+        }
+
+        // 生成单个 NPC 行（名称 + 操作区）
+        function createNpcRow(initialName = '', initialSettings = null) {
+            const row = document.createElement('div');
+            row.className = 'entry npc-entry';
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.placeholder = 'NPC名字';
+            nameInput.value = initialName || '';
+            nameInput.required = true;
+
+            const actions = document.createElement('div');
+            actions.className = 'npc-actions';
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = 'toggle-btn';
+            toggleBtn.textContent = '展开/收起设定';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.textContent = '删除';
+
+            actions.appendChild(toggleBtn);
+            actions.appendChild(removeBtn);
+
+            // 占位容器：详细设置
+            const detail = document.createElement('div');
+            detail.className = 'npc-detail';
+            detail.style.display = 'none';
+            const detailId = `npc_detail_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+            detail.id = detailId;
+
+            // 详细设置表单
+            detail.innerHTML = `
+                <div class="npc-setting-group">
+                    <label>语言风格:</label>
+                    <select class="npc_languageStyle">
+                        <option value="formal">正式</option>
+                        <option value="casual">随意</option>
+                        <option value="friendly">友好</option>
+                        <option value="professional">专业</option>
+                        <option value="humorous">幽默</option>
+                        <option value="serious">严肃</option>
+                    </select>
+                </div>
+                <div class="npc-setting-group">
+                    <label>关系:</label>
+                    <select class="npc_relationship">
+                        <option value="friend">朋友</option>
+                        <option value="colleague">同事</option>
+                        <option value="family">家人</option>
+                        <option value="stranger">陌生人</option>
+                        <option value="mentor">导师</option>
+                        <option value="student">学生</option>
+                    </select>
+                </div>
+                <div class="npc-setting-group">
+                    <label>示例输出:</label>
+                    <textarea class="npc_exampleOutput" placeholder="输入NPC的示例回复风格..."></textarea>
+                </div>
+                <div class="npc-setting-group">
+                    <label>其他设置:</label>
+                    <textarea class="npc_otherSettings" placeholder="其他特殊要求或设定..."></textarea>
+                </div>
+            `;
+
+            // 初始化设置
+            if (initialSettings) {
+                detail.querySelector('.npc_languageStyle').value = initialSettings.language_style || 'casual';
+                detail.querySelector('.npc_relationship').value = initialSettings.relationship || 'friend';
+                detail.querySelector('.npc_exampleOutput').value = initialSettings.example_output || '';
+                detail.querySelector('.npc_otherSettings').value = initialSettings.other_settings || '';
+            }
+
+            // 交互
+            toggleBtn.onclick = () => {
+                detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+            };
+            removeBtn.onclick = () => {
+                row.remove();
+                updateNpcSelection();
+            };
+
+            row.appendChild(nameInput);
+            row.appendChild(actions);
+            row.appendChild(detail);
+
+            return row;
+        }
+
+        function addNpcRow() {
+            const list = document.getElementById('npc-list');
+            const row = createNpcRow();
+            // 收起其它已展开的NPC设定
+            const allDetails = list.querySelectorAll('.npc-detail');
+            allDetails.forEach(function(detail) {
+                detail.style.display = 'none';
+            });
+            // 添加并默认展开新建NPC的设定
+            list.appendChild(row);
+            const newDetail = row.querySelector('.npc-detail');
+            if (newDetail) {
+                newDetail.style.display = 'block';
+            }
+            updateNpcSelection();
+        }
+
+        function clearAllNpcs() {
+            const list = document.getElementById('npc-list');
+            list.innerHTML = '';
+            updateNpcSelection();
+        }
+
+        async function saveNpcSettings() {
+            const list = document.getElementById('npc-list');
+            const rows = Array.from(list.querySelectorAll('.entry.npc-entry'));
+            const names = [];
+            const npcSettings = {};
+
+            for (const row of rows) {
+                const name = row.querySelector('input[type="text"]').value.trim();
+                if (!name) continue;
+                if (names.includes(name)) {
+                    alert(`存在重复的NPC名字：${name}`);
+                    return;
+                }
+                names.push(name);
+                const detail = row.querySelector('.npc-detail');
+                npcSettings[name] = {
+                    language_style: detail.querySelector('.npc_languageStyle').value,
+                    relationship: detail.querySelector('.npc_relationship').value,
+                    example_output: detail.querySelector('.npc_exampleOutput').value,
+                    other_settings: detail.querySelector('.npc_otherSettings').value
+                };
+            }
+
+            if (names.length === 0) {
+                alert('请至少添加一个NPC');
+                return;
+            }
+
+            const configData = {
+                selected_npcs: names,
+                npc_settings: npcSettings
+            };
+
+            try {
+                // 保存到localStorage（兼容旧逻辑）
+                const localStorageData = { npcs: names };
+                localStorage.setItem('npcSettings', JSON.stringify(localStorageData));
+
+                const response = await fetch('/api/npc/save_settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(configData)
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const result = await response.json();
+                console.log('NPC设置已保存到后端:', result);
+                alert('NPC设置已保存！论坛NPC将按配置生成回复。');
+            } catch (error) {
+                console.error('保存NPC设置失败:', error);
+                alert(`保存NPC设置失败: ${error.message}`);
+            }
+        }
+
     </script>
 
 </body>
