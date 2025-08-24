@@ -938,7 +938,7 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2, is_summar
                     logger.error(f"完整响应对象: {response}")
                 else:
                     content = message_content.strip()
-                    if content and "[image]" not in content:
+                    if content and "[image]" not in content and content != "ext":
                         filtered_content = strip_before_thought_tags(content)
                         if filtered_content:
                             return filtered_content
