@@ -79,6 +79,9 @@ MEMORY_TEMP_DIR = 'Memory_Temp'
 MAX_MESSAGE_LOG_ENTRIES = 30
 MAX_MEMORY_NUMBER = 50
 UPLOAD_MEMORY_TO_AI = True
+# 记忆存储方式：True = 保存到单独的JSON文件，False = 保存到prompt文件中
+SAVE_MEMORY_TO_SEPARATE_FILE = True
+CORE_MEMORY_DIR = 'CoreMemory'
 
 # 是否接收全部群聊消息
 ACCEPT_ALL_GROUP_CHAT_MESSAGES = False

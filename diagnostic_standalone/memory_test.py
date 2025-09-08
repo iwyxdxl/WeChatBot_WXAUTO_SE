@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+# ***********************************************************************
+# Copyright (C) 2025, iwyxdxl
+# Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# 
+# This file is part of WeChatBot.
+# This diagnostic tool was created as part of extensive modifications
+# made to the original KouriChat project during 2024-2025.
+# ***********************************************************************
+
 """
 记忆整理功能测试工具
 独立测试记忆整理逻辑，包括读取、总结、重要性评估等步骤

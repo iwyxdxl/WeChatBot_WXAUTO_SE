@@ -51,10 +51,12 @@ class Updater:
     # 需要跳过的文件和文件夹（不会被更新）
     SKIP_FILES = [
         "prompts",      # 聊天提示词
+        "CoreMemory",  # 核心记忆文件夹
         "Memory_Temp",  # 临时记忆文件
         "emojis",      # 表情包
         "forum_data",  # 论坛数据
         "recurring_reminders.json",  # 定时提醒
+        "chat_contexts.json", # 聊天上下文文件
         "config.py",    # 配置文件(单独处理)
         "数据备份",  # 数据备份
         ".git",        # Git仓库文件（避免权限问题）
@@ -315,23 +317,30 @@ class Updater:
             }
 
     def backup_important_files(self) -> bool:
-        """在更新前备份重要文件和文件夹到数据备份/{时间}目录"""
+        """在更新前备份重要文件和文件夹到数据备份/{时间}_更新备份目录"""
         try:
             # 创建带时间戳的备份目录
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_dir = os.path.join(self.root_dir, '数据备份', timestamp)
+            backup_dir = os.path.join(self.root_dir, '数据备份', f'{timestamp}_更新备份')
             os.makedirs(backup_dir, exist_ok=True)
             
-            # 需要备份的文件和文件夹
+            # 需要备份的文件
             files_to_backup = [
                 "config.py",
-                "recurring_reminders.json"
+                "recurring_reminders.json",
+                "chat_contexts.json"
             ]
             
+            # 需要备份的文件夹
             folders_to_backup = [
                 "prompts",
-                "emojis"
+                "emojis", 
+                "forum_data",
+                "CoreMemory",
+                "Memory_Temp"
             ]
+            
+            backed_up_items = []
             
             # 备份单个文件
             for file in files_to_backup:
@@ -341,6 +350,7 @@ class Updater:
                     os.makedirs(os.path.dirname(dst_file), exist_ok=True)
                     shutil.copy2(src_file, dst_file)
                     logger.info(f"已备份文件: {file}")
+                    backed_up_items.append(f"{file}文件")
             
             # 备份文件夹
             for folder in folders_to_backup:
@@ -349,8 +359,14 @@ class Updater:
                     dst_folder = os.path.join(backup_dir, folder)
                     shutil.copytree(src_folder, dst_folder)
                     logger.info(f"已备份文件夹: {folder}")
+                    backed_up_items.append(f"{folder}文件夹")
             
-            logger.info(f"重要文件已备份到: {backup_dir}")
+            if backed_up_items:
+                logger.info(f"重要文件已备份到: {backup_dir}")
+                logger.info(f"备份项目: {', '.join(backed_up_items)}")
+            else:
+                logger.info(f"没有找到需要备份的文件或文件夹")
+                
             return True
         except Exception as e:
             logger.error(f"备份重要文件失败: {str(e)}")

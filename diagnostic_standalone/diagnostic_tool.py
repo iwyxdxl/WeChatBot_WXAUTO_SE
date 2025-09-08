@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+# ***********************************************************************
+# Copyright (C) 2025, iwyxdxl
+# Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
+# 
+# This file is part of WeChatBot.
+# This diagnostic tool was created as part of extensive modifications
+# made to the original KouriChat project during 2024-2025.
+# ***********************************************************************
+
 """
 微信机器人一键诊断工具
 独立于主程序运行，提供7项核心功能测试

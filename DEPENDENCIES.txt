@@ -1,0 +1,83 @@
+第三方依赖许可证信息 / Third-Party Dependencies License Information
+================================================================
+
+本文件列出了WeChatBot_WXAUTO_SE项目使用的所有第三方依赖及其许可证信息。
+除特殊说明外，所有列出的许可证均与GPL-3.0兼容。
+
+⚠️ 特殊依赖说明 / Special Dependencies Notice:
+===========================================
+
+微信自动化库 (可选依赖):
+- wxautox_wechatbot: 私有协议，已获得本项目授权使用
+- wxautox: 私有许可证，用户需自行安装并取得作者授权
+- wxauto: Apache License 2.0 (开源备选方案)
+
+重要说明：本项目使用动态导入和fallback机制，优先尝试私有授权库，
+如无法使用则自动回退到Apache 2.0许可的开源版本(wxauto)，
+确保在任何情况下都有GPL-3.0兼容的实现可用。
+
+主要依赖 / Main Dependencies:
+-----------------------------
+
+1. Flask (BSD License)
+   - 许可证：BSD 3-Clause License (GPL-3.0兼容)
+   - 用途：Web UI框架
+
+2. Flask-CORS (MIT License)
+   - 许可证：MIT License (GPL-3.0兼容)
+   - 用途：跨域资源共享
+
+3. SQLAlchemy (MIT License)
+   - 许可证：MIT License (GPL-3.0兼容)
+   - 用途：数据库ORM
+
+4. OpenAI (Apache License 2.0)
+   - 许可证：Apache License 2.0 (GPL-3.0兼容)
+   - 用途：AI模型接口
+
+5. Requests (Apache License 2.0)
+   - 许可证：Apache License 2.0 (GPL-3.0兼容)
+   - 用途：HTTP请求库
+
+6. BeautifulSoup4 (MIT License)
+   - 许可证：MIT License (GPL-3.0兼容)
+   - 用途：HTML解析
+
+7. Pillow (PIL License / HPND)
+   - 许可证：Historical Permission Notice and Disclaimer (GPL-3.0兼容)
+   - 用途：图像处理
+
+8. PyAutoGUI (BSD License)
+   - 许可证：BSD 3-Clause License (GPL-3.0兼容)
+   - 用途：自动化GUI操作
+
+9. psutil (BSD License)
+   - 许可证：BSD 3-Clause License (GPL-3.0兼容)
+   - 用途：系统进程监控
+
+10. comtypes (MIT License)
+    - 许可证：MIT License (GPL-3.0兼容)
+    - 用途：COM接口
+
+11. pywin32 (PSF License)
+    - 许可证：Python Software Foundation License (GPL-3.0兼容)
+    - 用途：Windows API接口
+
+其他依赖 / Other Dependencies:
+------------------------------
+- lxml: BSD License (GPL-3.0兼容)
+- werkzeug: BSD License (GPL-3.0兼容)
+- filelock: Unlicense (GPL-3.0兼容)
+- typing-extensions: PSF License (GPL-3.0兼容)
+
+许可证兼容性说明 / License Compatibility Notes:
+=============================================
+- 所有列出的依赖库许可证均与GPL-3.0兼容
+- BSD、MIT、Apache 2.0许可证都是允许性许可证，可以与GPL-3.0组合使用
+- 本项目作为整体遵循GPL-3.0许可证
+- 用户在重新分发时需要遵循GPL-3.0的所有条款
+
+更新日期：2025年9月
+维护者：iwyxdxl
+
+注意：本文件应在依赖更新时同步更新，以确保许可证信息的准确性。
