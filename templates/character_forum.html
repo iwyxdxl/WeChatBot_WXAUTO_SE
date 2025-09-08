@@ -669,6 +669,51 @@
             font-weight: 600;
             cursor: pointer;
         }
+
+        /* 法律声明样式 */
+        .legal-notice {
+            margin-top: 30px;
+            padding: 15px 20px;
+            background-color: #f7f8fc;
+            border-top: 1px solid #e1e8ed;
+            text-align: center;
+            font-size: 0.75em;
+            color: #8899a6;
+            line-height: 1.4;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .legal-notice .legal-toggle {
+            cursor: pointer;
+            color: #536471;
+            font-weight: 500;
+            margin-bottom: 8px;
+            display: inline-block;
+            font-size: 0.85em;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        .legal-notice .legal-toggle:hover {
+            opacity: 1;
+            color: #1da1f2;
+        }
+        .legal-notice .legal-content {
+            display: none;
+            text-align: left;
+            font-size: 0.9em;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            border: 1px solid #e1e8ed;
+        }
+        .legal-notice .legal-content a {
+            color: #1da1f2;
+            text-decoration: none;
+        }
+        .legal-notice .legal-content a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -739,15 +784,47 @@
         <div class="avatar-edit-modal">
             <h3>更换头像</h3>
             <div class="avatar-input-group">
-                <label for="avatarUrlInput">头像图片链接</label>
-                <input type="url" id="avatarUrlInput" placeholder="请输入图片链接地址" />
+                <label for="avatarFileInput">选择头像图片文件</label>
+                <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" onchange="previewAvatar()" />
+                <p style="font-size: 12px; color: #536471; margin-top: 8px;">
+                    支持PNG、JPG、JPEG、GIF、WebP格式，文件大小建议不超过5MB
+                </p>
             </div>
             <div class="avatar-preview" id="avatarPreview"></div>
             <div class="avatar-edit-buttons">
                 <button class="avatar-edit-btn cancel" onclick="closeAvatarEdit()">取消</button>
                 <button class="avatar-edit-btn clear" onclick="clearAvatar()">清除头像</button>
-                <button class="avatar-edit-btn save" id="saveAvatarBtn" onclick="saveAvatar()">保存</button>
+                <button class="avatar-edit-btn save" id="saveAvatarBtn" onclick="uploadAvatar()" disabled>上传</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 法律声明 -->
+    <div class="legal-notice">
+        <div class="legal-toggle" id="toggleLegal">显示法律声明</div>
+        <div class="legal-content" id="legalContent">
+            <p>
+                Modified based on the <strong>KouriChat</strong> project.<br>
+                原项目版权: Copyright (C) 2025, umaru<br>
+                修改版本版权: Copyright (C) 2025, iwyxdxl
+            </p>
+            <p>
+                本软件是自由软件，您可以根据 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
+                GNU 通用公共许可证 第3版（或更高版本）</a> 的条款重新发布和修改本软件。
+            </p>
+            <p>
+                本软件按"现状"提供，不提供任何明示或暗示的担保（包括适销性或特定用途适用性）。<br>
+                如您未收到完整的许可证副本，请访问 <a href="https://www.gnu.org/licenses/gpl-3.0.zh-cn.html" target="_blank">
+                GNU GPL 3.0 中文版</a> 获取。
+            </p>
+            <p>
+                源代码获取：<br>
+                原项目源代码：<a href="https://github.com/KouriChat/KouriChat" target="_blank">https://github.com/KouriChat/KouriChat</a><br>
+                本项目源代码：<a href="https://github.com/iwyxdxl/WeChatBot_WXAUTO_SE" target="_blank">https://github.com/iwyxdxl/WeChatBot_WXAUTO_SE</a>
+            </p>
+            <p>
+                本软件仅供学习和娱乐使用，请勿用于违法用途，否则产生的一切法律责任均与任何作者无关。
+            </p>
         </div>
     </div>
 
@@ -1486,40 +1563,39 @@
             try {
                 console.log('开始加载头像设置...');
                 
-                // 从本地存储加载头像URL
-                const savedAvatarUrl = localStorage.getItem(`avatar_${characterName}`);
-                const profileAvatar = document.getElementById('profileAvatar');
-                
-                let avatarUrl = savedAvatarUrl;
-                
-                // 如果没有本地存储的头像，检查data属性
-                if (!avatarUrl) {
-                    const dataAvatarUrl = profileAvatar.getAttribute('data-avatar-url');
-                    if (dataAvatarUrl) {
-                        avatarUrl = dataAvatarUrl;
-                    }
-                }
-                
-                if (avatarUrl) {
-                    console.log('加载头像:', avatarUrl);
+                // 尝试从服务器获取头像
+                const response = await fetch(`/api/forum/avatar/${characterName}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const avatarUrl = URL.createObjectURL(blob);
+                    
+                    console.log('从服务器加载头像');
                     
                     // 更新个人资料头像
+                    const profileAvatar = document.getElementById('profileAvatar');
                     profileAvatar.style.backgroundImage = `url('${avatarUrl}')`;
                     profileAvatar.textContent = '';
                     
                     // 同步更新所有帖子头像
                     updateAllPostAvatars(avatarUrl);
                     
-                    // 更新头像预览（如果模态框已打开）
-                    const avatarPreview = document.getElementById('avatarPreview');
-                    if (avatarPreview) {
-                        avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
-                    }
+                    // 保存到本地存储（用于缓存）
+                    localStorage.setItem(`avatar_${characterName}`, avatarUrl);
                 } else {
-                    console.log('没有找到头像设置');
+                    console.log('服务器上没有找到头像文件');
+                    // 清除可能过期的本地缓存
+                    localStorage.removeItem(`avatar_${characterName}`);
                 }
             } catch (error) {
                 console.error('加载头像设置失败:', error);
+                // 尝试从本地存储加载（回退机制）
+                const savedAvatarUrl = localStorage.getItem(`avatar_${characterName}`);
+                if (savedAvatarUrl) {
+                    const profileAvatar = document.getElementById('profileAvatar');
+                    profileAvatar.style.backgroundImage = `url('${savedAvatarUrl}')`;
+                    profileAvatar.textContent = '';
+                    updateAllPostAvatars(savedAvatarUrl);
+                }
             }
         }
 
@@ -1562,73 +1638,145 @@
         function closeAvatarEdit() {
             const overlay = document.getElementById('avatarEditOverlay');
             overlay.style.display = 'none';
+            
+            // 重置表单
+            const fileInput = document.getElementById('avatarFileInput');
+            const saveBtn = document.getElementById('saveAvatarBtn');
+            const avatarPreview = document.getElementById('avatarPreview');
+            
+            fileInput.value = '';
+            saveBtn.disabled = true;
+            saveBtn.textContent = '上传';
+            avatarPreview.style.backgroundImage = 'none';
         }
 
-        async function saveAvatar() {
-            try {
-                const avatarUrlInput = document.getElementById('avatarUrlInput');
-                const avatarUrl = avatarUrlInput.value.trim();
+        // 预览选择的头像文件
+        function previewAvatar() {
+            const fileInput = document.getElementById('avatarFileInput');
+            const avatarPreview = document.getElementById('avatarPreview');
+            const saveBtn = document.getElementById('saveAvatarBtn');
+            
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
                 
-                if (!avatarUrl) {
-                    alert('请输入头像图片链接');
+                // 检查文件大小（5MB限制）
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('文件大小不能超过5MB，请选择较小的图片文件');
+                    fileInput.value = '';
+                    saveBtn.disabled = true;
                     return;
                 }
                 
-                // 更新头像预览
-                const avatarPreview = document.getElementById('avatarPreview');
-                const profileAvatar = document.getElementById('profileAvatar');
+                // 检查文件类型
+                const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+                if (!allowedTypes.includes(file.type)) {
+                    alert('不支持的文件格式，请选择PNG、JPG、JPEG、GIF或WebP格式的图片');
+                    fileInput.value = '';
+                    saveBtn.disabled = true;
+                    return;
+                }
                 
-                avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
-                profileAvatar.style.backgroundImage = `url('${avatarUrl}')`;
+                // 创建预览
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    avatarPreview.style.backgroundImage = `url('${e.target.result}')`;
+                    saveBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                avatarPreview.style.backgroundImage = 'none';
+                saveBtn.disabled = true;
+            }
+        }
+
+        // 上传头像文件
+        async function uploadAvatar() {
+            try {
+                const fileInput = document.getElementById('avatarFileInput');
+                const saveBtn = document.getElementById('saveAvatarBtn');
                 
-                // 保存到本地存储
-                localStorage.setItem(`avatar_${characterName}`, avatarUrl);
-                console.log('头像已保存到本地存储:', avatarUrl);
+                if (!fileInput.files || !fileInput.files[0]) {
+                    alert('请先选择一个图片文件');
+                    return;
+                }
                 
-                // 同步更新所有帖子中的头像
-                updateAllPostAvatars(avatarUrl);
+                const file = fileInput.files[0];
+                const formData = new FormData();
+                formData.append('avatar', file);
                 
-                // 这里可以添加保存到后端的逻辑
-                console.log('头像已更新:', avatarUrl);
+                // 更新按钮状态
+                saveBtn.disabled = true;
+                saveBtn.textContent = '上传中...';
                 
-                closeAvatarEdit();
-                alert('头像更新成功！已保存到本地，下次进入页面将自动加载。');
+                const response = await fetch(`/api/forum/avatar/upload/${characterName}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    console.log('头像上传成功:', data);
+                    
+                    // 重新加载头像设置以显示新头像
+                    await loadAvatarSettings();
+                    
+                    closeAvatarEdit();
+                    alert('头像上传成功！');
+                } else {
+                    throw new Error(data.error || '上传失败');
+                }
                 
             } catch (error) {
-                console.error('保存头像失败:', error);
-                alert('保存头像失败，请重试');
+                console.error('上传头像失败:', error);
+                alert(`上传头像失败：${error.message}`);
+            } finally {
+                const saveBtn = document.getElementById('saveAvatarBtn');
+                saveBtn.disabled = false;
+                saveBtn.textContent = '上传';
             }
         }
 
         // 清除头像函数
-        function clearAvatar() {
+        async function clearAvatar() {
             try {
-                // 清除本地存储
-                localStorage.removeItem(`avatar_${characterName}`);
-                console.log('已清除本地存储的头像');
+                if (!confirm('确定要删除头像吗？删除后无法恢复。')) {
+                    return;
+                }
                 
-                // 清除个人资料头像
-                const profileAvatar = document.getElementById('profileAvatar');
-                profileAvatar.style.backgroundImage = 'none';
-                profileAvatar.textContent = '{{ character_name[0] if character_name else "A" }}';
+                // 调用后端API删除头像文件
+                const response = await fetch(`/api/forum/avatar/${characterName}`, {
+                    method: 'DELETE'
+                });
                 
-                // 清除头像预览
-                const avatarPreview = document.getElementById('avatarPreview');
-                avatarPreview.style.backgroundImage = 'none';
-                
-                // 清除所有帖子头像
-                clearAllPostAvatars();
-                
-                // 清空输入框
-                const avatarUrlInput = document.getElementById('avatarUrlInput');
-                avatarUrlInput.value = '';
-                
-                closeAvatarEdit();
-                alert('头像已清除！');
+                if (response.ok) {
+                    console.log('头像删除成功');
+                    
+                    // 清除本地存储
+                    localStorage.removeItem(`avatar_${characterName}`);
+                    
+                    // 清除个人资料头像
+                    const profileAvatar = document.getElementById('profileAvatar');
+                    profileAvatar.style.backgroundImage = 'none';
+                    profileAvatar.textContent = '{{ character_name[0] if character_name else "A" }}';
+                    
+                    // 清除头像预览
+                    const avatarPreview = document.getElementById('avatarPreview');
+                    avatarPreview.style.backgroundImage = 'none';
+                    
+                    // 清除所有帖子头像
+                    clearAllPostAvatars();
+                    
+                    closeAvatarEdit();
+                    alert('头像已删除！');
+                } else {
+                    const data = await response.json();
+                    throw new Error(data.error || '删除失败');
+                }
                 
             } catch (error) {
-                console.error('清除头像失败:', error);
-                alert('清除头像失败，请重试');
+                console.error('删除头像失败:', error);
+                alert(`删除头像失败：${error.message}`);
             }
         }
 
@@ -1677,6 +1825,18 @@
                 alert(`删除失败: ${error.message}`);
             }
         }
+
+        // 法律声明折叠/展开功能
+        document.getElementById('toggleLegal').addEventListener('click', function() {
+            var content = document.getElementById('legalContent');
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                this.textContent = '隐藏法律声明';
+            } else {
+                content.style.display = 'none';
+                this.textContent = '显示法律声明';
+            }
+        });
     </script>
 </body>
 </html>

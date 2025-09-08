@@ -19,7 +19,7 @@
 # along with WeChatBot.  If not, see <http://www.gnu.org/licenses/>.
 # ***********************************************************************
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, Response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, Response, send_file
 import re
 import ast
 import os
@@ -37,16 +37,24 @@ import logging
 from queue import Queue, Empty
 import time
 import json
+from werkzeug.utils import secure_filename
+import uuid
+import base64
+import mimetypes
+from datetime import datetime
+import zipfile
 
 app = Flask(__name__)
 
 # ===== 统一的论坛数据目录 =====
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FORUM_DATA_DIR = os.path.join(BASE_DIR, 'forum_data')
+FORUM_AVATAR_DIR = os.path.join(FORUM_DATA_DIR, 'avatar')
 
 def _ensure_forum_dir_exists():
     try:
         os.makedirs(FORUM_DATA_DIR, exist_ok=True)
+        os.makedirs(FORUM_AVATAR_DIR, exist_ok=True)
     except Exception as e:
         try:
             app.logger.error(f"创建论坛数据目录失败: {e}")
@@ -57,6 +65,38 @@ def _ensure_forum_dir_exists():
 def _npc_config_file_path():
     _ensure_forum_dir_exists()
     return os.path.join(FORUM_DATA_DIR, 'npc_config.json')
+
+# ===== 头像文件处理函数 =====
+def get_prompt_filename_by_character(character_name):
+    """根据角色名获取对应的prompt文件名"""
+    # 在论坛系统中，character_name就是prompt文件名
+    # 因为LISTEN_LIST的结构是[微信名, prompt文件名]，
+    # 而character_name就是从LISTEN_LIST[1]（即prompt文件名）获取的
+    return character_name
+
+def get_avatar_filename(character_name, file_extension):
+    """生成头像文件名"""
+    prompt_filename = get_prompt_filename_by_character(character_name)
+    safe_filename = secure_filename(f"{prompt_filename}_avatar")
+    return f"{safe_filename}.{file_extension}"
+
+def allowed_avatar_file(filename):
+    """检查文件是否为允许的图片格式"""
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_avatar_file_path(character_name):
+    """获取头像文件路径"""
+    _ensure_forum_dir_exists()
+    prompt_filename = get_prompt_filename_by_character(character_name)
+    safe_filename = secure_filename(f"{prompt_filename}_avatar")
+    
+    # 查找现有的头像文件
+    for ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+        filepath = os.path.join(FORUM_AVATAR_DIR, f"{safe_filename}.{ext}")
+        if os.path.exists(filepath):
+            return filepath
+    return None
 
 def hide_api_key(api_key):
     """
@@ -378,7 +418,7 @@ def submit_config():
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
             'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
             'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY', 'ENABLE_FORUM_CUSTOM_MODEL',
-            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING',
+            'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING', 'SAVE_MEMORY_TO_SEPARATE_FILE',
             'ENABLE_TEXT_COMMANDS'
         ]
         for field in boolean_fields:
@@ -913,7 +953,7 @@ def index():
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
                 'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
                 'ENABLE_ASSISTANT_MODEL', 'USE_ASSISTANT_FOR_MEMORY_SUMMARY',
-                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING'
+                'IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE', 'ENABLE_SENSITIVE_CONTENT_CLEARING', 'SAVE_MEMORY_TO_SEPARATE_FILE'
             ]
             for field in boolean_fields_from_editor:
                  # 确保这些字段在表单中存在才处理，否则它们可能来自 quick_start
@@ -1303,6 +1343,305 @@ def import_config():
         app.logger.error(f"配置导入失败: {str(e)}")
         return jsonify({'error': f'导入失败: {str(e)}'}), 500
 
+def create_backup_directory():
+    """创建备份目录"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = os.path.join(BASE_DIR, "数据备份", f"{timestamp}_导入备份")
+    os.makedirs(backup_dir, exist_ok=True)
+    return backup_dir
+
+def backup_existing_data(backup_dir):
+    """备份现有数据到指定目录"""
+    backed_up_items = []
+    
+    try:
+        # 备份 prompts 文件夹
+        prompts_dir = os.path.join(BASE_DIR, 'prompts')
+        if os.path.exists(prompts_dir):
+            backup_prompts = os.path.join(backup_dir, 'prompts')
+            shutil.copytree(prompts_dir, backup_prompts)
+            backed_up_items.append('prompts文件夹')
+        
+        # 备份 emojis 文件夹
+        emojis_dir = os.path.join(BASE_DIR, 'emojis')
+        if os.path.exists(emojis_dir):
+            backup_emojis = os.path.join(backup_dir, 'emojis')
+            shutil.copytree(emojis_dir, backup_emojis)
+            backed_up_items.append('emojis文件夹')
+        
+        # 备份 forum_data 文件夹
+        forum_data_dir = FORUM_DATA_DIR
+        if os.path.exists(forum_data_dir):
+            backup_forum = os.path.join(backup_dir, 'forum_data')
+            shutil.copytree(forum_data_dir, backup_forum)
+            backed_up_items.append('forum_data文件夹')
+        
+        # 备份 CoreMemory 文件夹
+        config = parse_config()
+        core_memory_dir = os.path.join(BASE_DIR, config.get('CORE_MEMORY_DIR', 'CoreMemory'))
+        if os.path.exists(core_memory_dir):
+            backup_core = os.path.join(backup_dir, os.path.basename(core_memory_dir))
+            shutil.copytree(core_memory_dir, backup_core)
+            backed_up_items.append('CoreMemory文件夹')
+        
+        # 备份 recurring_reminders.json 文件
+        reminders_file = os.path.join(BASE_DIR, 'recurring_reminders.json')
+        if os.path.exists(reminders_file):
+            backup_reminders = os.path.join(backup_dir, 'recurring_reminders.json')
+            shutil.copy2(reminders_file, backup_reminders)
+            backed_up_items.append('recurring_reminders.json文件')
+        
+        # 备份 chat_contexts.json 文件
+        chat_contexts_file = os.path.join(BASE_DIR, 'chat_contexts.json')
+        if os.path.exists(chat_contexts_file):
+            backup_chat_contexts = os.path.join(backup_dir, 'chat_contexts.json')
+            shutil.copy2(chat_contexts_file, backup_chat_contexts)
+            backed_up_items.append('chat_contexts.json文件')
+        
+        # 备份 Memory_Temp 文件夹
+        config = parse_config()
+        memory_temp_dirname = config.get('MEMORY_TEMP_DIR', 'Memory_Temp')
+        memory_temp_dir = os.path.join(BASE_DIR, memory_temp_dirname)
+        if os.path.exists(memory_temp_dir):
+            backup_memory_temp = os.path.join(backup_dir, memory_temp_dirname)
+            shutil.copytree(memory_temp_dir, backup_memory_temp)
+            backed_up_items.append('Memory_Temp文件夹')
+        
+        # 备份 config.py 文件
+        config_file = os.path.join(BASE_DIR, 'config.py')
+        if os.path.exists(config_file):
+            backup_config = os.path.join(backup_dir, 'config.py')
+            shutil.copy2(config_file, backup_config)
+            backed_up_items.append('config.py文件')
+        
+        return backed_up_items
+    except Exception as e:
+        app.logger.error(f"备份数据失败: {str(e)}")
+        raise Exception(f"备份失败: {str(e)}")
+
+def import_directory_data(source_dir):
+    """从源目录导入数据"""
+    imported_items = []
+    
+    try:
+        # 导入 config.py 文件
+        source_config = os.path.join(source_dir, 'config.py')
+        if os.path.exists(source_config):
+            # 解析源配置文件
+            imported_config = {}
+            with open(source_config, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#') or not line:
+                        continue
+                    match = re.match(r'^(\w+)\s*=\s*(.+)$', line)
+                    if match:
+                        var_name = match.group(1)
+                        var_value_str = match.group(2)
+                        try:
+                            var_value = ast.literal_eval(var_value_str)
+                            imported_config[var_name] = var_value
+                        except:
+                            imported_config[var_name] = var_value_str
+            
+            # 获取当前配置并合并
+            current_config = parse_config()
+            for key, value in imported_config.items():
+                if key in current_config:  # 只更新当前配置中已存在的项
+                    current_config[key] = value
+            
+            # 更新配置文件
+            update_config(current_config)
+            imported_items.append(f'config.py文件（导入了{len(imported_config)}个参数）')
+        
+        # 导入 prompts 文件夹
+        source_prompts = os.path.join(source_dir, 'prompts')
+        if os.path.exists(source_prompts):
+            target_prompts = os.path.join(BASE_DIR, 'prompts')
+            if os.path.exists(target_prompts):
+                shutil.rmtree(target_prompts)
+            shutil.copytree(source_prompts, target_prompts)
+            imported_items.append('prompts文件夹')
+        
+        # 导入 emojis 文件夹
+        source_emojis = os.path.join(source_dir, 'emojis')
+        if os.path.exists(source_emojis):
+            target_emojis = os.path.join(BASE_DIR, 'emojis')
+            if os.path.exists(target_emojis):
+                shutil.rmtree(target_emojis)
+            shutil.copytree(source_emojis, target_emojis)
+            imported_items.append('emojis文件夹')
+        
+        # 导入 forum_data 文件夹
+        source_forum = os.path.join(source_dir, 'forum_data')
+        if os.path.exists(source_forum):
+            target_forum = FORUM_DATA_DIR
+            if os.path.exists(target_forum):
+                shutil.rmtree(target_forum)
+            shutil.copytree(source_forum, target_forum)
+            imported_items.append('forum_data文件夹')
+        
+        # 导入 CoreMemory 文件夹
+        config = parse_config()
+        core_memory_dirname = config.get('CORE_MEMORY_DIR', 'CoreMemory')
+        source_core = os.path.join(source_dir, core_memory_dirname)
+        if os.path.exists(source_core):
+            target_core = os.path.join(BASE_DIR, core_memory_dirname)
+            if os.path.exists(target_core):
+                shutil.rmtree(target_core)
+            shutil.copytree(source_core, target_core)
+            imported_items.append('CoreMemory文件夹')
+        
+        # 导入 recurring_reminders.json 文件
+        source_reminders = os.path.join(source_dir, 'recurring_reminders.json')
+        if os.path.exists(source_reminders):
+            target_reminders = os.path.join(BASE_DIR, 'recurring_reminders.json')
+            shutil.copy2(source_reminders, target_reminders)
+            imported_items.append('recurring_reminders.json文件')
+        
+        # 导入 chat_contexts.json 文件
+        source_chat_contexts = os.path.join(source_dir, 'chat_contexts.json')
+        if os.path.exists(source_chat_contexts):
+            target_chat_contexts = os.path.join(BASE_DIR, 'chat_contexts.json')
+            shutil.copy2(source_chat_contexts, target_chat_contexts)
+            imported_items.append('chat_contexts.json文件')
+        
+        # 导入 Memory_Temp 文件夹
+        config = parse_config()
+        memory_temp_dirname = config.get('MEMORY_TEMP_DIR', 'Memory_Temp')
+        source_memory_temp = os.path.join(source_dir, memory_temp_dirname)
+        if os.path.exists(source_memory_temp):
+            target_memory_temp = os.path.join(BASE_DIR, memory_temp_dirname)
+            if os.path.exists(target_memory_temp):
+                shutil.rmtree(target_memory_temp)
+            shutil.copytree(source_memory_temp, target_memory_temp)
+            imported_items.append('Memory_Temp文件夹')
+        
+        return imported_items
+    except Exception as e:
+        app.logger.error(f"导入目录数据失败: {str(e)}")
+        raise Exception(f"导入失败: {str(e)}")
+
+def import_files_data(files_dict):
+    """从上传的文件字典导入数据"""
+    imported_items = []
+    
+    try:
+        # 创建临时目录来重建文件结构
+        temp_dir = tempfile.mkdtemp()
+        
+        try:
+            # 重建文件结构
+            for relative_path, file_data in files_dict.items():
+                # 标准化路径分隔符
+                relative_path = relative_path.replace('\\', '/')
+                
+                # 处理路径，去除顶级目录（如果有的话）
+                path_parts = relative_path.split('/')
+                if len(path_parts) > 1:
+                    # 如果路径有多级，可能需要去除第一级目录
+                    relative_path = '/'.join(path_parts[1:]) if path_parts[0] and path_parts[0] != '.' else relative_path
+                
+                # 跳过空路径
+                if not relative_path:
+                    continue
+                
+                # 创建完整的文件路径
+                full_path = os.path.join(temp_dir, relative_path.replace('/', os.sep))
+                
+                # 确保目录存在
+                dir_path = os.path.dirname(full_path)
+                if dir_path and dir_path != temp_dir:
+                    os.makedirs(dir_path, exist_ok=True)
+                
+                # 保存文件
+                file_data.save(full_path)
+                
+                app.logger.debug(f"保存文件: {relative_path} -> {full_path}")
+            
+            # 使用现有的导入函数
+            imported_items = import_directory_data(temp_dir)
+            
+            return imported_items
+            
+        finally:
+            # 清理临时目录
+            try:
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+                
+    except Exception as e:
+        app.logger.error(f"导入文件数据失败: {str(e)}")
+        raise Exception(f"导入失败: {str(e)}")
+
+@app.route('/import_full_directory', methods=['POST'])
+@login_required
+def import_full_directory():
+    """导入完整的旧版本程序目录"""
+    global bot_process
+    
+    # 如果 bot 正在运行，则不允许导入
+    if bot_process and bot_process.poll() is None:
+        return jsonify({'error': '程序正在运行，请先停止再导入数据'}), 400
+
+    try:
+        # 检查是否上传了文件
+        if 'directory_files' not in request.files:
+            return jsonify({'error': '未找到上传的目录文件'}), 400
+            
+        uploaded_files = request.files.getlist('directory_files')
+        if not uploaded_files:
+            return jsonify({'error': '未找到任何文件'}), 400
+        
+        # 检查是否包含config.py文件
+        config_found = False
+        files_dict = {}
+        
+        for file in uploaded_files:
+            if file.filename:
+                # 获取相对路径（webkitRelativePath）
+                relative_path = file.filename
+                files_dict[relative_path] = file
+                
+                # 检查是否有config.py
+                if file.filename.endswith('config.py') or file.filename == 'config.py':
+                    config_found = True
+        
+        if not config_found:
+            return jsonify({'error': '选择的目录中没有找到config.py文件'}), 400
+        
+        # 创建备份目录
+        backup_dir = create_backup_directory()
+        
+        # 备份现有数据
+        backed_up_items = backup_existing_data(backup_dir)
+        
+        # 导入新数据
+        imported_items = import_files_data(files_dict)
+        
+        # 构建结果消息
+        message = f"完整目录导入成功！\n"
+        message += f"共处理了 {len(uploaded_files)} 个文件\n"
+        if backed_up_items:
+            message += f"已备份的数据: {', '.join(backed_up_items)}\n"
+        if imported_items:
+            message += f"已导入的数据: {', '.join(imported_items)}\n"
+        message += f"备份位置: {backup_dir}"
+        
+        return jsonify({
+            'success': True, 
+            'message': message,
+            'backed_up_items': backed_up_items,
+            'imported_items': imported_items,
+            'backup_location': backup_dir,
+            'files_count': len(uploaded_files)
+        }), 200
+                
+    except Exception as e:
+        app.logger.error(f"完整目录导入失败: {str(e)}")
+        return jsonify({'error': f'导入失败: {str(e)}'}), 500
+
 @app.route('/reset_default_config', methods=['POST'])
 @login_required
 def reset_default_config():
@@ -1645,6 +1984,171 @@ def get_npc_settings():
     except Exception as e:
         app.logger.error(f"获取NPC配置失败: {e}")
         return jsonify({'error': f'获取失败: {str(e)}'}), 500
+
+# 核心记忆管理API
+@app.route('/api/get_core_memory_files', methods=['GET'])
+@login_required
+def get_core_memory_files():
+    """获取核心记忆文件列表"""
+    try:
+        # 从配置中获取核心记忆目录
+        config = parse_config()
+        core_memory_dir = os.path.join(os.path.dirname(__file__), config.get('CORE_MEMORY_DIR', 'CoreMemory'))
+        
+        # 确保目录存在
+        os.makedirs(core_memory_dir, exist_ok=True)
+        
+        files = []
+        if os.path.exists(core_memory_dir):
+            for filename in os.listdir(core_memory_dir):
+                if filename.endswith('_core_memory.json'):
+                    file_path = os.path.join(core_memory_dir, filename)
+                    try:
+                        # 读取文件获取记忆片段数量
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            memories = json.load(f)
+                        
+                        memory_count = len(memories) if isinstance(memories, list) else 0
+                        
+                        # 获取文件修改时间
+                        mtime = os.path.getmtime(file_path)
+                        last_modified = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
+                        
+                        # 从文件名提取显示名称
+                        display_name = filename.replace('_core_memory.json', '').replace('_', ' - ')
+                        
+                        files.append({
+                            'filename': filename,
+                            'display_name': display_name,
+                            'memory_count': memory_count,
+                            'last_modified': last_modified
+                        })
+                    except Exception as e:
+                        app.logger.warning(f"读取核心记忆文件 {filename} 失败: {e}")
+                        continue
+        
+        # 按修改时间倒序排列
+        files.sort(key=lambda x: x['last_modified'], reverse=True)
+        
+        return jsonify({'status': 'success', 'files': files})
+        
+    except Exception as e:
+        app.logger.error(f"获取核心记忆文件列表失败: {e}")
+        return jsonify({'status': 'error', 'message': f'获取失败: {str(e)}'}), 500
+
+@app.route('/api/get_core_memory/<filename>', methods=['GET'])
+@login_required  
+def get_core_memory(filename):
+    """获取指定核心记忆文件的内容"""
+    try:
+        # 验证文件名安全性
+        if not filename.endswith('_core_memory.json'):
+            return jsonify({'status': 'error', 'error': '无效的文件名'}), 400
+            
+        config = parse_config()
+        core_memory_dir = os.path.join(os.path.dirname(__file__), config.get('CORE_MEMORY_DIR', 'CoreMemory'))
+        file_path = os.path.join(core_memory_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({'status': 'error', 'error': '文件不存在'}), 404
+        
+        # 读取记忆文件
+        with open(file_path, 'r', encoding='utf-8') as f:
+            memories = json.load(f)
+        
+        # 确保返回的是列表格式
+        if not isinstance(memories, list):
+            memories = []
+        
+        # 字段名兼容性处理：处理旧版本的time字段，统一使用timestamp字段
+        for memory in memories:
+            if isinstance(memory, dict):
+                # 如果有旧版本的time字段但没有timestamp字段，则将time转换为timestamp
+                if 'time' in memory and 'timestamp' not in memory:
+                    memory['timestamp'] = memory['time']
+                    del memory['time']  # 删除旧字段，避免冗余
+            
+        return jsonify({'status': 'success', 'memories': memories})
+        
+    except Exception as e:
+        app.logger.error(f"获取核心记忆文件 {filename} 失败: {e}")
+        return jsonify({'status': 'error', 'error': f'读取失败: {str(e)}'}), 500
+
+@app.route('/api/save_core_memory/<filename>', methods=['POST'])
+@login_required
+def save_core_memory(filename):
+    """保存核心记忆到指定文件"""
+    try:
+        # 验证文件名安全性
+        if not filename.endswith('_core_memory.json'):
+            return jsonify({'status': 'error', 'message': '无效的文件名'}), 400
+            
+        data = request.json
+        memories = data.get('memories', [])
+        
+        # 验证数据格式
+        if not isinstance(memories, list):
+            return jsonify({'status': 'error', 'message': '记忆数据必须是数组格式'}), 400
+        
+        # 验证每个记忆片段的格式
+        for i, memory in enumerate(memories):
+            if not isinstance(memory, dict):
+                return jsonify({'status': 'error', 'message': f'第{i+1}个记忆片段格式错误'}), 400
+            
+            # 字段名兼容性检查：支持time字段，但统一转换为timestamp
+            if 'time' in memory and 'timestamp' not in memory:
+                memory['timestamp'] = memory['time']
+                del memory['time']  # 删除旧字段，避免冗余
+            
+            # 验证必要字段
+            if 'timestamp' not in memory or 'importance' not in memory or 'summary' not in memory:
+                return jsonify({'status': 'error', 'message': f'第{i+1}个记忆片段缺少必要字段(timestamp、importance、summary)'}), 400
+                
+            if not isinstance(memory['importance'], int) or not (1 <= memory['importance'] <= 10):
+                return jsonify({'status': 'error', 'message': f'第{i+1}个记忆片段的重要度必须是1-10的整数'}), 400
+        
+        config = parse_config()
+        core_memory_dir = os.path.join(os.path.dirname(__file__), config.get('CORE_MEMORY_DIR', 'CoreMemory'))
+        os.makedirs(core_memory_dir, exist_ok=True)
+        
+        file_path = os.path.join(core_memory_dir, filename)
+        
+        # 保存记忆文件
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(memories, f, ensure_ascii=False, indent=2)
+        
+        app.logger.info(f"已保存核心记忆文件: {filename}")
+        return jsonify({'status': 'success', 'message': '核心记忆已保存'})
+        
+    except Exception as e:
+        app.logger.error(f"保存核心记忆文件 {filename} 失败: {e}")
+        return jsonify({'status': 'error', 'message': f'保存失败: {str(e)}'}), 500
+
+@app.route('/api/delete_core_memory/<filename>', methods=['DELETE'])
+@login_required
+def delete_core_memory(filename):
+    """删除核心记忆文件"""
+    try:
+        # 验证文件名安全性
+        if not filename.endswith('_core_memory.json'):
+            return jsonify({'status': 'error', 'message': '无效的文件名'}), 400
+            
+        config = parse_config()
+        core_memory_dir = os.path.join(os.path.dirname(__file__), config.get('CORE_MEMORY_DIR', 'CoreMemory'))
+        file_path = os.path.join(core_memory_dir, filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({'status': 'error', 'message': '文件不存在'}), 404
+        
+        # 删除文件
+        os.remove(file_path)
+        
+        app.logger.info(f"已删除核心记忆文件: {filename}")
+        return jsonify({'status': 'success', 'message': '核心记忆文件已删除'})
+        
+    except Exception as e:
+        app.logger.error(f"删除核心记忆文件 {filename} 失败: {e}")
+        return jsonify({'status': 'error', 'message': f'删除失败: {str(e)}'}), 500
 
 def run_bat_file():
     bat_file_path = "一键检测.bat"
@@ -2579,6 +3083,105 @@ def delete_likes_feed_item(character_name, item_id):
         app.logger.error(f"删除喜欢Feed项失败: {e}")
         return jsonify({'error': f'删除失败: {str(e)}'}), 500
 
+# ===== 头像管理API =====
+@app.route('/api/forum/avatar/upload/<character_name>', methods=['POST'])
+@login_required
+def upload_avatar(character_name):
+    """上传角色头像"""
+    try:
+        # 验证角色名
+        config = parse_config()
+        listen_list = config.get('LISTEN_LIST', [])
+        character_found = False
+        for item in listen_list:
+            if len(item) >= 2 and item[1] == character_name:
+                character_found = True
+                break
+        
+        if not character_found:
+            return jsonify({'error': '角色不存在'}), 404
+        
+        if 'avatar' not in request.files:
+            return jsonify({'error': '没有上传文件'}), 400
+        
+        file = request.files['avatar']
+        if file.filename == '':
+            return jsonify({'error': '没有选择文件'}), 400
+        
+        if not allowed_avatar_file(file.filename):
+            return jsonify({'error': '不支持的文件格式，请上传PNG、JPG、JPEG、GIF或WebP格式的图片'}), 400
+        
+        # 删除旧的头像文件
+        old_avatar_path = get_avatar_file_path(character_name)
+        if old_avatar_path and os.path.exists(old_avatar_path):
+            try:
+                os.remove(old_avatar_path)
+                app.logger.info(f"删除旧头像文件: {old_avatar_path}")
+            except Exception as e:
+                app.logger.warning(f"删除旧头像文件失败: {e}")
+        
+        # 保存新的头像文件
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = get_avatar_filename(character_name, file_extension)
+        filepath = os.path.join(FORUM_AVATAR_DIR, filename)
+        
+        file.save(filepath)
+        app.logger.info(f"头像上传成功: {filepath}")
+        
+        return jsonify({
+            'message': '头像上传成功',
+            'filename': filename
+        })
+    
+    except Exception as e:
+        app.logger.error(f"头像上传失败: {e}")
+        return jsonify({'error': f'上传失败: {str(e)}'}), 500
+
+@app.route('/api/forum/avatar/<character_name>')
+@login_required
+def get_avatar(character_name):
+    """获取角色头像"""
+    try:
+        avatar_path = get_avatar_file_path(character_name)
+        if not avatar_path:
+            return jsonify({'error': '头像不存在'}), 404
+        
+        return send_file(avatar_path)
+    
+    except Exception as e:
+        app.logger.error(f"获取头像失败: {e}")
+        return jsonify({'error': f'获取失败: {str(e)}'}), 500
+
+@app.route('/api/forum/avatar/<character_name>', methods=['DELETE'])
+@login_required
+def delete_avatar(character_name):
+    """删除角色头像"""
+    try:
+        # 验证角色名
+        config = parse_config()
+        listen_list = config.get('LISTEN_LIST', [])
+        character_found = False
+        for item in listen_list:
+            if len(item) >= 2 and item[1] == character_name:
+                character_found = True
+                break
+        
+        if not character_found:
+            return jsonify({'error': '角色不存在'}), 404
+        
+        avatar_path = get_avatar_file_path(character_name)
+        if not avatar_path:
+            return jsonify({'error': '头像不存在'}), 404
+        
+        os.remove(avatar_path)
+        app.logger.info(f"头像删除成功: {avatar_path}")
+        
+        return jsonify({'message': '头像删除成功'})
+    
+    except Exception as e:
+        app.logger.error(f"头像删除失败: {e}")
+        return jsonify({'error': f'删除失败: {str(e)}'}), 500
+
 def add_forum_post(character_name, content):
     """添加新的论坛帖子"""
     try:
@@ -2983,11 +3586,10 @@ def get_default_config():
         "ASSISTANT_MAX_TOKEN": 1000,
         "USE_ASSISTANT_FOR_MEMORY_SUMMARY": False,
         "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": False,
-        "ENABLE_SENSITIVE_CONTENT_CLEARING": True
-        ,
-        # 新增：文字指令识别功能开关
+        "ENABLE_SENSITIVE_CONTENT_CLEARING": True,
+        "SAVE_MEMORY_TO_SEPARATE_FILE": True,
+        "CORE_MEMORY_DIR": 'CoreMemory',
         "ENABLE_TEXT_COMMANDS": True,
-        # 论坛自定义模型（可选）
         "ENABLE_FORUM_CUSTOM_MODEL": False,
         "FORUM_BASE_URL": 'https://vg.v1api.cc/v1',
         "FORUM_MODEL": '',

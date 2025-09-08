@@ -18,7 +18,6 @@ from datetime import datetime
 import datetime as dt
 import threading
 import time
-from wxautox_wechatbot import WeChat
 from openai import OpenAI
 import random
 from typing import Optional
@@ -32,10 +31,17 @@ from threading import Timer
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import os
-os.environ["PROJECT_NAME"] = 'iwyxdxl/WeChatBot_WXAUTO_SE'
-from wxautox_wechatbot.param import WxParam
-WxParam.ENABLE_FILE_LOGGER = False
-WxParam.FORCE_MESSAGE_XBIAS = True
+try:
+    from wxautox_wechatbot import WeChat
+    from wxautox_wechatbot.param import WxParam
+    WxParam.ENABLE_FILE_LOGGER = False
+    WxParam.FORCE_MESSAGE_XBIAS = True
+    os.environ["PROJECT_NAME"] = 'iwyxdxl/WeChatBot_WXAUTO_SE'
+except ImportError:
+    try:
+        from wxautox import WeChat
+    except ImportError:
+        from wxauto import WeChat
 
 # 生成用户昵称列表和prompt映射字典
 user_names = [entry[0] for entry in LISTEN_LIST]
@@ -445,6 +451,10 @@ emoji_timer_lock = threading.Lock()
 can_send_messages = True
 is_sending_message = False
 
+# 用于拍一拍功能的全局变量
+user_last_msg = {}  # {user_id: msg对象} 存储每个用户最后发送的消息对象
+bot_last_sent_msg = {}  # {user_id: wx.GetLastMessage()} 存储机器人发送给每个用户的最后一条消息
+
 # --- 定时重启相关全局变量 ---
 program_start_time = 0.0 # 程序启动时间戳
 last_received_message_timestamp = 0.0 # 最后一次活动（收到/处理消息）的时间戳
@@ -720,13 +730,31 @@ def get_user_prompt(user_id):
     
     if prompt_content is None:
         raise FileNotFoundError(f"无法读取Prompt文件内容: {prompt_path}")
-        
-    if UPLOAD_MEMORY_TO_AI:
-        return prompt_content
-    else:
+    
+    # 处理记忆的上传
+    if not get_dynamic_config('UPLOAD_MEMORY_TO_AI', UPLOAD_MEMORY_TO_AI):
+        # 如果不上传记忆到AI，则移除所有记忆片段
         memory_marker = "## 记忆片段"
         if memory_marker in prompt_content:
             prompt_content = prompt_content.split(memory_marker, 1)[0].strip()
+        return prompt_content
+    
+    # 上传记忆到AI时，需要合并prompt文件中的记忆和JSON文件中的记忆
+    json_memories = load_core_memory_from_json(user_id)
+    json_memory_content = format_json_memories_for_prompt(json_memories)
+    
+    # 如果有JSON记忆需要添加
+    if json_memory_content:
+        # 找到prompt内容的结尾，添加JSON记忆
+        if prompt_content.endswith('\n'):
+            combined_content = prompt_content + '\n' + json_memory_content
+        else:
+            combined_content = prompt_content + '\n\n' + json_memory_content
+        
+        logger.debug(f"为用户 {user_id} 合并了 {len(json_memories)} 条JSON记忆到prompt中")
+        return combined_content
+    else:
+        # 没有JSON记忆，直接返回原始prompt内容
         return prompt_content
              
 # 加载聊天上下文
@@ -938,7 +966,7 @@ def call_chat_api_with_retry(messages_to_send, user_id, max_retries=2, is_summar
                     logger.error(f"完整响应对象: {response}")
                 else:
                     content = message_content.strip()
-                    if content and "[image]" not in content:
+                    if content and "[image]" not in content and content != "ext":
                         filtered_content = strip_before_thought_tags(content)
                         if filtered_content:
                             return filtered_content
@@ -1165,10 +1193,22 @@ def message_listener(msg, chat):
     msgattr = msg.attr
     logger.info(f'收到来自聊天窗口 "{who}" 中用户 "{sender}" 的原始消息 (类型: {msgtype}, 属性: {msgattr}): {original_content[:100]}')
 
-    if msgattr != 'friend': 
+    if msgattr == 'tickle':
+        if "我拍了拍" in original_content:
+            logger.info("检测到自己触发的拍一拍，已忽略。")
+            return
+        else:
+            original_content = f"[收到拍一拍消息]：{original_content}"
+    elif msgattr == 'self':
+        # 保存机器人自己发送的消息，用于拍一拍自己功能
+        global bot_last_sent_msg
+        bot_last_sent_msg[who] = msg
+        logger.debug(f"已保存机器人发送给 {who} 的最后消息对象")
+        return  # 不处理机器人自己的消息
+    elif msgattr != 'friend':
         logger.info(f"非好友消息，已忽略。")
         return
-    
+
     if msgtype == 'voice':
         voicetext = msg.to_text()
         original_content = (f"[语音消息]: {voicetext}")
@@ -1339,6 +1379,13 @@ def message_listener(msg, chat):
     if should_process_this_message:
         msg.content = content_for_handler 
         logger.info(f'最终准备处理消息 from chat "{who}" by sender "{sender}": {msg.content[:100]}')
+        
+        # 保存用户最后发送的消息对象，用于拍一拍功能
+        global user_last_msg
+        if not is_user_group_chat(who):  # 只在个人聊天中保存用户消息
+            user_last_msg[who] = msg
+            logger.debug(f"已保存用户 {who} 的最后消息对象")
+        
         if msgtype == 'emotion':
             is_animation_emoji_in_original = True
         else:
@@ -1511,7 +1558,9 @@ def log_user_message_to_memory(username, original_content):
     if ENABLE_MEMORY:
         try:
             prompt_name = prompt_mapping.get(username, username)
-            log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{username}_{prompt_name}_log.txt')
+            safe_username = sanitize_user_id_for_filename(username)
+            safe_prompt_name = sanitize_user_id_for_filename(prompt_name)
+            log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{safe_username}_{safe_prompt_name}_log.txt')
             log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{username}] {original_content}\n"
             os.makedirs(os.path.dirname(log_file), exist_ok=True)
             
@@ -1613,6 +1662,7 @@ def _handle_text_command_if_any(original_content: str, user_id: str) -> bool:
     /清除临时记忆 或 /cl - 清除当前聊天的临时上下文与记忆
     /允许语音通话 或 /ev - 允许使用语音通话提醒
     /禁止语音通话 或 /dv - 禁止使用语音通话提醒
+    /总结 或 /ms - 立即进行一次临时记忆总结成记忆片段
     """
     try:
         # 动态检查文本命令开关
@@ -1670,6 +1720,26 @@ def _handle_text_command_if_any(original_content: str, user_id: str) -> bool:
             reply_text = '已禁止使用语音通话提醒。' if ok else '操作失败，请稍后再试。'
             command_label = '[命令]/禁止语音通话' if normalized == '/禁止语音通话' else '[命令]/dv'
             send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+            return True
+
+        if normalized == '/总结' or normalized == '/ms':
+            try:
+                # 立即进行一次临时记忆总结，无论ENABLE_MEMORY是否启用
+                reply_text = '正在进行记忆总结，请稍后...'
+                command_label = '[命令]/总结' if normalized == '/总结' else '[命令]/ms'
+                send_reply(user_id, user_id, user_id, command_label, reply_text, is_system_message=True)
+                
+                # 调用记忆总结功能，跳过记忆条目检查
+                summarize_and_save(user_id, skip_check=True)
+                
+                # 发送完成消息
+                success_text = '记忆总结已完成，记忆片段已保存。'
+                send_reply(user_id, user_id, user_id, command_label, success_text, is_system_message=True)
+                
+            except Exception as e:
+                logger.error(f"执行记忆总结失败: {e}")
+                error_text = '记忆总结失败，请稍后再试。'
+                send_reply(user_id, user_id, user_id, command_label, error_text, is_system_message=True)
             return True
 
         # 未匹配命令
@@ -2004,8 +2074,18 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply, i
             is_sending_message = False
             return
 
-        # --- 构建消息队列（文本+表情随机插入）---
-        message_actions = [('text', part) for part in parts]
+        # --- 构建消息队列（文本+表情+拍一拍随机插入）---
+        message_actions = []
+        for part in parts:
+            if part == '[tickle]':
+                message_actions.append(('tickle', part))
+            elif part == '[tickle_self]':
+                message_actions.append(('tickle_self', part))
+            elif part == '[recall]':
+                message_actions.append(('recall', part))
+            else:
+                message_actions.append(('text', part))
+        
         if emoji_path:
             # 随机选择插入位置（0到len(message_actions)之间，包含末尾）
             insert_pos = random.randint(0, len(message_actions))
@@ -2034,6 +2114,45 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply, i
                     logger.error(f"表情包发送失败，已重试3次")
                 else:
                     time.sleep(random.uniform(0.5, 1.5))  # 表情包发送后随机延迟
+            elif action_type == 'tickle':
+                # 处理[tickle] - 拍一拍用户
+                try:
+                    global user_last_msg
+                    if user_id in user_last_msg and user_last_msg[user_id]:
+                        user_last_msg[user_id].tickle()
+                        logger.info(f"已拍一拍用户 {user_id}")
+                    else:
+                        logger.warning(f"无法拍一拍用户 {user_id}，找不到用户最后发送的消息")
+                except Exception as e:
+                    logger.error(f"拍一拍用户失败: {str(e)}")
+                time.sleep(random.uniform(2.0, 3.0))  # 拍一拍后延迟
+            elif action_type == 'tickle_self':
+                # 处理[tickle_self] - 拍一拍机器人自己的消息
+                try:
+                    global bot_last_sent_msg
+                    if bot_last_sent_msg and user_id in bot_last_sent_msg and bot_last_sent_msg[user_id]:
+                        bot_last_sent_msg[user_id].tickle()
+                        logger.info(f"已拍一拍机器人发送给 {user_id} 的消息")
+                    else:
+                        logger.warning(f"无法拍一拍机器人发送给 {user_id} 的消息，找不到最后发送的消息")
+                except Exception as e:
+                    logger.error(f"拍一拍机器人消息失败: {str(e)}")
+                time.sleep(random.uniform(2.0, 3.0))  # 拍一拍后延迟
+            elif action_type == 'recall':
+                # 处理[recall] - 撤回机器人上一条消息
+                try:
+                    if bot_last_sent_msg and user_id in bot_last_sent_msg and bot_last_sent_msg[user_id]:
+                        # 延时确保撤回最新消息
+                        time.sleep(random.uniform(3.0, 5.0))
+                        bot_last_sent_msg[user_id].select_option('撤回')
+                        logger.info(f"已撤回机器人发送给 {user_id} 的上一条消息")
+                        # 撤回后清除记录的消息对象，避免重复撤回
+                        bot_last_sent_msg[user_id] = None
+                    else:
+                        logger.warning(f"无法撤回机器人发送给 {user_id} 的消息，找不到最后发送的消息")
+                except Exception as e:
+                    logger.error(f"撤回机器人消息失败: {str(e)}")
+                time.sleep(random.uniform(2.0, 3.0))  # 撤回后延迟
             else:
                 # 文本消息发送三次重试
                 success = False
@@ -2076,92 +2195,109 @@ def send_reply(user_id, sender_name, username, original_merged_message, reply, i
 
 def split_message_with_context(text):
     """
-    将消息文本分割为多个部分，处理换行符、转义字符和$符号。
+    将消息文本分割为多个部分，处理换行符、转义字符、$符号和[tickle]/[tickle_self]/[recall]标记。
     处理文本中的换行符和转义字符，并根据配置决定是否分割。
     无论配置如何，都会以$作为分隔符分割消息。
+    特别支持[tickle]、[tickle_self]和[recall]作为独立消息分隔。
     
     特别说明：
     - 每个$都会作为独立分隔符，所以"Hello$World$Python"会分成三部分
     - 连续的$$会产生空部分，这些会被自动跳过
+    - [tickle]、[tickle_self]和[recall]会被分隔成独立的消息段
     """
     result_parts = []
     
-    # 首先用$符号分割文本（无论SEPARATE_ROW_SYMBOLS设置如何）
-    # 这会处理多个$的情况，每个$都作为分隔符
-    dollar_parts = re.split(r'\$', text)
+    # 首先处理[tickle]、[tickle_self]和[recall]标记，将其分隔成独立部分
+    # 使用正则表达式分割，保留分隔符
+    tickle_pattern = r'(\[tickle\]|\[tickle_self\]|\[recall\])'
+    tickle_parts = re.split(tickle_pattern, text)
     
-    # 对每个由$分割的部分应用原有的分隔逻辑
-    for dollar_part in dollar_parts:
-        # 跳过空的部分（比如连续的$$之间没有内容的情况）
-        if not dollar_part.strip():
+    # 对每个tickle分割的部分进行处理
+    for tickle_part in tickle_parts:
+        if not tickle_part:
             continue
             
-        # 应用原有的分隔逻辑
-        if SEPARATE_ROW_SYMBOLS:
-            main_parts = re.split(r'(?:\\{3,}|\n)', dollar_part)
-        else:
-            main_parts = re.split(r'\\{3,}', dollar_part)
-            
-        for part in main_parts:
-            part = part.strip()
-            if not part:
+        # 如果是tickle或recall标记，直接添加为独立部分
+        if tickle_part in ['[tickle]', '[tickle_self]', '[recall]']:
+            result_parts.append(tickle_part)
+            continue
+        
+        # 对于非tickle标记的部分，继续应用原有的分隔逻辑
+        # 首先用$符号分割文本（无论SEPARATE_ROW_SYMBOLS设置如何）
+        dollar_parts = re.split(r'\$', tickle_part)
+        
+        # 对每个由$分割的部分应用原有的分隔逻辑
+        for dollar_part in dollar_parts:
+            # 跳过空的部分（比如连续的$$之间没有内容的情况）
+            if not dollar_part.strip():
                 continue
-            segments = []
-            last_end = 0
-            for match in re.finditer(r'\\', part):
-                pos = match.start()
-                should_split_at_current_pos = False
-                advance_by = 1
-                if pos + 1 < len(part) and part[pos + 1] == 'n':
-                    should_split_at_current_pos = True
-                    advance_by = 2
-                else:
-                    prev_char = part[pos - 1] if pos > 0 else ''
-                    is_last_char_in_part = (pos == len(part) - 1)
-                    next_char = ''
-                    if not is_last_char_in_part:
-                        next_char = part[pos + 1]
-                    if not is_last_char_in_part and \
-                       re.match(r'[a-zA-Z0-9]', next_char) and \
-                       (re.match(r'[a-zA-Z0-9]', prev_char) if prev_char else True):
+                
+            # 应用原有的分隔逻辑
+            if SEPARATE_ROW_SYMBOLS:
+                main_parts = re.split(r'(?:\\{3,}|\n)', dollar_part)
+            else:
+                main_parts = re.split(r'\\{3,}', dollar_part)
+                
+            for part in main_parts:
+                part = part.strip()
+                if not part:
+                    continue
+                segments = []
+                last_end = 0
+                for match in re.finditer(r'\\', part):
+                    pos = match.start()
+                    should_split_at_current_pos = False
+                    advance_by = 1
+                    if pos + 1 < len(part) and part[pos + 1] == 'n':
                         should_split_at_current_pos = True
+                        advance_by = 2
                     else:
-                        is_in_emoticon = False
-                        i = pos - 1
-                        while i >= 0 and i > pos - 10:
-                            if part[i] in '({[（【｛':
-                                is_in_emoticon = True
-                                break
-                            if part[i].isalnum() and i < pos - 1:
-                                break
-                            i -= 1
-                        if not is_last_char_in_part and not is_in_emoticon:
-                            _found_forward_emoticon_char = False
-                            j = pos + 1
-                            while j < len(part) and j < pos + 10:
-                                if part[j] in ')}]）】｝':
-                                    _found_forward_emoticon_char = True
-                                    break
-                                if part[j].isalnum() and j > pos + 1:
-                                    break
-                                j += 1
-                            if _found_forward_emoticon_char:
-                                is_in_emoticon = True
-                        if not is_in_emoticon:
+                        prev_char = part[pos - 1] if pos > 0 else ''
+                        is_last_char_in_part = (pos == len(part) - 1)
+                        next_char = ''
+                        if not is_last_char_in_part:
+                            next_char = part[pos + 1]
+                        if not is_last_char_in_part and \
+                           re.match(r'[a-zA-Z0-9]', next_char) and \
+                           (re.match(r'[a-zA-Z0-9]', prev_char) if prev_char else True):
                             should_split_at_current_pos = True
-                if should_split_at_current_pos:
-                    segment_to_add = part[last_end:pos].strip()
-                    if segment_to_add:
-                        segments.append(segment_to_add)
-                    last_end = pos + advance_by
-            if last_end < len(part):
-                final_segment = part[last_end:].strip()
-                if final_segment:
-                    segments.append(final_segment)
-            if segments:
-                result_parts.extend(segments)
-            elif not segments and part:
-                result_parts.append(part)
+                        else:
+                            is_in_emoticon = False
+                            i = pos - 1
+                            while i >= 0 and i > pos - 10:
+                                if part[i] in '({[（【｛':
+                                    is_in_emoticon = True
+                                    break
+                                if part[i].isalnum() and i < pos - 1:
+                                    break
+                                i -= 1
+                            if not is_last_char_in_part and not is_in_emoticon:
+                                _found_forward_emoticon_char = False
+                                j = pos + 1
+                                while j < len(part) and j < pos + 10:
+                                    if part[j] in ')}]）】｝':
+                                        _found_forward_emoticon_char = True
+                                        break
+                                    if part[j].isalnum() and j > pos + 1:
+                                        break
+                                    j += 1
+                                if _found_forward_emoticon_char:
+                                    is_in_emoticon = True
+                            if not is_in_emoticon:
+                                should_split_at_current_pos = True
+                    if should_split_at_current_pos:
+                        segment_to_add = part[last_end:pos].strip()
+                        if segment_to_add:
+                            segments.append(segment_to_add)
+                        last_end = pos + advance_by
+                if last_end < len(part):
+                    final_segment = part[last_end:].strip()
+                    if final_segment:
+                        segments.append(final_segment)
+                if segments:
+                    result_parts.extend(segments)
+                elif not segments and part:
+                    result_parts.append(part)
                 
     return [p for p in result_parts if p]
 
@@ -2310,15 +2446,193 @@ def is_quiet_time():
         return current_time >= quiet_time_start or current_time <= quiet_time_end
 
 # 记忆管理功能
+def sanitize_user_id_for_filename(user_id):
+    """将user_id转换为安全的文件名，支持中文字符"""
+    import re
+    import string
+    
+    # 如果输入为空或None，返回默认值
+    if not user_id:
+        return "default_user"
+    
+    # 移除或替换危险字符，但保留中文字符
+    # 危险字符：路径分隔符、控制字符、特殊符号等
+    dangerous_chars = r'[<>:"/\\|?*\x00-\x1f\x7f]'
+    safe_name = re.sub(dangerous_chars, '_', user_id)
+    
+    # 移除开头和结尾的空格和点
+    safe_name = safe_name.strip(' .')
+    
+    # 确保不是Windows保留名称
+    windows_reserved = {
+        'CON', 'PRN', 'AUX', 'NUL',
+        'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+        'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+    }
+    if safe_name.upper() in windows_reserved:
+        safe_name = f"user_{safe_name}"
+    
+    # 如果结果为空，使用默认值
+    if not safe_name:
+        safe_name = "default_user"
+    
+    # 限制长度，避免文件名过长
+    if len(safe_name) > 100:  # 保守的长度限制
+        # 尝试保留中文字符的完整性
+        safe_name = safe_name[:100]
+        # 确保不在中文字符中间截断
+        if len(safe_name.encode('utf-8')) > len(safe_name):
+            # 有中文字符，更保守地截断
+            safe_name = safe_name[:50]
+    
+    return safe_name
+
+def get_core_memory_file_path(user_id):
+    """获取核心记忆JSON文件的路径"""
+    safe_user_id = sanitize_user_id_for_filename(user_id)
+    prompt_name = prompt_mapping.get(user_id, user_id)
+    safe_prompt_name = sanitize_user_id_for_filename(prompt_name)
+    core_memory_dir = os.path.join(root_dir, CORE_MEMORY_DIR)
+    os.makedirs(core_memory_dir, exist_ok=True)
+    return os.path.join(core_memory_dir, f'{safe_user_id}_{safe_prompt_name}_core_memory.json')
+
+def load_core_memory_from_json(user_id):
+    """从JSON文件加载核心记忆"""
+    memory_file = get_core_memory_file_path(user_id)
+    memories = []
+    try:
+        if os.path.exists(memory_file):
+            with open(memory_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    memories = data
+                    logger.debug(f"从JSON文件加载了 {len(memories)} 条核心记忆，用户: {user_id}")
+                else:
+                    logger.warning(f"核心记忆文件格式不正确，用户: {user_id}")
+        else:
+            logger.debug(f"核心记忆文件不存在，用户: {user_id}")
+    except Exception as e:
+        logger.error(f"加载核心记忆JSON文件失败，用户: {user_id}: {e}")
+    return memories
+
+def save_core_memory_to_json(user_id, memories):
+    """将核心记忆保存到JSON文件"""
+    memory_file = get_core_memory_file_path(user_id)
+    temp_file = memory_file + '.tmp'
+    try:
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(memories, f, ensure_ascii=False, indent=2)
+        shutil.move(temp_file, memory_file)
+        logger.info(f"成功保存 {len(memories)} 条核心记忆到JSON文件，用户: {user_id}")
+    except Exception as e:
+        logger.error(f"保存核心记忆JSON文件失败，用户: {user_id}: {e}")
+        if os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except OSError:
+                pass
+
+def add_memory_to_json(user_id, timestamp, summary, importance):
+    """向JSON文件添加一条新记忆"""
+    memories = load_core_memory_from_json(user_id)
+    new_memory = {
+        "timestamp": timestamp,
+        "summary": summary,
+        "importance": importance
+    }
+    memories.append(new_memory)
+    
+    # 如果超出最大数量，进行淘汰
+    if len(memories) > MAX_MEMORY_NUMBER:
+        memories = cleanup_json_memories(memories)
+    
+    save_core_memory_to_json(user_id, memories)
+
+def cleanup_json_memories(memories):
+    """对JSON格式的记忆进行淘汰处理"""
+    if len(memories) <= MAX_MEMORY_NUMBER:
+        return memories
+    
+    now = datetime.now()
+    memory_scores = []
+    
+    for memory in memories:
+        try:
+            timestamp = memory.get('timestamp', '')
+            importance = memory.get('importance', 3)
+            
+            # 尝试解析时间戳
+            parsed_time = None
+            formats = [
+                "%Y-%m-%d %A %H:%M:%S",
+                "%Y-%m-%d %A %H:%M",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M"
+            ]
+            
+            for fmt in formats:
+                try:
+                    parsed_time = datetime.strptime(timestamp, fmt)
+                    break
+                except ValueError:
+                    continue
+            
+            if parsed_time:
+                time_diff = (now - parsed_time).total_seconds()
+            else:
+                logger.warning(f"无法解析JSON记忆时间戳: {timestamp}")
+                time_diff = 0
+            
+            # 计算评分：0.6 * 重要度 - 0.4 * (时间差小时数)
+            score = 0.6 * importance - 0.4 * (time_diff / 3600)
+            memory_scores.append(score)
+            
+        except Exception as e:
+            logger.warning(f"处理JSON记忆项时出错: {e}")
+            memory_scores.append(0)  # 默认分数
+    
+    # 获取保留索引（按分数降序，时间升序）
+    sorted_indices = sorted(range(len(memory_scores)), 
+                          key=lambda k: (-memory_scores[k], memories[k].get('timestamp', '')))
+    keep_indices = set(sorted_indices[:MAX_MEMORY_NUMBER])
+    
+    # 保留高分记忆
+    cleaned_memories = [memories[i] for i in sorted(keep_indices)]
+    logger.info(f"JSON记忆淘汰：从 {len(memories)} 条清理为 {len(cleaned_memories)} 条")
+    
+    return cleaned_memories
+
+def format_json_memories_for_prompt(memories):
+    """将JSON格式的记忆转换为prompt格式"""
+    if not memories:
+        return ""
+    
+    formatted_lines = []
+    for memory in memories:
+        timestamp = memory.get('timestamp', '')
+        summary = memory.get('summary', '')
+        importance = memory.get('importance', 3)
+        
+        formatted_lines.append(f"""## 记忆片段 [{timestamp}]
+**重要度**: {importance}
+**摘要**: {summary}
+
+""")
+    
+    return ''.join(formatted_lines)
+
 def append_to_memory_section(user_id, content):
     """将内容追加到用户prompt文件的记忆部分"""
     try:
         prompts_dir = os.path.join(root_dir, 'prompts')
-        user_file = os.path.join(prompts_dir, f'{user_id}.md')
+        # 注意：这里应该使用prompt_name而不是user_id作为文件名
+        prompt_name = prompt_mapping.get(user_id, user_id)
+        safe_prompt_name = sanitize_user_id_for_filename(prompt_name)
+        user_file = os.path.join(prompts_dir, f'{safe_prompt_name}.md')
         
         # 确保用户文件存在
         if not os.path.exists(user_file):
-            raise FileNotFoundError(f"用户文件 {user_id}.md 不存在")
+            raise FileNotFoundError(f"用户文件 {safe_prompt_name}.md 不存在")
 
         # 读取并处理文件内容
         with open(user_file, 'r+', encoding='utf-8') as file:
@@ -2355,15 +2669,22 @@ def append_to_memory_section(user_id, content):
         logger.error(f"文件未找到: {str(e)}")
         raise
 
-def summarize_and_save(user_id):
-    """总结聊天记录并存储记忆"""
+def summarize_and_save(user_id, skip_check=False):
+    """总结聊天记录并存储记忆
+    
+    Args:
+        user_id: 用户ID
+        skip_check: 是否跳过记忆条目数量检查，用于手动触发的总结命令
+    """
     log_file = None
     temp_file = None
     backup_file = None
     try:
         # --- 前置检查 ---
         prompt_name = prompt_mapping.get(user_id, user_id)  # 获取配置的prompt名
-        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_{prompt_name}_log.txt')
+        safe_user_id = sanitize_user_id_for_filename(user_id)
+        safe_prompt_name = sanitize_user_id_for_filename(prompt_name)
+        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{safe_user_id}_{safe_prompt_name}_log.txt')
         if not os.path.exists(log_file):
             logger.warning(f"日志文件不存在: {log_file}")
             return
@@ -2410,8 +2731,8 @@ def summarize_and_save(user_id):
             logger.error(f"读取日志文件时发生未知错误: {log_file}, 错误: {e}")
             return
             
-        # 修改检查条件：仅检查是否达到最小处理阈值
-        if len(logs) < MAX_MESSAGE_LOG_ENTRIES:
+        # 修改检查条件：仅检查是否达到最小处理阈值（除非跳过检查）
+        if not skip_check and len(logs) < MAX_MESSAGE_LOG_ENTRIES:
             logger.info(f"日志条目不足（{len(logs)}条），未触发记忆总结。")
             return
 
@@ -2458,42 +2779,50 @@ def summarize_and_save(user_id):
         # --- 存储记忆 ---
         current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M")
         
-        # 修正1：增加末尾换行
-        memory_entry = f"""## 记忆片段 [{current_time}]
+        # 根据配置选择存储方式
+        if get_dynamic_config('SAVE_MEMORY_TO_SEPARATE_FILE', SAVE_MEMORY_TO_SEPARATE_FILE):
+            # 保存到JSON文件
+            logger.info(f"将记忆保存到JSON文件，用户: {user_id}")
+            add_memory_to_json(user_id, current_time, summary, importance)
+        else:
+            # 保存到prompt文件
+            logger.info(f"将记忆保存到prompt文件，用户: {user_id}")
+            # 修正1：增加末尾换行
+            memory_entry = f"""## 记忆片段 [{current_time}]
 **重要度**: {importance}
 **摘要**: {summary}
 
 """  # 注意这里有两个换行
 
-        prompt_name = prompt_mapping.get(user_id, user_id)
-        prompts_dir = os.path.join(root_dir, 'prompts')
-        os.makedirs(prompts_dir, exist_ok=True)
+            prompt_name = prompt_mapping.get(user_id, user_id)
+            prompts_dir = os.path.join(root_dir, 'prompts')
+            os.makedirs(prompts_dir, exist_ok=True)
 
-        user_prompt_file = os.path.join(prompts_dir, f'{prompt_name}.md')
-        temp_file = f"{user_prompt_file}.tmp"
-        backup_file = f"{user_prompt_file}.bak"
+            user_prompt_file = os.path.join(prompts_dir, f'{prompt_name}.md')
+            temp_file = f"{user_prompt_file}.tmp"
+            backup_file = f"{user_prompt_file}.bak"
 
-        try:
-            with open(temp_file, 'w', encoding='utf-8') as f:
+            try:
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    if os.path.exists(user_prompt_file):
+                        with open(user_prompt_file, 'r', encoding='utf-8') as src:
+                            f.write(src.read().rstrip() + '\n\n')  # 修正2：规范化原有内容结尾
+                
+                    # 写入预格式化的内容
+                    f.write(memory_entry)  # 不再重复生成字段
+
+                # 步骤2：备份原文件
                 if os.path.exists(user_prompt_file):
-                    with open(user_prompt_file, 'r', encoding='utf-8') as src:
-                        f.write(src.read().rstrip() + '\n\n')  # 修正2：规范化原有内容结尾
-            
-                # 写入预格式化的内容
-                f.write(memory_entry)  # 不再重复生成字段
+                    shutil.copyfile(user_prompt_file, backup_file)
 
-            # 步骤2：备份原文件
-            if os.path.exists(user_prompt_file):
-                shutil.copyfile(user_prompt_file, backup_file)
+                # 步骤3：替换文件
+                shutil.move(temp_file, user_prompt_file)
 
-            # 步骤3：替换文件
-            shutil.move(temp_file, user_prompt_file)
-
-        except Exception as e:
-            # 异常恢复流程
-            if os.path.exists(backup_file):
-                shutil.move(backup_file, user_prompt_file)
-            raise
+            except Exception as e:
+                # 异常恢复流程
+                if os.path.exists(backup_file):
+                    shutil.move(backup_file, user_prompt_file)
+                raise
 
         # --- 清理日志 ---
         with open(log_file, 'w', encoding='utf-8') as f:
@@ -2520,9 +2849,8 @@ def memory_manager():
                 log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user}_{prompt_name}_log.txt')
                 
                 try:
-                    prompt_name = prompt_mapping.get(user, user)  # 获取配置的文件名，没有则用昵称
-                    user_prompt_file = os.path.join(root_dir, 'prompts', f'{prompt_name}.md')
-                    manage_memory_capacity(user_prompt_file)
+                    # 根据配置调用对应的记忆容量管理函数
+                    manage_user_memory_capacity(user)
                 except UnicodeDecodeError as ude:
                     logger.error(f"用户 {user} 的记忆文件编码异常: {str(ude)}")
                     logger.info(f"跳过用户 {user} 的内存管理，等待下一轮检查")
@@ -2566,7 +2894,7 @@ def memory_manager():
             time.sleep(60)  # 每分钟检查一次
 
 def manage_memory_capacity(user_file):
-    """记忆淘汰机制"""
+    """记忆淘汰机制 - 处理prompt文件中的记忆清理"""
     # 允许重要度缺失（使用可选捕获组）
     MEMORY_SEGMENT_PATTERN = r'## 记忆片段 \[(.*?)\]\n(?:\*{2}重要度\*{2}: (\d*)\n)?\*{2}摘要\*{2}:(.*?)(?=\n## 记忆片段 |\Z)'
     try:
@@ -2679,17 +3007,45 @@ def manage_memory_capacity(user_file):
             f.write(''.join(new_content).strip())
         
         shutil.move(f"{user_file}.tmp", user_file)
-        logger.info(f"成功清理记忆")
+        logger.info(f"成功清理prompt文件中的记忆")
 
     except Exception as e:
         logger.error(f"记忆整理失败: {str(e)}")
+
+def manage_core_memory_capacity(user_id):
+    """管理JSON文件中的核心记忆容量"""
+    try:
+        memories = load_core_memory_from_json(user_id)
+        if len(memories) > MAX_MEMORY_NUMBER:
+            logger.info(f"用户 {user_id} 的JSON记忆超过容量限制，开始清理")
+            cleaned_memories = cleanup_json_memories(memories)
+            save_core_memory_to_json(user_id, cleaned_memories)
+            logger.info(f"用户 {user_id} 的JSON记忆清理完成")
+    except Exception as e:
+        logger.error(f"管理用户 {user_id} 的JSON记忆容量失败: {e}")
+
+def manage_user_memory_capacity(user):
+    """根据配置管理用户的记忆容量（prompt文件或JSON文件）"""
+    try:
+        if get_dynamic_config('SAVE_MEMORY_TO_SEPARATE_FILE', SAVE_MEMORY_TO_SEPARATE_FILE):
+            # 清理JSON文件中的记忆
+            manage_core_memory_capacity(user)
+        else:
+            # 清理prompt文件中的记忆
+            prompt_name = prompt_mapping.get(user, user)
+            user_prompt_file = os.path.join(root_dir, 'prompts', f'{prompt_name}.md')
+            manage_memory_capacity(user_prompt_file)
+    except Exception as e:
+        logger.error(f"管理用户 {user} 记忆容量失败: {e}")
 
 def clear_memory_temp_files(user_id):
     """清除指定用户的Memory_Temp文件"""
     try:
         logger.warning(f"已开启自动清除Memory_Temp文件功能，尝试清除用户 {user_id} 的Memory_Temp文件")
         prompt_name = prompt_mapping.get(user_id, user_id)
-        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_{prompt_name}_log.txt')
+        safe_user_id = sanitize_user_id_for_filename(user_id)
+        safe_prompt_name = sanitize_user_id_for_filename(prompt_name)
+        log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{safe_user_id}_{safe_prompt_name}_log.txt')
         if os.path.exists(log_file):
             os.remove(log_file)
             logger.warning(f"已清除用户 {user_id} 的Memory_Temp文件: {log_file}")
@@ -3062,8 +3418,10 @@ def log_original_message_to_memory(user_id, message_content):
         try:
             # 获取用户对应的 prompt 文件名（或用户昵称）
             prompt_name = prompt_mapping.get(user_id, user_id)
+            safe_user_id = sanitize_user_id_for_filename(user_id)
+            safe_prompt_name = sanitize_user_id_for_filename(prompt_name)
             # 构建日志文件路径
-            log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{user_id}_{prompt_name}_log.txt')
+            log_file = os.path.join(root_dir, MEMORY_TEMP_DIR, f'{safe_user_id}_{safe_prompt_name}_log.txt')
             # 准备日志条目，记录原始用户消息
             log_entry = f"{datetime.now().strftime('%Y-%m-%d %A %H:%M:%S')} | [{user_id}] {message_content}\n"
             # 确保目录存在
@@ -3809,6 +4167,10 @@ def main():
         # 确保临时目录存在
         memory_temp_dir = os.path.join(root_dir, MEMORY_TEMP_DIR)
         os.makedirs(memory_temp_dir, exist_ok=True)
+        
+        # 确保核心记忆目录存在（当启用单独文件存储时使用）
+        core_memory_dir = os.path.join(root_dir, CORE_MEMORY_DIR)
+        os.makedirs(core_memory_dir, exist_ok=True)
 
         # 加载聊天上下文
         logger.info("正在加载聊天上下文...")
