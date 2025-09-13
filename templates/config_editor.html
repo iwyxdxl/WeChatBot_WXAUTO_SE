@@ -1073,6 +1073,64 @@
             // 基于已知域名模式的快速检查
             return url.includes('v1api.cc') || url.includes('v1chat.cc') || url.includes('a3e.top') || url.includes('littlewheat.com') || url.includes('vg.') || url.includes('weapi');
         }
+
+        // 全局变量存储动态获取的weapi模型列表
+        let weapiModelList = null;
+        
+        // 默认的weapi模型列表（作为备用）
+        const defaultWeapiModels = [
+            { value: "deepseek-ai/DeepSeek-V3", text: "DeepSeek V3 (1226版本)" },
+            { value: "deepseek-v3-0324", text: "DeepSeek V3 (0324版本，推荐)" },
+            { value: "gemini-2.0-flash-exp", text: "Gemini 2.0 Flash (推荐)" },     
+            { value: "gemini-2.5-pro", text: "Gemini 2.5 Pro * (推荐，体验感更好)" },
+            { value: "gemini-2.5-pro-exp-03-25", text: "Gemini 2.5 Pro * (0325版本)" },
+            { value: "claude-3-7-sonnet-20250219", text: "Claude 3.7 Sonnet * (20250219版本，推荐)" },
+            { value: "claude-sonnet-4-20250514", text: "Claude Sonnet 4 * (20250514版本)" },
+            { value: "doubao-pro-256k-241115", text: "豆包 Pro (241115版本)" },
+            { value: "deepseek-ai/DeepSeek-R1", text: "DeepSeek R1" },
+            { value: "claude-3-5-sonnet-20241022", text: "Claude 3.5 Sonnet (20241022版本)" },
+            { value: "claude-3-5-haiku-20241022", text: "Claude 3.5 Haiku (20241022版本)" },
+            { value: "gemini-2.0-flash-thinking-exp-1219", text: "Gemini 2.0 Flash (1219版本)" },
+            { value: "gemini-2.5-flash", text: "Gemini 2.5 Flash" },                     
+            { value: "gpt-5", text: "GPT-5 *" },
+            { value: "o4-mini", text: "o4-mini" },
+            { value: "gpt-4o", text: "GPT-4o" },
+            { value: "gpt-4.1", text: "GPT-4.1" },
+            { value: "gpt-4o-mini", text: "GPT-4o-mini" },
+            { value: "gpt-4.1-mini", text: "GPT-4.1-mini" },   
+            { value: "other", text: "其它" }
+        ];
+
+        // 动态获取weapi模型列表
+        async function fetchWeapiModels() {
+            try {
+                const response = await fetch('https://vg.v1api.cc/weapi_models', {
+                    method: 'GET',
+                    timeout: 5000
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const models = await response.json();
+                // 添加"其它"选项
+                models.push({ value: "other", text: "其它" });
+                
+                weapiModelList = models;
+                console.log('Successfully fetched weapi models:', models.length, 'models');
+                return models;
+            } catch (error) {
+                console.warn('Failed to fetch weapi models:', error);
+                weapiModelList = defaultWeapiModels;
+                return defaultWeapiModels;
+            }
+        }
+
+        // 获取weapi模型列表（优先使用已缓存的）
+        function getWeapiModels() {
+            return weapiModelList || defaultWeapiModels;
+        }
         
         // 设置API Key输入字段的交互逻辑
         function setupApiKeyInputs() {
@@ -1161,6 +1219,18 @@
         document.addEventListener('DOMContentLoaded', function () {
             // 初始化时检测WeAPIs节点
             updateWeAPIsUrls();
+            
+            // 动态获取weapi模型列表
+            fetchWeapiModels().then(() => {
+                console.log('Weapi models loaded, updating model options...');
+                // 重新更新模型选项以使用最新的模型列表
+                if (typeof updateModelOptions === 'function') {
+                    updateModelOptions();
+                }
+                if (typeof updateForumModelOptions === 'function') {
+                    updateForumModelOptions();
+                }
+            });
             
             // 处理API Key输入字段的交互
             setupApiKeyInputs();
@@ -1313,28 +1383,8 @@
                         { value: "other", text: "其它" }
                     ];
                 } else if (isWeAPIsUrlSync(apiUrl)) {
-                    options = [
-                        { value: "deepseek-ai/DeepSeek-V3", text: "DeepSeek V3 (1226版本)" },
-                        { value: "deepseek-v3-0324", text: "DeepSeek V3 (0324版本，推荐)" },
-                        { value: "gemini-2.0-flash-exp", text: "Gemini 2.0 Flash (推荐)" },     
-                        { value: "gemini-2.5-pro", text: "Gemini 2.5 Pro * (推荐，体验感更好)" },
-                        { value: "gemini-2.5-pro-exp-03-25", text: "Gemini 2.5 Pro * (0325版本)" },
-                        { value: "claude-3-7-sonnet-20250219", text: "Claude 3.7 Sonnet * (20250219版本，推荐)" },
-                        { value: "claude-sonnet-4-20250514", text: "Claude Sonnet 4 * (20250514版本)" },
-                        { value: "doubao-pro-256k-241115", text: "豆包 Pro (241115版本)" },
-                        { value: "deepseek-ai/DeepSeek-R1", text: "DeepSeek R1" },
-                        { value: "claude-3-5-sonnet-20241022", text: "Claude 3.5 Sonnet (20241022版本)" },
-                        { value: "claude-3-5-haiku-20241022", text: "Claude 3.5 Haiku (20241022版本)" },
-                        { value: "gemini-2.0-flash-thinking-exp-1219", text: "Gemini 2.0 Flash (1219版本)" },
-                        { value: "gemini-2.5-flash", text: "Gemini 2.5 Flash" },                     
-                        { value: "gpt-5", text: "GPT-5 *" },
-                        { value: "o4-mini", text: "o4-mini" },
-                        { value: "gpt-4o", text: "GPT-4o" },
-                        { value: "gpt-4.1", text: "GPT-4.1" },
-                        { value: "gpt-4o-mini", text: "GPT-4o-mini" },
-                        { value: "gpt-4.1-mini", text: "GPT-4.1-mini" },   
-                        { value: "other", text: "其它" }
-                    ];
+                    // 使用动态获取的weapi模型列表
+                    options = getWeapiModels();
                 } else {
                     options = [ { value: "other", text: "其它" } ];
                 }
@@ -1677,18 +1727,8 @@
                         { value: 'other', text: '其它' }
                     ];
                 } else if (apiUrl && isWeAPIsUrlSync(apiUrl)) {
-                    options = [
-                        { value: 'deepseek-ai/DeepSeek-V3', text: 'DeepSeek V3 (1226版本)' },
-                        { value: 'deepseek-v3-0324', text: 'DeepSeek V3 (0324版本)' },
-                        { value: 'claude-3-7-sonnet-20250219', text: 'Claude 3.7 Sonnet * (20250219版本)' },
-                        { value: 'gemini-2.5-pro', text: 'Gemini 2.5 Pro *' },
-                        { value: 'deepseek-ai/DeepSeek-R1', text: 'DeepSeek R1' },
-                        { value: 'gpt-5', text: 'GPT-5 *' },
-                        { value: 'o4-mini', text: 'o4-mini' },
-                        { value: 'gpt-4o', text: 'GPT-4o' },
-                        { value: 'gpt-4o-mini', text: 'GPT-4o-mini' },
-                        { value: 'other', text: '其它' }
-                    ];
+                    // 使用动态获取的weapi模型列表
+                    options = getWeapiModels();
                 } else {
                     options = [ { value: 'other', text: '其它' } ];
                 }
@@ -3496,7 +3536,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.24 beta2</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.24</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>

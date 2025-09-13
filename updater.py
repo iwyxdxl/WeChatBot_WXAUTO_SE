@@ -38,13 +38,13 @@ logger = logging.getLogger(__name__)
 
 class Updater:
     # GitHub仓库信息
-    REPO_OWNER = "iwyxdxl"
+    REPO_OWNER = "onebai123"
     REPO_NAME = "WeChatBot_WXAUTO_SE"
     REPO_BRANCH = "main"
     GITHUB_API = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
     
     # Gitee备选源
-    GITEE_REPO_OWNER = "iwyxdxl"
+    GITEE_REPO_OWNER = "onebai123"
     GITEE_REPO_NAME = "WeChatBot_WXAUTO_SE"
     GITEE_API = f"https://gitee.com/api/v5/repos/{GITEE_REPO_OWNER}/{GITEE_REPO_NAME}"
     
