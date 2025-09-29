@@ -1,0 +1,120 @@
+{
+  "user_list": [
+    {
+      "nickname": "盛夏",
+      "prompt_file": "哥哥哥哥哥哥哥哥哥"
+    }
+  ],
+  "prompt_list": [
+    "1",
+    "xyz",
+    "哥哥哥哥哥哥哥哥哥",
+    "群聊总结官",
+    "角色1",
+    "角色2",
+    "高冷群聊总结助手"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "2000",
+    "temperature": "2.0",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "盛夏",
+    "MODEL": "gemini-2.5-pro-free",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 2.0,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_API_KEY": "",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": false,
+    "ENABLE_EMOJI_RECOGNITION": false,
+    "MOONSHOT_MODEL": "gpt-4o",
+    "MOONSHOT_API_KEY": "",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": false,
+    "EMOJI_SENDING_PROBABILITY": 5,
+    "EMOJI_DIR": "emojis",
+    "emoji_tag_max_length": 10,
+    "ENABLE_GROUP_AT_REPLY": false,
+    "ENABLE_GROUP_KEYWORD_REPLY": false,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "ENABLE_GROUP_SUMMARY": true,
+    "SUMMARY_TIME_RANGE": "thisweek",
+    "SUMMARY_TIME": "19:46",
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 0,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_MEMORY": false,
+    "UPLOAD_MEMORY_TO_AI": false,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 120,
+    "MAX_MEMORY_NUMBER": 100,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 20,
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "如果用户跟你道别了睡着了，就模拟#主动消息里的内容进行互动，可以表达思念，问她在干什么，注意不要总是重复。如果用户在和你互动，你就继续推动剧情。",
+    "MIN_COUNTDOWN_HOURS": 1.0,
+    "MAX_COUNTDOWN_HOURS": 5.0,
+    "QUIET_TIME_START": "22:00",
+    "QUIET_TIME_END": "8:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 12.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "520",
+    "PORT": 5000,
+    "prompt_file": "哥哥哥哥哥哥哥哥哥",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "group_name": "盛夏",
+    "group_prompt": "1",
+    "LISTEN_LIST": [
+      [
+        "盛夏",
+        "哥哥哥哥哥哥哥哥哥"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://8.137.155.88:5000",
+    "server_ip": "8_137_155_88",
+    "timestamp": "2025-09-29 04:40:14",
+    "test_mode": false,
+    "prompt_download_results": {
+      "1": true,
+      "xyz": true,
+      "哥哥哥哥哥哥哥哥哥": true,
+      "群聊总结官": true,
+      "角色1": true,
+      "角色2": true,
+      "高冷群聊总结助手": true
+    },
+    "memory_download_results": {
+      "盛夏": true
+    },
+    "reminders_download_success": true
+  }
+}

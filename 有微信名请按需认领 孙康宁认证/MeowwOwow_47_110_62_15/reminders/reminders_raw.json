@@ -1,0 +1,14 @@
+[
+  {
+    "content": "喊小我起床",
+    "reminder_type": "recurring",
+    "time_str": "07:00",
+    "user_id": "MeowwOwow"
+  },
+  {
+    "content": "提醒小我睡觉",
+    "reminder_type": "recurring",
+    "time_str": "22:30",
+    "user_id": "MeowwOwow"
+  }
+]

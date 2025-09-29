@@ -1,0 +1,89 @@
+{
+  "user_list": [
+    {
+      "nickname": "脆脆薯饼",
+      "prompt_file": "白白"
+    }
+  ],
+  "prompt_list": [
+    "白白",
+    "角色2"
+  ],
+  "chat_model_config": {
+    "api_provider": "硅基流动",
+    "max_token": "2000",
+    "temperature": "0.9"
+  },
+  "form_parameters": {
+    "nickname": "脆脆薯饼",
+    "MODEL": "Pro/deepseek-ai/DeepSeek-V3",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 0.9,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "moonshot-v1-128k-vision-preview",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": true,
+    "ONLINE_MODEL": "deepseek-r1-searching",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询特定人物的最新动态,歌词,游戏等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 26,
+    "EMOJI_DIR": "emojis2",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 7,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 35,
+    "MAX_MEMORY_NUMBER": 55,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 5,
+    "ENABLE_AUTO_MESSAGE": false,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么",
+    "MIN_COUNTDOWN_HOURS": 1.0,
+    "MAX_COUNTDOWN_HOURS": 2.0,
+    "QUIET_TIME_START": "22:00",
+    "QUIET_TIME_END": "8:00",
+    "ENABLE_REMINDERS": false,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_SCHEDULED_RESTART": true,
+    "RESTART_INTERVAL_HOURS": 5.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "白白",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "脆脆薯饼",
+        "白白"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://8.148.66.94:5000",
+    "server_ip": "8_148_66_94",
+    "timestamp": "2025-09-29 04:43:00",
+    "test_mode": false,
+    "prompt_download_results": {
+      "白白": true,
+      "角色2": true
+    },
+    "memory_download_results": {
+      "脆脆薯饼": false
+    },
+    "reminders_download_success": true
+  }
+}

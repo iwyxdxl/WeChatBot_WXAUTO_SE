@@ -1,0 +1,20 @@
+[
+  {
+    "content": "准备休息啦",
+    "reminder_type": "recurring",
+    "time_str": "22:00",
+    "user_id": "女朋友^"
+  },
+  {
+    "content": "又在熬夜？",
+    "reminder_type": "recurring",
+    "time_str": "23:00",
+    "user_id": "女朋友^"
+  },
+  {
+    "content": "自律的一天~",
+    "reminder_type": "recurring",
+    "time_str": "07:00",
+    "user_id": "女朋友^"
+  }
+]

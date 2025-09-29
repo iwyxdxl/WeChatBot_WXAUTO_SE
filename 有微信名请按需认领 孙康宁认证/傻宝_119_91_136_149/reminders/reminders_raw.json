@@ -1,0 +1,14 @@
+[
+  {
+    "content": "说早安",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "Aaannnyl"
+  },
+  {
+    "content": "说晚安，说点情话或者励志文学",
+    "reminder_type": "recurring",
+    "time_str": "22:00",
+    "user_id": "Aaannnyl"
+  }
+]

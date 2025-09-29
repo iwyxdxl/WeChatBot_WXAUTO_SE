@@ -1,0 +1,116 @@
+{
+  "user_list": [
+    {
+      "nickname": "Zzzenzen",
+      "prompt_file": "大胆想法的提示词__ー___"
+    }
+  ],
+  "prompt_list": [
+    "intent_analyzer",
+    "memory_update_prompt",
+    "test",
+    "大世界小安",
+    "大胆想法的提示词__ー___"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "10000",
+    "temperature": "1.1",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "Zzzenzen",
+    "MODEL": "gemini-2.5-pro-f",
+    "MAX_TOKEN": 10000,
+    "TEMPERATURE": 1.1,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gemini-2.5-pro",
+    "ASSISTANT_MAX_TOKEN": 3000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gemini-2.5-pro",
+    "MOONSHOT_TEMPERATURE": 0.4,
+    "ENABLE_ONLINE_API": true,
+    "ONLINE_MODEL": "gemini-2.5-pro",
+    "ONLINE_API_TEMPERATURE": 0.4,
+    "ONLINE_API_MAX_TOKEN": 10000,
+    "SEARCH_DETECTION_PROMPT": "",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_INTENT_ANALYSIS": false,
+    "ENABLE_EMOJI_SENDING": false,
+    "EMOJI_SENDING_PROBABILITY": 0,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "糖彻",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": false,
+    "AVERAGE_TYPING_SPEED": 0.1,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 6,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": false,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_MESSAGE_LOG_ENTRIES": 500,
+    "MAX_MEMORY_NUMBER": 500000,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 30,
+    "ENABLE_AUTO_MESSAGE": false,
+    "AUTO_MESSAGE": "(推进世界至当前时间点）",
+    "MIN_COUNTDOWN_HOURS": 0.2,
+    "MAX_COUNTDOWN_HOURS": 1.0,
+    "QUIET_TIME_START": "00:30",
+    "QUIET_TIME_END": "6:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": true,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_PERIOD_TRACKING": true,
+    "LAST_STATUS_UPDATE_DATE": "2024-01-01",
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 8.0,
+    "RESTART_INACTIVITY_MINUTES": 120,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "大胆想法的提示词__ー___",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_ASSISTANT_BASE_URL": "other",
+    "temp_IMAGE_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "DEFAULT_INTENT_ON_FAILURE": "social_chat",
+    "DEFAULT_STANCE_ON_FAILURE": "partner",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "CURRENT_PERIOD_STATUS": "auto",
+    "LISTEN_LIST": [
+      [
+        "Zzzenzen",
+        "大胆想法的提示词__ー___"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://47.122.55.24:5000",
+    "server_ip": "47_122_55_24",
+    "timestamp": "2025-09-29 04:36:42",
+    "test_mode": false,
+    "prompt_download_results": {
+      "intent_analyzer": true,
+      "memory_update_prompt": true,
+      "test": true,
+      "大世界小安": true,
+      "大胆想法的提示词__ー___": true
+    },
+    "memory_download_results": {
+      "Zzzenzen": false
+    },
+    "reminders_download_success": true
+  }
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "content": "起床时间",
+    "reminder_type": "recurring",
+    "user_id": "春和景明",
+    "timestamp": "2025-09-29 04:32:39",
+    "time_str": "05:45",
+    "raw_data": {
+      "content": "起床时间",
+      "reminder_type": "recurring",
+      "time_str": "05:45",
+      "user_id": "春和景明"
+    }
+  }
+]

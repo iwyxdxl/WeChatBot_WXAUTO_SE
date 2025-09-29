@@ -1,0 +1,15 @@
+[
+  {
+    "content": "半年纪念日",
+    "reminder_type": "one-off",
+    "user_id": "宝宝",
+    "timestamp": "2025-09-29 04:33:25",
+    "target_datetime_str": "2026-03-27 09:00",
+    "raw_data": {
+      "content": "半年纪念日",
+      "reminder_type": "one-off",
+      "target_datetime_str": "2026-03-27 09:00",
+      "user_id": "宝宝"
+    }
+  }
+]

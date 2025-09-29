@@ -1,0 +1,14 @@
+[
+  {
+    "content": "睡觉睡觉睡觉!",
+    "reminder_type": "recurring",
+    "time_str": "01:00",
+    "user_id": "神奇海螺在哪里"
+  },
+  {
+    "content": "起床起床起床！",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "神奇海螺在哪里"
+  }
+]

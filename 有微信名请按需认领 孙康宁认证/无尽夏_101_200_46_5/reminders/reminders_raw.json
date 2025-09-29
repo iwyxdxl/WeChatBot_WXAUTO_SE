@@ -1,0 +1,14 @@
+[
+  {
+    "content": "睡觉",
+    "reminder_type": "recurring",
+    "time_str": "23:00",
+    "user_id": "无尽夏"
+  },
+  {
+    "content": "下班",
+    "reminder_type": "recurring",
+    "time_str": "18:05",
+    "user_id": "无尽夏"
+  }
+]

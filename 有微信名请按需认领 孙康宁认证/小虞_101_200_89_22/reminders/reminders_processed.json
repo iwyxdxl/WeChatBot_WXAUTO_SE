@@ -1,0 +1,15 @@
+[
+  {
+    "content": "吃药",
+    "reminder_type": "recurring",
+    "user_id": "小虞",
+    "timestamp": "2025-09-29 04:23:12",
+    "time_str": "12:00",
+    "raw_data": {
+      "content": "吃药",
+      "reminder_type": "recurring",
+      "time_str": "12:00",
+      "user_id": "小虞"
+    }
+  }
+]

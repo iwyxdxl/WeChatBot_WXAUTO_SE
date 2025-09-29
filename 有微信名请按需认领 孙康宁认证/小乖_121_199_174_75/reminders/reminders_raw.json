@@ -1,0 +1,20 @@
+[
+  {
+    "content": "跟我道早安",
+    "reminder_type": "recurring",
+    "time_str": "07:00",
+    "user_id": "小乖"
+  },
+  {
+    "content": "催我吃药",
+    "reminder_type": "recurring",
+    "time_str": "20:30",
+    "user_id": "小乖"
+  },
+  {
+    "content": "催我睡觉",
+    "reminder_type": "recurring",
+    "time_str": "21:30",
+    "user_id": "小乖"
+  }
+]

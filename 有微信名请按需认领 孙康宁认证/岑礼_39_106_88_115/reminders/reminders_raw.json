@@ -1,0 +1,14 @@
+[
+  {
+    "content": "提醒睡觉",
+    "reminder_type": "recurring",
+    "time_str": "01:00",
+    "user_id": "岑礼"
+  },
+  {
+    "content": "给我打电话喊我起床",
+    "reminder_type": "recurring",
+    "time_str": "09:00",
+    "user_id": "岑礼"
+  }
+]

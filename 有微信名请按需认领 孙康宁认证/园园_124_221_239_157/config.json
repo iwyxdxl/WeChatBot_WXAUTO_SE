@@ -1,0 +1,120 @@
+{
+  "user_list": [
+    {
+      "nickname": "园园",
+      "prompt_file": "齐司礼3"
+    }
+  ],
+  "prompt_list": [
+    "角色1",
+    "角色2",
+    "陆沉",
+    "陆沉2_yaml_",
+    "齐司礼",
+    "齐司礼2",
+    "齐司礼3"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "15000",
+    "temperature": "1.3",
+    "assistant_model_enabled": true,
+    "assistant_api_provider": "WeAPIs"
+  },
+  "form_parameters": {
+    "nickname": "园园",
+    "ENABLE_FORUM_CUSTOM_MODEL": false,
+    "FORUM_MODEL": "deepseek-ai/DeepSeek-V3",
+    "FORUM_API_KEY": "",
+    "FORUM_MAX_TOKEN": 1200,
+    "FORUM_TEMPERATURE": 1.0,
+    "MODEL": "gemini-2.5-pro-f",
+    "MAX_TOKEN": 15000,
+    "TEMPERATURE": 1.3,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": true,
+    "ASSISTANT_MODEL": "claude-3-7-sonnet-20250219",
+    "ASSISTANT_MAX_TOKEN": 3000,
+    "ASSISTANT_TEMPERATURE": 1.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": true,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gpt-4o",
+    "MOONSHOT_TEMPERATURE": 1.3,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_BASE_URL": "",
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": false,
+    "EMOJI_SENDING_PROBABILITY": 10,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": false,
+    "ENABLE_GROUP_KEYWORD_REPLY": false,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": false,
+    "AVERAGE_TYPING_SPEED": 0.1,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 8,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 200,
+    "MAX_MEMORY_NUMBER": 20000,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 200,
+    "ENABLE_AUTO_MESSAGE": false,
+    "AUTO_MESSAGE": "{char}}会主动发微信消息给园园，首先输出[[ACTION:PAT]]，然后严格按照上下文组织消息内容，保持绝对的情景连贯性，从以下几个话题中挑选：【1、分享自己在做什么】 【2、亲昵地询问对方正在做什么，是否一切安好】 【3、对园园表达当下的关心和想念】 【4、闲聊(如：突发奇想/有趣发现/日常生活片段/网络内容/梗图分享/工作学习见闻）】 【5、确认对方是否收到之前的消息，轻柔催促回复（避免过于急躁）】",
+    "MIN_COUNTDOWN_HOURS": 0.5,
+    "MAX_COUNTDOWN_HOURS": 1.0,
+    "QUIET_TIME_START": "23:00",
+    "QUIET_TIME_END": "8:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": true,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "齐司礼3",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "园园",
+        "齐司礼3"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://124.221.239.157:5000",
+    "server_ip": "124_221_239_157",
+    "timestamp": "2025-09-29 04:29:09",
+    "test_mode": false,
+    "prompt_download_results": {
+      "角色1": true,
+      "角色2": true,
+      "陆沉": true,
+      "陆沉2_yaml_": true,
+      "齐司礼": true,
+      "齐司礼2": true,
+      "齐司礼3": true
+    },
+    "memory_download_results": {
+      "园园": true
+    },
+    "reminders_download_success": true
+  }
+}

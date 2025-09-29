@@ -1,0 +1,72 @@
+{
+  "user_list": [
+    {
+      "nickname": "YShico",
+      "prompt_file": "夏鸣星"
+    }
+  ],
+  "prompt_list": [],
+  "chat_model_config": {},
+  "form_parameters": {
+    "nickname": "YShico",
+    "MODEL": "deepseek-ai/DeepSeek-V3",
+    "MAX_TOKEN": 2300,
+    "TEMPERATURE": 1.1,
+    "ENABLE_IMAGE_RECOGNITION": false,
+    "ENABLE_EMOJI_RECOGNITION": false,
+    "MOONSHOT_MODEL": "gpt-4o",
+    "MOONSHOT_API_KEY": "",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "deepseek-r1-searching",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": false,
+    "EMOJI_SENDING_PROBABILITY": 0,
+    "EMOJI_DIR": "emojis",
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 7,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_MEMORY": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 30,
+    "MAX_MEMORY_NUMBER": 40,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "UPLOAD_MEMORY_TO_AI": true,
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么",
+    "MIN_COUNTDOWN_HOURS": 1.0,
+    "MAX_COUNTDOWN_HOURS": 1.5,
+    "QUIET_TIME_START": "03:00",
+    "QUIET_TIME_END": "8:00",
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "夏鸣星",
+    "temp_MODEL": "deepseek-ai/DeepSeek-V3",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "YShico",
+        "夏鸣星"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://8.148.69.81:5000",
+    "server_ip": "8_148_69_81",
+    "timestamp": "2025-09-29 04:43:05",
+    "test_mode": false,
+    "memory_download_results": {
+      "YShico": false
+    },
+    "reminders_download_success": true
+  }
+}
