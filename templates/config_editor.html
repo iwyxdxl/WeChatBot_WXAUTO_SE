@@ -1902,6 +1902,23 @@
                 });
             }
             
+            // 密码设置按钮
+            const passwordSetupBtn = document.getElementById('passwordSetupBtn');
+            if(passwordSetupBtn) {
+                passwordSetupBtn.addEventListener('click', async function() {
+                    // 先保存当前配置
+                    showAlert('正在保存配置...', true);
+                    const saveSuccess = await saveConfig();
+                    
+                    if (saveSuccess) {
+                        // 保存成功后跳转到密码设置页面
+                        window.location.href = '/password_setup?manual=true&return=config_editor';
+                    } else {
+                        showAlert('保存配置失败，无法跳转到密码设置页面', false);
+                    }
+                });
+            }
+            
             // 恢复默认配置按钮
             const resetDefaultConfigBtn = document.getElementById('resetDefaultConfigBtn');
             if(resetDefaultConfigBtn) {
@@ -3536,7 +3553,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.24</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.24.1</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -4271,16 +4288,31 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                 </div>
 
                 <div id="section-web-editor" class="content-panel">
-                    <h2>网页编辑器配置 (修改后下次启动生效)</h2>
+                    <h2>网页编辑器配置 (修改后重新运行程序生效)</h2>
                      <div class="form-group">
                         <div class="switch-item">
-                            <label>启用密码登录 (若您希望开放端口以便其它设备远程访问配置编辑器则建议启用)</label>
-                            <div class="switch"><label class="switch-label"><input type="checkbox" name="ENABLE_LOGIN_PASSWORD" {% if config.ENABLE_LOGIN_PASSWORD %}checked{% endif %}><span class="slider round"></span></label></div>
+                            <label>允许开放端口 (开启后允许其它设备远程访问，关闭则仅本地访问)</label>
+                            <div class="switch"><label class="switch-label"><input type="checkbox" name="ALLOW_OPEN_PORT" {% if config.ALLOW_OPEN_PORT %}checked{% endif %}><span class="slider round"></span></label></div>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>登录密码:</label>
-                        <input type="text" name="LOGIN_PASSWORD" value="{{ config.LOGIN_PASSWORD }}">
+                        <label>登录密码管理:</label>
+                        <button type="button" id="passwordSetupBtn" class="nav-button" style="background-color: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                            {% if config.PASSWORD_IS_VALID %}
+                                修改密码
+                            {% else %}
+                                设置密码
+                            {% endif %}
+                        </button>
+                        <small style="display: block; margin-top: 5px; color: #666;">
+                            {% if config.ALLOW_OPEN_PORT and not config.PASSWORD_IS_VALID %}
+                                <span style="color: #f44336;">⚠️ 已开放端口但密码未设置，请点击按钮设置安全密码</span>
+                            {% elif config.ALLOW_OPEN_PORT and config.PASSWORD_IS_VALID %}
+                                <span style="color: #4CAF50;">✓ 已设置安全密码</span>
+                            {% else %}
+                                本地访问模式，无需密码验证
+                            {% endif %}
+                        </small>
                     </div>
                     <div class="form-group">
                         <label>网页端口:</label>
@@ -4288,7 +4320,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
                         <button type="button" id="resetDefaultConfigBtn" class="nav-button" style="background-color: #ff5722;">恢复默认配置</button>
-                        <small style="display: block; margin-top: 10px; color: #d32f2f;">警告：此操作将清除所有自定义配置并恢复到程序初始默认值（登录密码除外），操作不可撤销！</small>
+                        <small style="display: block; margin-top: 10px; color: #d32f2f;">警告：此操作将清除所有自定义配置并恢复到程序初始默认值（登录密码和开放端口设置除外），操作不可撤销！</small>
                     </div>
                 </div>
 

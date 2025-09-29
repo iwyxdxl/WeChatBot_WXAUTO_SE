@@ -234,11 +234,31 @@ def get_chat_context_users():
         app.logger.error(f"读取 chat_contexts.json 失败: {e}")
         return []
 
+# 全局变量用于防暴力破解
+login_attempt_count = 0
+login_locked = False
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    global login_attempt_count, login_locked
     config = parse_config()
-    if not config.get('ENABLE_LOGIN_PASSWORD', False):
+    
+    # 检查是否需要密码验证
+    allow_open_port = config.get('ALLOW_OPEN_PORT', False)
+    password_is_valid = config.get('PASSWORD_IS_VALID', False)
+    
+    # 如果不开放端口，直接进入
+    if not allow_open_port:
+        session['logged_in'] = True
         return redirect(url_for('index'))
+    
+    # 如果开放端口但密码不合法，进入密码设置页面
+    if allow_open_port and not password_is_valid:
+        return redirect(url_for('password_setup', force='true'))
+    
+    # 检查是否被锁定
+    if login_locked:
+        return render_template('login.html', error="密码已锁定，请重新运行Run.bat解锁！")
 
     if request.method == 'POST':
         password = request.form.get('password', '')
@@ -246,9 +266,15 @@ def login():
         
         if password == stored_pwd:
             session['logged_in'] = True
+            login_attempt_count = 0  # 重置尝试次数
             return redirect(url_for('index'))
         else:
-            return render_template('login.html', error="密码错误")
+            login_attempt_count += 1
+            if login_attempt_count >= 5:  # 5次错误后锁定
+                login_locked = True
+                return render_template('login.html', error="密码已锁定，请重新运行Run.bat解锁！")
+            else:
+                return render_template('login.html', error=f"密码错误，剩余尝试次数：{5-login_attempt_count}")
 
     return render_template('login.html')
 
@@ -257,13 +283,78 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('login'))
 
+@app.route('/password_setup', methods=['GET', 'POST'])
+def password_setup():
+    config = parse_config()
+    allow_open_port = config.get('ALLOW_OPEN_PORT', False)
+    password_is_valid = config.get('PASSWORD_IS_VALID', False)
+    
+    # 如果是手动访问设置页面（非强制重定向），允许设置密码
+    # 只有在开放端口且密码已经合法，且不是强制设置时才跳转
+    if allow_open_port and password_is_valid and request.args.get('force') != 'true' and request.args.get('manual') != 'true':
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        # 验证密码复杂度
+        if len(password) < 8:
+            return render_template('password_setup.html', error="密码长度不能少于8位")
+        
+        if not any(c.isupper() for c in password):
+            return render_template('password_setup.html', error="密码必须包含大写字母")
+        
+        if not any(c.islower() for c in password):
+            return render_template('password_setup.html', error="密码必须包含小写字母")
+        
+        if not any(c.isdigit() for c in password):
+            return render_template('password_setup.html', error="密码必须包含数字")
+        
+        if password != confirm_password:
+            return render_template('password_setup.html', error="两次输入的密码不一致")
+        
+        # 更新配置文件
+        try:
+            update_config({
+                'LOGIN_PASSWORD': password,
+                'PASSWORD_IS_VALID': True
+            })
+            
+            # 根据return参数决定跳转目标
+            return_to = request.args.get('return', 'login')
+            if return_to == 'config_editor':
+                redirect_url = "/"
+                success_msg = "密码设置成功！正在返回配置页面..."
+            else:
+                redirect_url = "/login"
+                success_msg = "密码设置成功！正在跳转..."
+            
+            return render_template('password_setup.html', success=success_msg, redirect_url=redirect_url)
+        except Exception as e:
+            return render_template('password_setup.html', error=f"密码设置失败：{str(e)}")
+    
+    # GET请求：判断是否允许跳过设置
+    # 如果不开放端口，或者是手动访问（非强制设置），允许跳过
+    allow_skip = not allow_open_port or request.args.get('manual') == 'true'
+    return render_template('password_setup.html', allow_skip=allow_skip)
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         config = parse_config()
-        if config.get('ENABLE_LOGIN_PASSWORD', False):
+        allow_open_port = config.get('ALLOW_OPEN_PORT', False)
+        password_is_valid = config.get('PASSWORD_IS_VALID', False)
+        
+        # 如果开放端口且密码合法，需要登录验证
+        if allow_open_port and password_is_valid:
             if not session.get('logged_in'):
                 return redirect(url_for('login'))
+        # 如果开放端口但密码不合法，跳转到密码设置
+        elif allow_open_port and not password_is_valid:
+            return redirect(url_for('password_setup', force='true'))
+        # 如果不开放端口，无需验证
+        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -413,7 +504,7 @@ def submit_config():
         boolean_fields = [
             'ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION',
             'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY',
-            'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
+            'UPLOAD_MEMORY_TO_AI', 'ALLOW_OPEN_PORT', 'PASSWORD_IS_VALID', 'ENABLE_REMINDERS',
             'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
             'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
@@ -948,7 +1039,7 @@ def index():
             boolean_fields_from_editor = [
                 'ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION',
                 'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY',
-                'UPLOAD_MEMORY_TO_AI', 'ENABLE_LOGIN_PASSWORD', 'ENABLE_REMINDERS',
+                'UPLOAD_MEMORY_TO_AI', 'ALLOW_OPEN_PORT', 'PASSWORD_IS_VALID', 'ENABLE_REMINDERS',
                 'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
                 'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
@@ -1659,8 +1750,10 @@ def reset_default_config():
             default_config['PORT'] = current_config['PORT']
         if 'LOGIN_PASSWORD' in current_config:
             default_config['LOGIN_PASSWORD'] = current_config['LOGIN_PASSWORD']
-        if 'ENABLE_LOGIN_PASSWORD' in current_config:
-            default_config['ENABLE_LOGIN_PASSWORD'] = current_config['ENABLE_LOGIN_PASSWORD']
+        if 'ALLOW_OPEN_PORT' in current_config:
+            default_config['ALLOW_OPEN_PORT'] = current_config['ALLOW_OPEN_PORT']
+        if 'PASSWORD_IS_VALID' in current_config:
+            default_config['PASSWORD_IS_VALID'] = current_config['PASSWORD_IS_VALID']
         
         # 使用 update_config 函数来保留原有的注释和格式
         update_config(default_config)
@@ -3556,8 +3649,9 @@ def get_default_config():
         "GROUP_KEYWORD_LIST": ['你好', '机器人', '在吗'],
         "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
         "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": True,
-        "ENABLE_LOGIN_PASSWORD": False,
+        "ALLOW_OPEN_PORT": False,
         "LOGIN_PASSWORD": '123456',
+        "PASSWORD_IS_VALID": False,
         "PORT": 5000,
         "ENABLE_REMINDERS": True,
         "ALLOW_REMINDERS_IN_QUIET_TIME": True,
@@ -3753,8 +3847,15 @@ if __name__ == '__main__':
     kill_process_using_port(PORT)
 
     print(f"\033[31m重要提示：\r\n若您的浏览器没有自动打开网页端，请手动访问http://localhost:{config.get('PORT', '5000')}/ \r\n \033[0m")
-    if config.get('ENABLE_LOGIN_PASSWORD', False):
-        print(f"\033[31m您已启用登录密码，密码为 {config.get('LOGIN_PASSWORD', '未设置')} 请勿泄露给其它人！\r\n \033[0m")
+    allow_open_port = config.get('ALLOW_OPEN_PORT', False)
+    password_is_valid = config.get('PASSWORD_IS_VALID', False)
+    if allow_open_port:
+        if password_is_valid:
+            print(f"\033[31m您已开启外网访问模式，请保护好您的登录密码！若您忘记了您的登录密码，可在程序目录下的config.py文件中找到LOGIN_PASSWORD查看！\r\n \033[0m")
+        else:
+            print(f"\033[31m检测到您开启了外网访问但密码未设置，请在网页中重新设置密码！\r\n \033[0m")
+    else:
+        print(f"\033[32m当前为本地访问模式，无需密码验证\r\n \033[0m")
     
     # 在启动服务器前设置定时器打开浏览器
     def open_browser():
@@ -3762,5 +3863,7 @@ if __name__ == '__main__':
     
     Timer(1, open_browser).start()  # 延迟1秒确保服务器已启动
     
-    app.run(host="0.0.0.0", debug=False, port=PORT)
+    # 根据配置决定绑定地址
+    host = "0.0.0.0" if config.get('ALLOW_OPEN_PORT', False) else "127.0.0.1"
+    app.run(host=host, debug=False, port=PORT)
     

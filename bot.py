@@ -1200,11 +1200,15 @@ def message_listener(msg, chat):
         else:
             original_content = f"[收到拍一拍消息]：{original_content}"
     elif msgattr == 'self':
-        # 保存机器人自己发送的消息，用于拍一拍自己功能
-        global bot_last_sent_msg
-        bot_last_sent_msg[who] = msg
-        logger.debug(f"已保存机器人发送给 {who} 的最后消息对象")
-        return  # 不处理机器人自己的消息
+        # 保存机器人自己发送的消息，用于拍一拍自己和撤回功能
+        if msgtype == 'text':
+            global bot_last_sent_msg
+            bot_last_sent_msg[who] = msg
+            logger.debug(f"已保存机器人发送给 {who} 的最后消息对象")
+            return
+        else:
+            logger.debug(f"非文本消息，已忽略。")
+            return
     elif msgattr != 'friend':
         logger.info(f"非好友消息，已忽略。")
         return

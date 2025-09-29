@@ -91,9 +91,10 @@ GROUP_KEYWORD_LIST = ['你好', '机器人', '在吗']
 GROUP_CHAT_RESPONSE_PROBABILITY = 100
 GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY = True
 
-# 登录配置编辑器设置
-ENABLE_LOGIN_PASSWORD = False
-LOGIN_PASSWORD = '123456'
+# 配置编辑器设置
+ALLOW_OPEN_PORT = False  # 允许开放端口，True时使用0.0.0.0启动，False时使用127.0.0.1启动
+LOGIN_PASSWORD = '123456'  # 登录密码
+PASSWORD_IS_VALID = False  # 密码是否合法（用于适配旧版本，开放端口时必须重新设置密码）
 PORT = 5000
 
 # 文字指令识别开关
