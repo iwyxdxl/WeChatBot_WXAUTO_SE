@@ -1,0 +1,117 @@
+{
+  "user_list": [
+    {
+      "nickname": "老婆宝宝",
+      "prompt_file": "困"
+    }
+  ],
+  "prompt_list": [
+    "困",
+    "困困回",
+    "沈星回"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "080117",
+    "max_token": "3000",
+    "temperature": "1.1",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "老婆宝宝",
+    "ENABLE_FORUM_CUSTOM_MODEL": false,
+    "FORUM_MODEL": "deepseek-ai/DeepSeek-V3",
+    "FORUM_API_KEY": "",
+    "FORUM_MAX_TOKEN": 1200,
+    "FORUM_TEMPERATURE": 1.0,
+    "MODEL": "gemini-2.5-pro-preview-05-06-maxthinking",
+    "DEEPSEEK_API_KEY": "080117",
+    "MAX_TOKEN": 3000,
+    "TEMPERATURE": 1.1,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_API_KEY": "",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gemini-2.5-pro",
+    "MOONSHOT_API_KEY": "080117",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": true,
+    "ONLINE_MODEL": "gemini-2.5-pro-maxthinking",
+    "ONLINE_API_KEY": "080117",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 25,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "AVERAGE_TYPING_SPEED": 0.1,
+    "RANDOM_TYPING_SPEED_MIN": 0.1,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 5,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_GROUPS": 10,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "SAVE_MEMORY_TO_SEPARATE_FILE": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 50,
+    "MAX_MEMORY_NUMBER": 7,
+    "CORE_MEMORY_DIR": "CoreMemory",
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么",
+    "MIN_COUNTDOWN_HOURS": 2.0,
+    "MAX_COUNTDOWN_HOURS": 3.0,
+    "QUIET_TIME_START": "23:59",
+    "QUIET_TIME_END": "8:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "080117",
+    "PORT": 5000,
+    "prompt_file": "困",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_IMAGE_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "老婆宝宝",
+        "困"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://116.62.16.94:5000",
+    "server_ip": "116_62_16_94",
+    "timestamp": "2025-09-29 04:44:51",
+    "test_mode": false,
+    "prompt_download_results": {
+      "困": true,
+      "困困回": true,
+      "沈星回": true
+    },
+    "memory_download_results": {
+      "老婆宝宝": false
+    },
+    "reminders_download_success": true
+  }
+}

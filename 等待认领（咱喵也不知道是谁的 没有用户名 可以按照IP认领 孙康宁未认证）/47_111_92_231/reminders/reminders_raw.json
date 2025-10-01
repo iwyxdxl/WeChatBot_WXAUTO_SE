@@ -1,0 +1,20 @@
+[
+  {
+    "content": "叫我起床",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "9"
+  },
+  {
+    "content": "叫我睡觉",
+    "reminder_type": "recurring",
+    "time_str": "00:00",
+    "user_id": "9"
+  },
+  {
+    "content": "吃药",
+    "reminder_type": "recurring",
+    "time_str": "14:00",
+    "user_id": "9"
+  }
+]

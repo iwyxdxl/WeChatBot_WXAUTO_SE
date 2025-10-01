@@ -1,0 +1,101 @@
+{
+  "user_list": [
+    {
+      "nickname": "妳.",
+      "prompt_file": "黎深"
+    }
+  ],
+  "prompt_list": [
+    "萧逸",
+    "黎深"
+  ],
+  "chat_model_config": {
+    "api_provider": "硅基流动",
+    "max_token": "2000",
+    "temperature": "1.1",
+    "assistant_model_enabled": true,
+    "assistant_api_provider": "WeAPIs"
+  },
+  "form_parameters": {
+    "nickname": "妳.",
+    "MODEL": "deepseek-ai/DeepSeek-V3",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 1.1,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": true,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_API_KEY": "",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "moonshot-v1-128k-vision-preview",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 25,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": false,
+    "ENABLE_GROUP_KEYWORD_REPLY": false,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": false,
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 7,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_MESSAGE_LOG_ENTRIES": 30,
+    "MAX_MEMORY_NUMBER": 50,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 5,
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么",
+    "MIN_COUNTDOWN_HOURS": 0.5,
+    "MAX_COUNTDOWN_HOURS": 1.5,
+    "QUIET_TIME_START": "23:59",
+    "QUIET_TIME_END": "00:01",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": true,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "黎深",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "妳.",
+        "黎深"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://47.122.46.84:5000",
+    "server_ip": "47_122_46_84",
+    "timestamp": "2025-09-29 04:36:28",
+    "test_mode": false,
+    "prompt_download_results": {
+      "萧逸": true,
+      "黎深": true
+    },
+    "memory_download_results": {
+      "妳.": false
+    },
+    "reminders_download_success": true
+  }
+}

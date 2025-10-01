@@ -1,0 +1,20 @@
+[
+  {
+    "content": "吃药",
+    "reminder_type": "recurring",
+    "time_str": "12:00",
+    "user_id": "王子和木木"
+  },
+  {
+    "content": "叫我",
+    "reminder_type": "recurring",
+    "time_str": "07:30",
+    "user_id": "王子和木木"
+  },
+  {
+    "content": "该写作业了",
+    "reminder_type": "recurring",
+    "time_str": "07:30",
+    "user_id": "王子和木木"
+  }
+]

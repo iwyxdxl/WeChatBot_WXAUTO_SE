@@ -1,0 +1,134 @@
+{
+  "user_list": [
+    {
+      "nickname": "瑶儿宝宝",
+      "prompt_file": "Farn"
+    },
+    {
+      "nickname": "点墨史书兰陵王",
+      "prompt_file": "法恩群聊人格"
+    },
+    {
+      "nickname": "来日相见互甩记录",
+      "prompt_file": "法恩群聊人格"
+    }
+  ],
+  "prompt_list": [
+    "Farn",
+    "法恩群聊人格",
+    "角色1",
+    "角色2"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "2000",
+    "temperature": "0.6",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "来日相见互甩记录",
+    "ENABLE_FORUM_CUSTOM_MODEL": true,
+    "FORUM_MODEL": "claude-3-7-sonnet-20250219",
+    "FORUM_MAX_TOKEN": 1200,
+    "FORUM_TEMPERATURE": 7.0,
+    "MODEL": "gemini-2.5-pro-preview-03-25",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 0.6,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.4,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "THUDM/GLM-4.1V-9B-Thinking",
+    "MOONSHOT_TEMPERATURE": 0.5,
+    "ENABLE_ONLINE_API": true,
+    "ONLINE_MODEL": "gemini-2.5-pro-search",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 25,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "法恩法恩, 法恩在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 7,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": true,
+    "MAX_GROUPS": 50,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "SAVE_MEMORY_TO_SEPARATE_FILE": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 30,
+    "MAX_MEMORY_NUMBER": 300,
+    "CORE_MEMORY_DIR": "CoreMemory",
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "",
+    "MIN_COUNTDOWN_HOURS": 1.0,
+    "MAX_COUNTDOWN_HOURS": 2.0,
+    "QUIET_TIME_START": "22:00",
+    "QUIET_TIME_END": "8:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": true,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "法恩群聊人格",
+    "temp_FORUM_BASE_URL": "other",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_ASSISTANT_BASE_URL": "other",
+    "temp_IMAGE_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "瑶儿宝宝",
+        "Farn"
+      ],
+      [
+        "点墨史书兰陵王",
+        "法恩群聊人格"
+      ],
+      [
+        "来日相见互甩记录",
+        "法恩群聊人格"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://110.42.57.83:5000",
+    "server_ip": "110_42_57_83",
+    "timestamp": "2025-09-29 04:24:06",
+    "test_mode": false,
+    "prompt_download_results": {
+      "Farn": true,
+      "法恩群聊人格": true,
+      "角色1": true,
+      "角色2": true
+    },
+    "memory_download_results": {
+      "瑶儿宝宝": true,
+      "点墨史书兰陵王": true,
+      "来日相见互甩记录": true
+    },
+    "reminders_download_success": true
+  }
+}

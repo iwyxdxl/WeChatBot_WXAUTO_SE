@@ -1,0 +1,14 @@
+[
+  {
+    "content": "闹钟",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-07-14 07:00",
+    "user_id": "女朋友"
+  },
+  {
+    "content": "叫我哦",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-07-14 07:00",
+    "user_id": "女朋友"
+  }
+]

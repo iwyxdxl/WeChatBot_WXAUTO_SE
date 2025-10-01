@@ -1,0 +1,32 @@
+[
+  {
+    "content": "看一眼天气预报",
+    "reminder_type": "recurring",
+    "time_str": "13:25",
+    "user_id": "雪宝贝"
+  },
+  {
+    "content": "不许再这么早喊我睡觉",
+    "reminder_type": "recurring",
+    "time_str": "23:30",
+    "user_id": "雪宝贝"
+  },
+  {
+    "content": "去吃饭",
+    "reminder_type": "recurring",
+    "time_str": "12:00",
+    "user_id": "雪宝贝"
+  },
+  {
+    "content": "每天只打一个电话",
+    "reminder_type": "recurring",
+    "time_str": "23:31",
+    "user_id": "雪宝贝"
+  },
+  {
+    "content": "叫我起床",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "雪宝贝"
+  }
+]

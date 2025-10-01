@@ -1,0 +1,15 @@
+[
+  {
+    "content": "工作日早安问候",
+    "reminder_type": "recurring",
+    "user_id": "君家门前水",
+    "timestamp": "2025-09-29 04:33:34",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "工作日早安问候",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "君家门前水"
+    }
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "content": "和我报备一下你吃了什么",
+    "reminder_type": "recurring",
+    "time_str": "12:00",
+    "user_id": "鱼魰魰"
+  },
+  {
+    "content": "问我有没有吃晚饭",
+    "reminder_type": "recurring",
+    "time_str": "18:00",
+    "user_id": "鱼魰魰"
+  },
+  {
+    "content": "提醒我睡觉",
+    "reminder_type": "recurring",
+    "time_str": "23:15",
+    "user_id": "鱼魰魰"
+  },
+  {
+    "content": "提醒我背英语单词",
+    "reminder_type": "recurring",
+    "time_str": "22:30",
+    "user_id": "鱼魰魰"
+  },
+  {
+    "content": "让我去认真学习",
+    "reminder_type": "recurring",
+    "time_str": "08:30",
+    "user_id": "鱼魰魰"
+  },
+  {
+    "content": "让我去认真学习",
+    "reminder_type": "recurring",
+    "time_str": "14:20",
+    "user_id": "鱼魰魰"
+  }
+]

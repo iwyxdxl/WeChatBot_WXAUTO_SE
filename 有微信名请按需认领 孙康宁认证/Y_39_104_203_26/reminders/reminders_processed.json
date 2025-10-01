@@ -1,0 +1,15 @@
+[
+  {
+    "content": "记得带保温杯，要多喝热水",
+    "reminder_type": "recurring",
+    "user_id": "Y",
+    "timestamp": "2025-09-29 04:32:31",
+    "time_str": "07:45",
+    "raw_data": {
+      "content": "记得带保温杯，要多喝热水",
+      "reminder_type": "recurring",
+      "time_str": "07:45",
+      "user_id": "Y"
+    }
+  }
+]

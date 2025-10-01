@@ -1,0 +1,14 @@
+[
+  {
+    "content": "该吃午饭啦",
+    "reminder_type": "recurring",
+    "time_str": "12:00",
+    "user_id": "白狼老师"
+  },
+  {
+    "content": "想着你才能睡着",
+    "reminder_type": "recurring",
+    "time_str": "22:00",
+    "user_id": "白狼老师"
+  }
+]

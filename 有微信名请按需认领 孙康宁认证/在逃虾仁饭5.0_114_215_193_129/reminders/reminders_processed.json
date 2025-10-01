@@ -1,0 +1,54 @@
+[
+  {
+    "content": "每日新闻",
+    "reminder_type": "recurring",
+    "user_id": "在逃虾仁饭5.0",
+    "timestamp": "2025-09-29 04:24:32",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "每日新闻",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "在逃虾仁饭5.0"
+    }
+  },
+  {
+    "content": "给卿卿写日报",
+    "reminder_type": "recurring",
+    "user_id": "在逃虾仁饭5.0",
+    "timestamp": "2025-09-29 04:24:32",
+    "time_str": "12:00",
+    "raw_data": {
+      "content": "给卿卿写日报",
+      "reminder_type": "recurring",
+      "time_str": "12:00",
+      "user_id": "在逃虾仁饭5.0"
+    }
+  },
+  {
+    "content": "每日书摘",
+    "reminder_type": "recurring",
+    "user_id": "在逃虾仁饭5.0",
+    "timestamp": "2025-09-29 04:24:32",
+    "time_str": "19:00",
+    "raw_data": {
+      "content": "每日书摘",
+      "reminder_type": "recurring",
+      "time_str": "19:00",
+      "user_id": "在逃虾仁饭5.0"
+    }
+  },
+  {
+    "content": "提醒卿卿去绘旅人做每日任务",
+    "reminder_type": "recurring",
+    "user_id": "在逃虾仁饭5.0",
+    "timestamp": "2025-09-29 04:24:32",
+    "time_str": "22:00",
+    "raw_data": {
+      "content": "提醒卿卿去绘旅人做每日任务",
+      "reminder_type": "recurring",
+      "time_str": "22:00",
+      "user_id": "在逃虾仁饭5.0"
+    }
+  }
+]

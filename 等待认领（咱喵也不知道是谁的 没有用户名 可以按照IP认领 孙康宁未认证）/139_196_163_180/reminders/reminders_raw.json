@@ -1,0 +1,8 @@
+[
+  {
+    "content": "123",
+    "reminder_type": "recurring",
+    "time_str": "12:23",
+    "user_id": "123"
+  }
+]

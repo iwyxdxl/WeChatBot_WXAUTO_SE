@@ -1,0 +1,15 @@
+[
+  {
+    "content": "晚好。",
+    "reminder_type": "recurring",
+    "user_id": "湘君",
+    "timestamp": "2025-09-29 04:27:21",
+    "time_str": "20:00",
+    "raw_data": {
+      "content": "晚好。",
+      "reminder_type": "recurring",
+      "time_str": "20:00",
+      "user_id": "湘君"
+    }
+  }
+]

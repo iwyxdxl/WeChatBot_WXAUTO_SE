@@ -1,0 +1,20 @@
+[
+  {
+    "content": "起床",
+    "reminder_type": "recurring",
+    "time_str": "07:30",
+    "user_id": "少女欣👾"
+  },
+  {
+    "content": "午睡起床",
+    "reminder_type": "recurring",
+    "time_str": "14:40",
+    "user_id": "少女欣👾"
+  },
+  {
+    "content": "给我打电话 提醒我睡觉哦",
+    "reminder_type": "recurring",
+    "time_str": "23:30",
+    "user_id": "少女欣👾"
+  }
+]

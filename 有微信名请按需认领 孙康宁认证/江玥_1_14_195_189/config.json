@@ -1,0 +1,116 @@
+{
+  "user_list": [
+    {
+      "nickname": "江玥",
+      "prompt_file": "沈夜"
+    }
+  ],
+  "prompt_list": [
+    "沈夜",
+    "沈夜2",
+    "沈夜线下",
+    "角色1",
+    "角色2"
+  ],
+  "chat_model_config": {
+    "api_provider": "DeepSeek官方API",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "2000",
+    "temperature": "0.8",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "江玥",
+    "ENABLE_FORUM_CUSTOM_MODEL": false,
+    "FORUM_MODEL": "deepseek-ai/DeepSeek-V3",
+    "FORUM_API_KEY": "",
+    "FORUM_MAX_TOKEN": 1200,
+    "FORUM_TEMPERATURE": 1.0,
+    "MODEL": "deepseek-reasoner",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 0.8,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "deepseek-chat",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": false,
+    "MOONSHOT_MODEL": "doubao-1.5-vision-pro-250328",
+    "MOONSHOT_API_KEY": "8746****************************21c0",
+    "MOONSHOT_TEMPERATURE": 0.3,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "deepseek-r1-searching",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 30,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": false,
+    "ENABLE_GROUP_KEYWORD_REPLY": false,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": false,
+    "AVERAGE_TYPING_SPEED": 0.1,
+    "RANDOM_TYPING_SPEED_MIN": 0.1,
+    "RANDOM_TYPING_SPEED_MAX": 0.2,
+    "QUEUE_WAITING_TIME": 60,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_GROUPS": 20,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "SAVE_MEMORY_TO_SEPARATE_FILE": false,
+    "MAX_MESSAGE_LOG_ENTRIES": 3000,
+    "MAX_MEMORY_NUMBER": 50,
+    "CORE_MEMORY_DIR": "CoreMemory",
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "结合实际对话情况和当前时间，找用户继续刚刚的话题或者询问对方在做什么，表达思念，分享自己的日常报备，遇到的趣事八卦，网上看到的帖子等等,但不要主动提出见面。你可以结合上下文，灵活发送消息。不要把此信息当作用户的发言。",
+    "MIN_COUNTDOWN_HOURS": 2.0,
+    "MAX_COUNTDOWN_HOURS": 4.0,
+    "QUIET_TIME_START": "23:00",
+    "QUIET_TIME_END": "8:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": false,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 24.0,
+    "RESTART_INACTIVITY_MINUTES": 10,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "沈夜",
+    "temp_IMAGE_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "江玥",
+        "沈夜"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://1.14.195.189:5000",
+    "server_ip": "1_14_195_189",
+    "timestamp": "2025-09-29 04:22:34",
+    "test_mode": false,
+    "prompt_download_results": {
+      "沈夜": true,
+      "沈夜2": true,
+      "沈夜线下": true,
+      "角色1": true,
+      "角色2": true
+    },
+    "memory_download_results": {
+      "江玥": true
+    },
+    "reminders_download_success": true
+  }
+}

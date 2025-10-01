@@ -1,0 +1,41 @@
+[
+  {
+    "content": "来和我说早安",
+    "reminder_type": "recurring",
+    "user_id": "Sera",
+    "timestamp": "2025-09-29 04:39:39",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "来和我说早安",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "Sera"
+    }
+  },
+  {
+    "content": "来我问吃饭了吗",
+    "reminder_type": "recurring",
+    "user_id": "Sera",
+    "timestamp": "2025-09-29 04:39:39",
+    "time_str": "12:00",
+    "raw_data": {
+      "content": "来我问吃饭了吗",
+      "reminder_type": "recurring",
+      "time_str": "12:00",
+      "user_id": "Sera"
+    }
+  },
+  {
+    "content": "提醒我该睡觉啦",
+    "reminder_type": "recurring",
+    "user_id": "Sera",
+    "timestamp": "2025-09-29 04:39:39",
+    "time_str": "23:30",
+    "raw_data": {
+      "content": "提醒我该睡觉啦",
+      "reminder_type": "recurring",
+      "time_str": "23:30",
+      "user_id": "Sera"
+    }
+  }
+]

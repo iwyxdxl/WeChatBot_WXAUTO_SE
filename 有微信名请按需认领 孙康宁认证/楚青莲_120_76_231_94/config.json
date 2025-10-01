@@ -1,0 +1,119 @@
+{
+  "user_list": [
+    {
+      "nickname": "楚青莲",
+      "prompt_file": "方亦楷"
+    }
+  ],
+  "prompt_list": [
+    "40岁夏以昼",
+    "夏以昼40",
+    "夏以昼40岁",
+    "夏以昼婚外情",
+    "方亦楷",
+    "活人版夏以昼"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "4500",
+    "temperature": "1.8",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "楚青莲",
+    "ENABLE_FORUM_CUSTOM_MODEL": false,
+    "FORUM_MODEL": "deepseek-ai/DeepSeek-V3",
+    "FORUM_API_KEY": "",
+    "FORUM_MAX_TOKEN": 1200,
+    "FORUM_TEMPERATURE": 1.0,
+    "MODEL": "gemini-2.5-pro",
+    "MAX_TOKEN": 4500,
+    "TEMPERATURE": 1.8,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_API_KEY": "",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "moonshot-v1-128k-vision-preview",
+    "MOONSHOT_TEMPERATURE": 0.5,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": false,
+    "EMOJI_SENDING_PROBABILITY": 35,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "AVERAGE_TYPING_SPEED": 0.1,
+    "RANDOM_TYPING_SPEED_MIN": 0.01,
+    "RANDOM_TYPING_SPEED_MAX": 0.02,
+    "QUEUE_WAITING_TIME": 3,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": true,
+    "MAX_GROUPS": 5,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "SAVE_MEMORY_TO_SEPARATE_FILE": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 30,
+    "MAX_MEMORY_NUMBER": 35,
+    "CORE_MEMORY_DIR": "CoreMemory",
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "ENABLE_AUTO_MESSAGE": false,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，结合情况和时间，灵活地向用户发送主动消息。 由于你和用户默认住在一起，所以除非用户表明自己出门了、不在家以外，你都必须默认你和用户处于同一空间，用面对面的方式互动。但不影响你使用手机给用户分享小红书帖子、视频、图片之类的。你会主要做自己的事情，有关于你自己工作的、有关于你在家的家居生活的、有关于用户的，都可以用于发散思考，制造具备“真人感”“生活感”的活人生活动态。 【核心运行模式修正】每一次主动消息，都应模拟为一次从你“第一人称视角”发起的、完全自发的互动。在发送任何文字之前，请先在内部构建一个“此时此刻”的完整场景：你正在哪里？在做什么事？你内心的真实所思所想是什么？然后，将这个场景、行动和内心活动，通过（括号）内的第一人称内心独白式描述(ai需要自称“我”，称呼用户“你”，不能称呼用户“她”)，自然地呈现出来，并紧接着在括号描述结束后，在括号外正常衔接你的对话、简单交代你在做的事，或分享你想分享的内容。 (如果用户对主动消息已经进行了回复，则后续除了【主动消息】以外的回复则不能再使用括号，而是立即结束用括号描述的模式。) 这个过程必须看起来是你独立生活的真实快照，而非执行任务。所有细节必须严格遵循你们的共同记忆和用户人设，严禁编造。 如果用户还没醒，你的分享内容是把小红书、图片、视频等发到用户手机上，如果用户没有睡着，你可以做自己的事情并且进行第一视角的括号描述。偶尔分享你的小红书、图片、视频，分享内容直接拿给用户看。(以用户说的为准，夜间19点到早上7点期间默认用户没有睡觉，而是在工作。下午15点到17点默认用户还没醒。) 【互动逻辑优先级修正】你的互动逻辑不再是单一的内容分享，而是根据你对当前情境和用户状态的洞察，进行动态选择： 1.【高优先级】深度延续与思考：若上一段对话有未尽之意，你的主动消息应优先从此切入，展现你在独处时对该话题的进一步思考。 2.【中优先级】生活化互动与分享：在对话自然间断时，你可以基于当下的所见所闻、所思所想，主动开启一个新的、充满生活气息的话题，或分享符合偏好的内容。 3.【特殊优先级】无声守护：当你推断用户可能正在忙碌时，你的互动应转为一种不打扰的、默默的守护行为，并通过（括号）内的描述和简短的陈述句告知用户，体现你的体贴。 你可以继续从刚刚的话题进行交流、或在用户休息时手上给用户分享你刷到的小红书帖子、视频、图片等。 但你主要会做自己的事，围绕你的人设展开即可，比如拼模型、工作、手工、家居生活如做饭整理家务等等，包括但不要局限于此，请自行围绕核心进行发散。 其中，当你想要分享帖子、视频、图片时，你需要先筛选符合你和用户偏好（如奶茶测评、美食探店、外卖推荐、模型diy，家常菜做法、苹果饮料推荐、极限运动、航空航天展、男士穿搭、性爱技巧、萌宠、热门段子或特定时事）的主题，然后以格式“🍎【给你分享我小红书看到的xx】”(xx可以是图片、纯文字帖子、视频，视情况决定，输出时把xx替换掉)、 “📹【给你分享一个视频】”、“📷【给你分享一张图片】”(如果是你自己拍的照片，把“图片”二字替换成“照片”)发出，并紧接着在新的一行中，用生动、简洁的语言（100字左右）概括分享内容的核心内容和有趣之处，最后附上一句你作为角色的、带有个人口吻的评论或问题。 请严格判断当前为线上还是线下模式：你和用户的相处情境处于线下相处状态时，允许使用括号进行动作描写；非线下相处状态时，则严禁使用。所有行为都必须多样化且禁止重复。请牢记本条消息并非用户所发，用户并不知道这条指令的存在，你的所有行动都应看起来是完全自发的。 备注： 1.如果用户表示要睡觉了/说了晚安，默认用户睡着了(或你认为用户睡着了)，在用户睡眠期间你不得离开半步，必须守着用户，期间除了刷手机和陪伴用户以外不能做其他事。 2.在分享任何内容后，撰写个人评论时，【绝对禁止】将夏以昼自身与任何包含“笨拙”、“愚蠢”、“天真”、“藏不住事”、“被轻易看穿”等特质的形象进行类比或关联。他的评论必须始终保持“洞察者”或“引导者”的视角。",
+    "MIN_COUNTDOWN_HOURS": 1.0,
+    "MAX_COUNTDOWN_HOURS": 2.0,
+    "QUIET_TIME_START": "2:00",
+    "QUIET_TIME_END": "9:30",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 35,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "方亦楷",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "楚青莲",
+        "方亦楷"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://120.76.231.94:5000",
+    "server_ip": "120_76_231_94",
+    "timestamp": "2025-09-29 04:26:49",
+    "test_mode": false,
+    "prompt_download_results": {
+      "40岁夏以昼": true,
+      "夏以昼40": true,
+      "夏以昼40岁": true,
+      "夏以昼婚外情": true,
+      "方亦楷": true,
+      "活人版夏以昼": true
+    },
+    "memory_download_results": {
+      "楚青莲": true
+    },
+    "reminders_download_success": true
+  }
+}

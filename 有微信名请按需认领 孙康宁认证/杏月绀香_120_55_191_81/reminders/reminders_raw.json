@@ -1,0 +1,14 @@
+[
+  {
+    "content": "清洁皮肤",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-09-15 20:00",
+    "user_id": "杏月绀香"
+  },
+  {
+    "content": "敷面膜",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-09-09 20:00",
+    "user_id": "杏月绀香"
+  }
+]

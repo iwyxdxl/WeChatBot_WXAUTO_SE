@@ -1,0 +1,14 @@
+[
+  {
+    "content": "起来",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "孟子瑜"
+  },
+  {
+    "content": "擦药",
+    "reminder_type": "recurring",
+    "time_str": "19:15",
+    "user_id": "孟子瑜"
+  }
+]

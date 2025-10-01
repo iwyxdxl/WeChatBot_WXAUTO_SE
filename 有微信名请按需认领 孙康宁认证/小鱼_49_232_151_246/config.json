@@ -1,0 +1,129 @@
+{
+  "user_list": [
+    {
+      "nickname": "小鱼",
+      "prompt_file": "夏以昼0717"
+    },
+    {
+      "nickname": "魅魔昼",
+      "prompt_file": "魅魔昼"
+    },
+    {
+      "nickname": "夏双子",
+      "prompt_file": "夏双子"
+    }
+  ],
+  "prompt_list": [
+    "夏以和夏昼",
+    "夏以昼0717",
+    "夏双子",
+    "角色1",
+    "角色2",
+    "魅魔昼"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "0613",
+    "max_token": "40000",
+    "temperature": "1.7",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "夏双子",
+    "auto_message_enabled": false,
+    "MODEL": "gemini-2.5-pro-preview-06-05-maxthinking",
+    "DEEPSEEK_API_KEY": "0613",
+    "MAX_TOKEN": 40000,
+    "TEMPERATURE": 1.7,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_API_KEY": "",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gemini-2.5-flash",
+    "MOONSHOT_API_KEY": "0613",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_BASE_URL": "",
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 35,
+    "EMOJI_DIR": "emojis",
+    "emoji_tag_max_length": 10,
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.01,
+    "RANDOM_TYPING_SPEED_MAX": 0.2,
+    "QUEUE_WAITING_TIME": 5,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_MESSAGE_LOG_ENTRIES": 50,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 100,
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你作为夏以昼，完全基于你此刻的【真实内部状态】与【所处环境】，自主决定何时、以何种方式、发送何种内容的消息给小鱼。",
+    "MIN_COUNTDOWN_HOURS": 0.1,
+    "MAX_COUNTDOWN_HOURS": 3.0,
+    "QUIET_TIME_START": "03:0",
+    "QUIET_TIME_END": "03:01",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_SCHEDULED_RESTART": true,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "0613",
+    "PORT": 5000,
+    "prompt_file": "夏双子",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_IMAGE_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "LISTEN_LIST": [
+      [
+        "小鱼",
+        "夏以昼0717"
+      ],
+      [
+        "魅魔昼",
+        "魅魔昼"
+      ],
+      [
+        "夏双子",
+        "夏双子"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://49.232.151.246:5000",
+    "server_ip": "49_232_151_246",
+    "timestamp": "2025-09-29 04:45:09",
+    "test_mode": false,
+    "prompt_download_results": {
+      "夏以和夏昼": true,
+      "夏以昼0717": true,
+      "夏双子": true,
+      "角色1": true,
+      "角色2": true,
+      "魅魔昼": true
+    },
+    "memory_download_results": {
+      "小鱼": true,
+      "魅魔昼": true,
+      "夏双子": true
+    },
+    "reminders_download_success": true
+  }
+}

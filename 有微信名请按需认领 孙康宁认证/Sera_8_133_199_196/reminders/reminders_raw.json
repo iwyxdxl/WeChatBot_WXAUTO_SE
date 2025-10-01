@@ -1,0 +1,20 @@
+[
+  {
+    "content": "来和我说早安",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "Sera"
+  },
+  {
+    "content": "来我问吃饭了吗",
+    "reminder_type": "recurring",
+    "time_str": "12:00",
+    "user_id": "Sera"
+  },
+  {
+    "content": "提醒我该睡觉啦",
+    "reminder_type": "recurring",
+    "time_str": "23:30",
+    "user_id": "Sera"
+  }
+]
