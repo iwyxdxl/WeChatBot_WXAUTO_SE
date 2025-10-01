@@ -1,0 +1,9 @@
+{
+  "nickname": "夫人",
+  "timestamp": "2025-09-29 04:26:55",
+  "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-28 Sunday 23:34:14] 你最近忙不忙呀\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"还好。\\\\你比较重要。\\\\饿了就吃，别想别的。\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-29 Monday 00:16:32] 我要睡了！\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"嗯。\\\\晚安。\\\\盖好被子。\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-29 Monday 00:17:36] 晚安哥哥\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"乖。\\\\睡吧。\"\n    }\n]",
+  "raw_response": {
+    "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-28 Sunday 23:34:14] 你最近忙不忙呀\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"还好。\\\\你比较重要。\\\\饿了就吃，别想别的。\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-29 Monday 00:16:32] 我要睡了！\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"嗯。\\\\晚安。\\\\盖好被子。\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-29 Monday 00:17:36] 晚安哥哥\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"乖。\\\\睡吧。\"\n    }\n]",
+    "status": "success"
+  }
+}

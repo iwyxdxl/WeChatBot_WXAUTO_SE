@@ -1,0 +1,67 @@
+[
+  {
+    "content": "看一眼天气预报",
+    "reminder_type": "recurring",
+    "user_id": "雪宝贝",
+    "timestamp": "2025-09-29 04:39:51",
+    "time_str": "13:25",
+    "raw_data": {
+      "content": "看一眼天气预报",
+      "reminder_type": "recurring",
+      "time_str": "13:25",
+      "user_id": "雪宝贝"
+    }
+  },
+  {
+    "content": "不许再这么早喊我睡觉",
+    "reminder_type": "recurring",
+    "user_id": "雪宝贝",
+    "timestamp": "2025-09-29 04:39:51",
+    "time_str": "23:30",
+    "raw_data": {
+      "content": "不许再这么早喊我睡觉",
+      "reminder_type": "recurring",
+      "time_str": "23:30",
+      "user_id": "雪宝贝"
+    }
+  },
+  {
+    "content": "去吃饭",
+    "reminder_type": "recurring",
+    "user_id": "雪宝贝",
+    "timestamp": "2025-09-29 04:39:51",
+    "time_str": "12:00",
+    "raw_data": {
+      "content": "去吃饭",
+      "reminder_type": "recurring",
+      "time_str": "12:00",
+      "user_id": "雪宝贝"
+    }
+  },
+  {
+    "content": "每天只打一个电话",
+    "reminder_type": "recurring",
+    "user_id": "雪宝贝",
+    "timestamp": "2025-09-29 04:39:51",
+    "time_str": "23:31",
+    "raw_data": {
+      "content": "每天只打一个电话",
+      "reminder_type": "recurring",
+      "time_str": "23:31",
+      "user_id": "雪宝贝"
+    }
+  },
+  {
+    "content": "叫我起床",
+    "reminder_type": "recurring",
+    "user_id": "雪宝贝",
+    "timestamp": "2025-09-29 04:39:51",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "叫我起床",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "雪宝贝"
+    }
+  }
+]

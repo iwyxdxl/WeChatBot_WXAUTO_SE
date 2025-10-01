@@ -1,0 +1,14 @@
+[
+  {
+    "content": "睡觉",
+    "reminder_type": "recurring",
+    "time_str": "23:40",
+    "user_id": "。。。"
+  },
+  {
+    "content": "喊我起床，溜溜",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-07-12 08:30",
+    "user_id": "。。。"
+  }
+]

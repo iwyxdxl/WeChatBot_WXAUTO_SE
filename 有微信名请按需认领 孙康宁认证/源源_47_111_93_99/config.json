@@ -1,0 +1,106 @@
+{
+  "user_list": [
+    {
+      "nickname": "源源",
+      "prompt_file": "沈星回"
+    }
+  ],
+  "prompt_list": [
+    "沈星回"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "5000",
+    "temperature": "1.3",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "源源",
+    "ENABLE_FORUM_CUSTOM_MODEL": true,
+    "FORUM_MODEL": "gemini-2.5-pro",
+    "FORUM_MAX_TOKEN": 2000,
+    "FORUM_TEMPERATURE": 1.3,
+    "MODEL": "gemini-2.5-pro-max",
+    "MAX_TOKEN": 5000,
+    "TEMPERATURE": 1.3,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gemini-2.5-flash",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.8,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gemini-2.5-flash",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": true,
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 20,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": false,
+    "ENABLE_GROUP_KEYWORD_REPLY": false,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": false,
+    "AVERAGE_TYPING_SPEED": 0.01,
+    "RANDOM_TYPING_SPEED_MIN": 0.01,
+    "RANDOM_TYPING_SPEED_MAX": 0.02,
+    "QUEUE_WAITING_TIME": 8,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_GROUPS": 60,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "SAVE_MEMORY_TO_SEPARATE_FILE": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 500,
+    "MAX_MEMORY_NUMBER": 50,
+    "CORE_MEMORY_DIR": "CoreMemory",
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，结合情况和时间，可以找用户继续刚刚的话题、询问用户在做什么、表达当下情绪（开心、思念等甚至负面的）、分享自己的日常或者吐槽，你可以结合上下文，结合提示词灵活发送任何消息，甚至包括通话请求、转账、查岗等等，禁止重复（本条默认非用户所发，用户不知情）",
+    "MIN_COUNTDOWN_HOURS": 0.5,
+    "MAX_COUNTDOWN_HOURS": 0.8,
+    "QUIET_TIME_START": "03:00",
+    "QUIET_TIME_END": "10:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": false,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": false,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": true,
+    "RESTART_INTERVAL_HOURS": 8.0,
+    "RESTART_INACTIVITY_MINUTES": 120,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "194521",
+    "PORT": 5000,
+    "prompt_file": "沈星回",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "源源",
+        "沈星回"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://47.111.93.99:5000",
+    "server_ip": "47_111_93_99",
+    "timestamp": "2025-09-29 04:35:47",
+    "test_mode": false,
+    "prompt_download_results": {
+      "沈星回": true
+    },
+    "memory_download_results": {
+      "源源": true
+    },
+    "reminders_download_success": true
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "user_list": [
+    {
+      "nickname": "夫人",
+      "prompt_file": "顾时夜"
+    }
+  ],
+  "prompt_list": [
+    "角色1",
+    "角色2",
+    "顾时夜"
+  ],
+  "chat_model_config": {
+    "api_provider": "WeAPIs",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "2000",
+    "temperature": "0.7",
+    "assistant_model_enabled": false
+  },
+  "form_parameters": {
+    "nickname": "夫人",
+    "ENABLE_FORUM_CUSTOM_MODEL": true,
+    "FORUM_MODEL": "deepseek-ai/DeepSeek-V3",
+    "FORUM_API_KEY": "",
+    "FORUM_MAX_TOKEN": 1200,
+    "FORUM_TEMPERATURE": 0.7,
+    "MODEL": "gemini-2.5-pro-06-05",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 0.7,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": false,
+    "ASSISTANT_MODEL": "gpt-4o-mini",
+    "ASSISTANT_API_KEY": "",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": false,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gpt-4o",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": true,
+    "ONLINE_MODEL": "net-gpt-4o-mini",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "天气、新闻、歌词",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 25,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "顾时夜, 在吗, 四哥",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 6,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": true,
+    "MAX_GROUPS": 5,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "SAVE_MEMORY_TO_SEPARATE_FILE": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 25,
+    "MAX_MEMORY_NUMBER": 100,
+    "CORE_MEMORY_DIR": "CoreMemory",
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么或分享近期日常",
+    "MIN_COUNTDOWN_HOURS": 2.0,
+    "MAX_COUNTDOWN_HOURS": 3.0,
+    "QUIET_TIME_START": "1:00",
+    "QUIET_TIME_END": "6:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_TEXT_COMMANDS": true,
+    "ENABLE_SCHEDULED_RESTART": true,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "GUSHIYE1122",
+    "PORT": 5000,
+    "prompt_file": "顾时夜",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "夫人",
+        "顾时夜"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://121.196.219.37:5000",
+    "server_ip": "121_196_219_37",
+    "timestamp": "2025-09-29 04:26:55",
+    "test_mode": false,
+    "prompt_download_results": {
+      "角色1": true,
+      "角色2": true,
+      "顾时夜": true
+    },
+    "memory_download_results": {
+      "夫人": true
+    },
+    "reminders_download_success": true
+  }
+}

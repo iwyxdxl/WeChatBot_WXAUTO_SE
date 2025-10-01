@@ -1,0 +1,28 @@
+[
+  {
+    "content": "睡觉",
+    "reminder_type": "recurring",
+    "user_id": "。。。",
+    "timestamp": "2025-09-29 04:36:21",
+    "time_str": "23:40",
+    "raw_data": {
+      "content": "睡觉",
+      "reminder_type": "recurring",
+      "time_str": "23:40",
+      "user_id": "。。。"
+    }
+  },
+  {
+    "content": "喊我起床，溜溜",
+    "reminder_type": "one-off",
+    "user_id": "。。。",
+    "timestamp": "2025-09-29 04:36:21",
+    "target_datetime_str": "2025-07-12 08:30",
+    "raw_data": {
+      "content": "喊我起床，溜溜",
+      "reminder_type": "one-off",
+      "target_datetime_str": "2025-07-12 08:30",
+      "user_id": "。。。"
+    }
+  }
+]

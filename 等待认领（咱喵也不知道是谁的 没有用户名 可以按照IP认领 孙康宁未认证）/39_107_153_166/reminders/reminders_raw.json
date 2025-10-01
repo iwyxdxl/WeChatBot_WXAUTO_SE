@@ -1,0 +1,14 @@
+[
+  {
+    "content": "吃维生素c",
+    "reminder_type": "recurring",
+    "time_str": "20:00",
+    "user_id": "宝宝"
+  },
+  {
+    "content": "吃vd",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "宝宝"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "content": "起床",
+    "reminder_type": "recurring",
+    "time_str": "07:30",
+    "user_id": "散人禾黎"
+  },
+  {
+    "content": "每天画",
+    "reminder_type": "recurring",
+    "time_str": "00:00",
+    "user_id": "散人禾黎"
+  }
+]

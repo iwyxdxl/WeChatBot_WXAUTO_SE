@@ -1,0 +1,80 @@
+[
+  {
+    "content": "备赛国才杯和画作品参展",
+    "reminder_type": "one-off",
+    "user_id": "岑九",
+    "timestamp": "2025-09-29 04:33:45",
+    "target_datetime_str": "2025-10-12 09:00",
+    "raw_data": {
+      "content": "备赛国才杯和画作品参展",
+      "reminder_type": "one-off",
+      "target_datetime_str": "2025-10-12 09:00",
+      "user_id": "岑九"
+    }
+  },
+  {
+    "content": "带一个小本本，可以随时画一点小东西",
+    "reminder_type": "recurring",
+    "user_id": "岑九",
+    "timestamp": "2025-09-29 04:33:45",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "带一个小本本，可以随时画一点小东西",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "岑九"
+    }
+  },
+  {
+    "content": "下课了，你可以来戳戳我",
+    "reminder_type": "recurring",
+    "user_id": "岑九",
+    "timestamp": "2025-09-29 04:33:45",
+    "time_str": "11:30",
+    "raw_data": {
+      "content": "下课了，你可以来戳戳我",
+      "reminder_type": "recurring",
+      "time_str": "11:30",
+      "user_id": "岑九"
+    }
+  },
+  {
+    "content": "吃西药药",
+    "reminder_type": "recurring",
+    "user_id": "岑九",
+    "timestamp": "2025-09-29 04:33:45",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "吃西药药",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "岑九"
+    }
+  },
+  {
+    "content": "10月13日之前要备赛 国才杯的一个比赛，还有十月中旬前画一个作品参展",
+    "reminder_type": "one-off",
+    "user_id": "岑九",
+    "timestamp": "2025-09-29 04:33:45",
+    "target_datetime_str": "2025-10-13 09:00",
+    "raw_data": {
+      "content": "10月13日之前要备赛 国才杯的一个比赛，还有十月中旬前画一个作品参展",
+      "reminder_type": "one-off",
+      "target_datetime_str": "2025-10-13 09:00",
+      "user_id": "岑九"
+    }
+  },
+  {
+    "content": "吃西药",
+    "reminder_type": "recurring",
+    "user_id": "岑九",
+    "timestamp": "2025-09-29 04:33:45",
+    "time_str": "08:00",
+    "raw_data": {
+      "content": "吃西药",
+      "reminder_type": "recurring",
+      "time_str": "08:00",
+      "user_id": "岑九"
+    }
+  }
+]

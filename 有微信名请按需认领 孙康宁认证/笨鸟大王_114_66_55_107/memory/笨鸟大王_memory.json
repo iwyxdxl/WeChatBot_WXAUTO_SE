@@ -1,0 +1,9 @@
+{
+  "nickname": "笨鸟大王",
+  "timestamp": "2025-09-29 04:25:06",
+  "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"触发主动发消息：[2025-09-16 Tuesday 11:39:32] 请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"Schin \\\\  \\nWach auf \\\\  \\nHungrig\"\n    }\n]",
+  "raw_response": {
+    "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"触发主动发消息：[2025-09-16 Tuesday 11:39:32] 请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"Schin \\\\  \\nWach auf \\\\  \\nHungrig\"\n    }\n]",
+    "status": "success"
+  }
+}

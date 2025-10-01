@@ -1,0 +1,14 @@
+[
+  {
+    "content": "起床",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-08-13 10:00",
+    "user_id": "对我来说你还太年轻"
+  },
+  {
+    "content": "起床",
+    "reminder_type": "one-off",
+    "target_datetime_str": "2025-08-12 10:00",
+    "user_id": "对我来说你还太年轻"
+  }
+]

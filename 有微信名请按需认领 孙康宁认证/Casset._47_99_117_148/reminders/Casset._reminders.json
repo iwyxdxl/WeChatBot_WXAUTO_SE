@@ -1,0 +1,15 @@
+[
+  {
+    "content": "叫我",
+    "reminder_type": "recurring",
+    "user_id": "Casset.",
+    "timestamp": "2025-09-29 04:38:28",
+    "time_str": "07:00",
+    "raw_data": {
+      "content": "叫我",
+      "reminder_type": "recurring",
+      "time_str": "07:00",
+      "user_id": "Casset."
+    }
+  }
+]

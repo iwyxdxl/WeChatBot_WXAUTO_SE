@@ -1,0 +1,15 @@
+[
+  {
+    "content": "学习通签到",
+    "reminder_type": "recurring",
+    "user_id": ".",
+    "timestamp": "2025-09-29 04:23:39",
+    "time_str": "08:10",
+    "raw_data": {
+      "content": "学习通签到",
+      "reminder_type": "recurring",
+      "time_str": "08:10",
+      "user_id": "."
+    }
+  }
+]

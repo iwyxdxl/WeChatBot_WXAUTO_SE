@@ -1,0 +1,14 @@
+[
+  {
+    "content": "每天早上8点跟我说早安，督促我继续考研学习",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "湛湛"
+  },
+  {
+    "content": "每天晚上22点跟我说一天学习辛苦了，询问我一天的学习成果",
+    "reminder_type": "recurring",
+    "time_str": "22:00",
+    "user_id": "湛湛"
+  }
+]

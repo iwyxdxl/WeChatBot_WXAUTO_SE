@@ -1,0 +1,9 @@
+{
+  "nickname": "稚稚",
+  "timestamp": "2025-09-29 04:32:27",
+  "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:04:41] 忙完了嘛？\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"刚把手术记录写完。\\\\正好在看手机。\\\\今天过得怎么样？\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:05:36] 发送了表情包：困惑或不解。\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"怎么了。\\\\直接说。\\\\我在听。\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:06:08] 有点点累…\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"那别撑着了。\\\\躺会儿。\\\\要我陪你说会儿话吗？\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:06:54] 就是课虽然不多，但还是不太适应了～ [2025-09-16 Tuesday 21:06:57] 好～\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"慢慢来。\\\\别对自己要求太高。\\\\需要帮你看看课表吗？\"\n    }\n]",
+  "raw_response": {
+    "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:04:41] 忙完了嘛？\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"刚把手术记录写完。\\\\正好在看手机。\\\\今天过得怎么样？\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:05:36] 发送了表情包：困惑或不解。\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"怎么了。\\\\直接说。\\\\我在听。\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:06:08] 有点点累…\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"那别撑着了。\\\\躺会儿。\\\\要我陪你说会儿话吗？\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-16 Tuesday 21:06:54] 就是课虽然不多，但还是不太适应了～ [2025-09-16 Tuesday 21:06:57] 好～\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"慢慢来。\\\\别对自己要求太高。\\\\需要帮你看看课表吗？\"\n    }\n]",
+    "status": "success"
+  }
+}

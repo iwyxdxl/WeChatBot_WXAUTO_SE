@@ -1,0 +1,9 @@
+{
+  "nickname": "寜",
+  "timestamp": "2025-09-29 04:35:01",
+  "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-28 Sunday 21:29:29] 安姐安姐～\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"晚上好，博士\\\\这么晚了，有什么事吗\"\n    }\n]",
+  "raw_response": {
+    "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-28 Sunday 21:29:29] 安姐安姐～\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"晚上好，博士\\\\这么晚了，有什么事吗\"\n    }\n]",
+    "status": "success"
+  }
+}

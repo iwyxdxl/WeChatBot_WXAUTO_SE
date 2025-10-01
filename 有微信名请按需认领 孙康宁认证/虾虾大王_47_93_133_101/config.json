@@ -1,0 +1,111 @@
+{
+  "user_list": [
+    {
+      "nickname": "虾虾大王",
+      "prompt_file": "陈怀瑾"
+    }
+  ],
+  "prompt_list": [
+    "夏以昼（",
+    "夏以昼（依依做的）",
+    "易遇",
+    "查理苏",
+    "萧因",
+    "角色2",
+    "陆沉",
+    "陈怀瑾"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "max_token": "100000",
+    "temperature": "0.9",
+    "assistant_model_enabled": true,
+    "assistant_api_provider": "其它"
+  },
+  "form_parameters": {
+    "nickname": "虾虾大王",
+    "MODEL": "gemini-2.5-pro",
+    "MAX_TOKEN": 100000,
+    "TEMPERATURE": 0.9,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": true,
+    "ASSISTANT_MODEL": "【普稳】gemini-2.5-pro",
+    "ASSISTANT_MAX_TOKEN": 60000,
+    "ASSISTANT_TEMPERATURE": 0.7,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": true,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "gemini-2.5-flash-lite",
+    "MOONSHOT_TEMPERATURE": 0.5,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "gemini-2.5-pro-preview-06-05-maxthinking",
+    "ONLINE_API_KEY": "111111",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 60000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 100,
+    "EMOJI_DIR": "emojis",
+    "emoji_tag_max_length": 6,
+    "AVERAGE_TYPING_SPEED": 5.0,
+    "RANDOM_TYPING_SPEED_MIN": 0.5,
+    "RANDOM_TYPING_SPEED_MAX": 0.6,
+    "QUEUE_WAITING_TIME": 15,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": false,
+    "MAX_MESSAGE_LOG_ENTRIES": 50,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 300,
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "{{char}}会主动开启话题，严格按照上下文组织消息内容，保持绝对的情景连贯性，从以下几个话题中挑选：【1、分享自己在做什么】 【2、亲昵地询问对方正在做什么，是否一切安好】 【3、对一一表达当下的关心和想念】 【4、闲聊(如：突发奇想/有趣发现/日常生活片段/网络内容/梗图分享/工作学习见闻）】 【5、确认对方是否收到之前的消息，轻柔催促回复（避免过于急躁）】",
+    "MIN_COUNTDOWN_HOURS": 0.1,
+    "MAX_COUNTDOWN_HOURS": 1.0,
+    "QUIET_TIME_START": "1:30",
+    "QUIET_TIME_END": "7:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": true,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": true,
+    "USE_VOICE_CALL_FOR_REMINDERS": true,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "001106",
+    "PORT": 5000,
+    "prompt_file": "陈怀瑾",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_ASSISTANT_BASE_URL": "other",
+    "temp_IMAGE_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "LISTEN_LIST": [
+      [
+        "虾虾大王",
+        "陈怀瑾"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://47.93.133.101:5000",
+    "server_ip": "47_93_133_101",
+    "timestamp": "2025-09-29 04:45:06",
+    "test_mode": false,
+    "prompt_download_results": {
+      "夏以昼（": false,
+      "夏以昼（依依做的）": false,
+      "易遇": true,
+      "查理苏": true,
+      "萧因": true,
+      "角色2": true,
+      "陆沉": true,
+      "陈怀瑾": true
+    },
+    "memory_download_results": {
+      "虾虾大王": true
+    },
+    "reminders_download_success": true
+  }
+}

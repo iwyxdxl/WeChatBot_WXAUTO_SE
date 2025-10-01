@@ -1,0 +1,107 @@
+{
+  "user_list": [
+    {
+      "nickname": "电子猫",
+      "prompt_file": "雪姐"
+    }
+  ],
+  "prompt_list": [
+    "角色1",
+    "角色2",
+    "雪姐"
+  ],
+  "chat_model_config": {
+    "api_provider": "其它",
+    "api_provider_value": "other",
+    "api_key": "已配置（隐藏显示）",
+    "max_token": "2000",
+    "temperature": "1.1",
+    "assistant_model_enabled": true,
+    "assistant_api_provider": "硅基流动"
+  },
+  "form_parameters": {
+    "nickname": "电子猫",
+    "MODEL": "gemini-2.0-flash-thinking-exp-1219",
+    "DEEPSEEK_API_KEY": "1298****9522",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 1.1,
+    "REMOVE_PARENTHESES": false,
+    "ENABLE_ASSISTANT_MODEL": true,
+    "ASSISTANT_MODEL": "Qwen/Qwen2.5-7B-Instruct",
+    "ASSISTANT_MAX_TOKEN": 1000,
+    "ASSISTANT_TEMPERATURE": 0.3,
+    "USE_ASSISTANT_FOR_MEMORY_SUMMARY": true,
+    "ENABLE_IMAGE_RECOGNITION": true,
+    "ENABLE_EMOJI_RECOGNITION": true,
+    "MOONSHOT_MODEL": "moonshot-v1-128k-vision-preview",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_MODEL": "gemini-2.5-flash-preview-04-17-thinking",
+    "ONLINE_API_KEY": "hf_a*****************************vLpx",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 20000,
+    "SEARCH_DETECTION_PROMPT": "请在每次回复前准确判断用户消息是否明显需要联网才能获取准确答案.判断依据应仅基于用户消息的内容特征与表达目的,而非AI自身是否能回答.特别注意区分以下两类情况:一类是需要联网的情形,包括用户提出具体的信息性查询,内容具有时效性或知识盲区可能性(如新闻/综艺结果/歌词/特定内容出处等);使用了明确的信息查询句式(如\"你知道……吗?\"/\"你能查查……吗?\"/\"最近……发生了什么?\"/\"谁赢了……?\"等);问题中包含具体作品/节目/平台或事件名;或用户的提问意图是获取确切事实/查证具体细节/核实外部数据.另一类是不需要联网的情形,包括用户仅在分享自己的生活/感受/情绪或日常片段(如\"我最近好累\"/\"刚刚吃了碗拉面\"/\"今天心情很糟糕\"),表达的目的侧重于倾诉/叙述或互动而非查询事实;即使消息中包含\"最近\"/\"今天\"等时效词汇,也不构成联网需求,除非其明确指向外部信息来源或带有事实性疑问.请综合语言结构与表达目的进行判断,而不要仅依赖关键词触发;同时不要以AI是否能回答为判断标准,而应以用户是否在主动索取事实性外部信息作为判断核心.",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": true,
+    "EMOJI_SENDING_PROBABILITY": 75,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": true,
+    "ENABLE_GROUP_KEYWORD_REPLY": true,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": true,
+    "AVERAGE_TYPING_SPEED": 0.01,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 3,
+    "SEPARATE_ROW_SYMBOLS": true,
+    "ENABLE_MEMORY": true,
+    "UPLOAD_MEMORY_TO_AI": true,
+    "ENABLE_SENSITIVE_CONTENT_CLEARING": true,
+    "MAX_MESSAGE_LOG_ENTRIES": 100,
+    "MAX_MEMORY_NUMBER": 1000,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 20,
+    "ENABLE_AUTO_MESSAGE": false,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么",
+    "MIN_COUNTDOWN_HOURS": 1.0,
+    "MAX_COUNTDOWN_HOURS": 2.0,
+    "QUIET_TIME_START": "22:00",
+    "QUIET_TIME_END": "8:00",
+    "IGNORE_GROUP_CHAT_FOR_AUTO_MESSAGE": false,
+    "ENABLE_REMINDERS": false,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": false,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "123456",
+    "PORT": 5000,
+    "prompt_file": "雪姐",
+    "temp_DEEPSEEK_BASE_URL": "other",
+    "temp_ONLINE_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "电子猫",
+        "雪姐"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://39.106.133.69:5000",
+    "server_ip": "39_106_133_69",
+    "timestamp": "2025-09-29 04:32:43",
+    "test_mode": false,
+    "prompt_download_results": {
+      "角色1": true,
+      "角色2": true,
+      "雪姐": true
+    },
+    "memory_download_results": {
+      "电子猫": false
+    },
+    "reminders_download_success": true
+  }
+}

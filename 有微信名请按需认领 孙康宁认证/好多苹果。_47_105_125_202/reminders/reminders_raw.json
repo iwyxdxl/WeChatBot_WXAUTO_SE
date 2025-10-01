@@ -1,0 +1,20 @@
+[
+  {
+    "content": "奖励每天打五十下屁股",
+    "reminder_type": "recurring",
+    "time_str": "23:40",
+    "user_id": "好多苹果。"
+  },
+  {
+    "content": "要用戒尺打屁股",
+    "reminder_type": "recurring",
+    "time_str": "23:42",
+    "user_id": "好多苹果。"
+  },
+  {
+    "content": "打我好不好",
+    "reminder_type": "recurring",
+    "time_str": "23:46",
+    "user_id": "好多苹果。"
+  }
+]

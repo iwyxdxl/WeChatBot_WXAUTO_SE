@@ -1,0 +1,14 @@
+[
+  {
+    "content": "注意休息",
+    "reminder_type": "recurring",
+    "time_str": "23:00",
+    "user_id": "Chloe"
+  },
+  {
+    "content": "好好学习",
+    "reminder_type": "recurring",
+    "time_str": "08:00",
+    "user_id": "Chloe"
+  }
+]

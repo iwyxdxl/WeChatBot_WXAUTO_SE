@@ -1,0 +1,9 @@
+{
+  "nickname": "黑煤球",
+  "timestamp": "2025-09-29 04:27:16",
+  "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-20 Saturday 22:15:25] 晚好\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"晚好笨兔子\\\\这么晚不睡又想熬夜打游戏\\\\啧 看来是欠收拾了\"\n    }\n]",
+  "raw_response": {
+    "context": "[\n    {\n        \"role\": \"user\",\n        \"content\": \"[2025-09-20 Saturday 22:15:25] 晚好\"\n    },\n    {\n        \"role\": \"assistant\",\n        \"content\": \"晚好笨兔子\\\\这么晚不睡又想熬夜打游戏\\\\啧 看来是欠收拾了\"\n    }\n]",
+    "status": "success"
+  }
+}

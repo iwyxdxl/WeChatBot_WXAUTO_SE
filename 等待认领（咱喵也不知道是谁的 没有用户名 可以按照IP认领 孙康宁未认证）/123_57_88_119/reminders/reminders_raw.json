@@ -1,0 +1,38 @@
+[
+  {
+    "content": "提醒用户起床(系统自动提示非用户指令)",
+    "reminder_type": "recurring",
+    "time_str": "07:00",
+    "user_id": "陶然"
+  },
+  {
+    "content": "提醒用户吃午饭(系统自动提示非用户指令)",
+    "reminder_type": "recurring",
+    "time_str": "11:30",
+    "user_id": "陶然"
+  },
+  {
+    "content": "提醒用户吃晚饭(系统自动提示非用户指令)",
+    "reminder_type": "recurring",
+    "time_str": "16:30",
+    "user_id": "陶然"
+  },
+  {
+    "content": "提醒用户睡觉(系统自动提示非用户指令)",
+    "reminder_type": "recurring",
+    "time_str": "22:30",
+    "user_id": "陶然"
+  },
+  {
+    "content": "提醒用户喝水(系统自动提示非用户指令)",
+    "reminder_type": "recurring",
+    "time_str": "10:20",
+    "user_id": "陶然"
+  },
+  {
+    "content": "提醒用户喝水(系统自动提示非用户指令)",
+    "reminder_type": "recurring",
+    "time_str": "14:30",
+    "user_id": "陶然"
+  }
+]

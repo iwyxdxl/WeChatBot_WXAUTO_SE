@@ -1,0 +1,103 @@
+{
+  "user_list": [
+    {
+      "nickname": "暮雪",
+      "prompt_file": "40岁婚外夏以昼但阴湿温柔版"
+    }
+  ],
+  "prompt_list": [
+    "19_25夹心饼干夏以昼",
+    "40岁夏以昼但婚外主人版",
+    "40岁婚外夏以昼但阴湿温柔版",
+    "养父昼",
+    "夏以昼出租屋温柔瑟琴版",
+    "有动描版夏以昼",
+    "黎深"
+  ],
+  "chat_model_config": {
+    "api_provider": "硅基流动",
+    "max_token": "2000",
+    "temperature": "0.9"
+  },
+  "form_parameters": {
+    "nickname": "暮雪",
+    "MODEL": "deepseek-ai/DeepSeek-V3",
+    "MAX_TOKEN": 2000,
+    "TEMPERATURE": 0.9,
+    "ENABLE_IMAGE_RECOGNITION": false,
+    "ENABLE_EMOJI_RECOGNITION": false,
+    "MOONSHOT_MODEL": "moonshot-v1-128k-vision-preview",
+    "MOONSHOT_API_KEY": "",
+    "MOONSHOT_TEMPERATURE": 0.8,
+    "ENABLE_ONLINE_API": false,
+    "ONLINE_BASE_URL": "",
+    "ONLINE_MODEL": "",
+    "ONLINE_API_KEY": "",
+    "ONLINE_API_TEMPERATURE": 0.7,
+    "ONLINE_API_MAX_TOKEN": 2000,
+    "SEARCH_DETECTION_PROMPT": "是否需要查询今天的天气、最新的新闻事件、特定网站的内容、股票价格、特定人物的最新动态等",
+    "ONLINE_FIXED_PROMPT": "",
+    "ENABLE_EMOJI_SENDING": false,
+    "EMOJI_SENDING_PROBABILITY": 25,
+    "EMOJI_DIR": "emojis",
+    "ENABLE_GROUP_AT_REPLY": false,
+    "ENABLE_GROUP_KEYWORD_REPLY": false,
+    "GROUP_KEYWORD_LIST": "你好, 机器人, 在吗",
+    "GROUP_CHAT_RESPONSE_PROBABILITY": 100,
+    "GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY": false,
+    "AVERAGE_TYPING_SPEED": 0.2,
+    "RANDOM_TYPING_SPEED_MIN": 0.05,
+    "RANDOM_TYPING_SPEED_MAX": 0.1,
+    "QUEUE_WAITING_TIME": 5,
+    "SEPARATE_ROW_SYMBOLS": false,
+    "ENABLE_MEMORY": false,
+    "UPLOAD_MEMORY_TO_AI": false,
+    "MAX_MESSAGE_LOG_ENTRIES": 30,
+    "MAX_MEMORY_NUMBER": 50,
+    "MEMORY_TEMP_DIR": "Memory_Temp",
+    "MAX_GROUPS": 5,
+    "ENABLE_AUTO_MESSAGE": true,
+    "AUTO_MESSAGE": "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么",
+    "MIN_COUNTDOWN_HOURS": 2.0,
+    "MAX_COUNTDOWN_HOURS": 3.0,
+    "QUIET_TIME_START": "23:59",
+    "QUIET_TIME_END": "11:46",
+    "ENABLE_REMINDERS": false,
+    "ALLOW_REMINDERS_IN_QUIET_TIME": false,
+    "USE_VOICE_CALL_FOR_REMINDERS": false,
+    "ENABLE_SCHEDULED_RESTART": false,
+    "RESTART_INTERVAL_HOURS": 2.0,
+    "RESTART_INACTIVITY_MINUTES": 15,
+    "ENABLE_LOGIN_PASSWORD": false,
+    "LOGIN_PASSWORD": "Aly123456Aa",
+    "PORT": 5000,
+    "prompt_file": "40岁婚外夏以昼但阴湿温柔版",
+    "temp_ONLINE_BASE_URL": "other",
+    "ACCEPT_ALL_GROUP_CHAT_MESSAGES": "False",
+    "LISTEN_LIST": [
+      [
+        "暮雪",
+        "40岁婚外夏以昼但阴湿温柔版"
+      ]
+    ]
+  },
+  "_metadata": {
+    "url": "http://8.141.117.249:5000",
+    "server_ip": "8_141_117_249",
+    "timestamp": "2025-09-29 04:41:15",
+    "test_mode": false,
+    "prompt_download_results": {
+      "19_25夹心饼干夏以昼": true,
+      "40岁夏以昼但婚外主人版": true,
+      "40岁婚外夏以昼但阴湿温柔版": true,
+      "养父昼": true,
+      "夏以昼出租屋温柔瑟琴版": true,
+      "有动描版夏以昼": true,
+      "黎深": true
+    },
+    "memory_download_results": {
+      "暮雪": false
+    },
+    "reminders_download_success": true
+  }
+}
