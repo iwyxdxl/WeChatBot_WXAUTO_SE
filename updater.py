@@ -68,7 +68,7 @@ class Updater:
 
     # GitHub代理列表 - 第一组: 支持API Zipball的镜像 (优先使用)
     PROXY_SERVERS = [
-        # "",  # 空字符串表示直接使用原始GitHub地址
+        "",  # 空字符串表示直接使用原始GitHub地址
         # 支持API Zipball的镜像 (测试成功率4/4)
         "https://gh.noki.eu.org/",      # 899ms,4/4成功
         "https://gh-proxy.com/",        # 1350ms,4/4成功
