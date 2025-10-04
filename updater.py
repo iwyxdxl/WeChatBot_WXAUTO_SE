@@ -66,24 +66,32 @@ class Updater:
         "backup",      # 备份文件夹
     ]
 
-    # GitHub代理列表
+    # GitHub代理列表 - 第一组: 支持API Zipball的镜像 (优先使用)
     PROXY_SERVERS = [
         "",  # 空字符串表示直接使用原始GitHub地址
-        # 镜像站
-        "https://ghfast.top/",
-        "https://github.moeyy.xyz/", 
-        "https://git.886.be/",
-        # "https://ghproxy.com/",           # GitHub代理
-        # "https://mirror.ghproxy.com/",    # ghproxy镜像
-        # "https://github.com.cnpmjs.org/", # cnpmjs镜像
-        # "https://hub.fastgit.xyz/",       # FastGit镜像
-        # "https://download.fastgit.org/",  # FastGit下载镜像
-        # "https://github.bajins.com/",     # bajins镜像
-        # "https://pd.zwc365.com/",         # zwc365镜像
-        # "https://ghps.cc/",               # ghps镜像
-        # "https://gh.con.sh/",             # con.sh镜像
-        # "https://cors.isteed.cc/github.com/", # isteed镜像
-        # "https://hub.yzuu.cf/",           # yzuu镜像
+        # 支持API Zipball的镜像 (测试成功率4/4)
+        "https://gh.noki.eu.org/",      # 899ms,4/4成功
+        "https://gh-proxy.com/",        # 1350ms,4/4成功
+        "https://gitpro.a3e.top/",      # 1350ms,4/4成功,官方维护
+        "https://hub.tcpmini.news/",    # 1972ms,4/4成功,官方维护
+        "https://tvv.tw/",              # 最快812ms,4/4成功
+        "https://gh.noki.icu/",         # 1432ms,4/4成功
+        "https://gh.catmak.name/",      # 2242ms,4/4成功
+    ]
+    
+    # GitHub代理列表 - 第二组: 支持Tag/Main下载的镜像 (备用)
+    PROXY_SERVERS_FALLBACK = [
+        # 速度最快的镜像 (不支持API但支持Tag/Main)
+        "https://y.whereisdoge.work/",  # 最快668ms,3/4成功
+        "https://github.xxlab.tech/",   # 761ms,3/4成功
+        "https://hub.gitmirror.com/",   # 813ms,3/4成功
+        "https://gh.nxnow.top/",        # 931ms,3/4成功
+        "https://gh.404cafe.fun/",      # 1010ms,3/4成功
+        "https://ghproxy.net/",         # 1059ms,3/4成功
+        "https://git.669966.xyz/",      # 1177ms,3/4成功
+        "https://gh-proxy.net/",        # 1217ms,3/4成功
+        "https://ghfast.top/",          # 1641ms,3/4成功
+        "https://ghproxy.cc/",          # 1727ms,3/4成功
     ]
 
     def __init__(self):
@@ -91,18 +99,52 @@ class Updater:
         self.temp_dir = os.path.join(self.root_dir, 'temp_update')
         self.version_file = os.path.join(self.root_dir, 'version.json')
         self.current_proxy_index = 0  # 当前使用的代理索引
+        self.use_fallback_proxies = False  # 是否使用备用代理列表
 
-    def get_proxy_url(self, original_url: str) -> str:
+    def get_current_proxy_list(self):
+        """获取当前使用的代理列表"""
+        return self.PROXY_SERVERS_FALLBACK if self.use_fallback_proxies else self.PROXY_SERVERS
+
+    def get_proxy_url(self, original_url: str, log_info: bool = True) -> str:
         """获取当前代理URL"""
-        if self.current_proxy_index >= len(self.PROXY_SERVERS):
+        proxy_list = self.get_current_proxy_list()
+        if self.current_proxy_index >= len(proxy_list):
             return original_url
-        proxy = self.PROXY_SERVERS[self.current_proxy_index]
+        proxy = proxy_list[self.current_proxy_index]
+        
+        # 打印当前使用的代理节点信息
+        if log_info:
+            node_type = "备用更新节点" if self.use_fallback_proxies else "主更新节点"
+            node_number = self.current_proxy_index + 1
+            
+            if proxy:
+                msg = f"[检查更新] 使用 {node_type}{node_number}"
+                print(msg)
+                logger.info(msg)
+            else:
+                msg = f"[检查更新] 使用直连方式 (主更新节点{node_number})"
+                print(msg)
+                logger.info(msg)
+        
         return f"{proxy}{original_url}" if proxy else original_url
 
     def try_next_proxy(self) -> bool:
         """尝试切换到下一个代理"""
+        proxy_list = self.get_current_proxy_list()
         self.current_proxy_index += 1
-        return self.current_proxy_index < len(self.PROXY_SERVERS)
+        
+        # 如果当前列表已用完
+        if self.current_proxy_index >= len(proxy_list):
+            # 如果还没用过备用列表,切换到备用列表
+            if not self.use_fallback_proxies:
+                logger.info("主代理列表已全部尝试,切换到备用代理列表...")
+                self.use_fallback_proxies = True
+                self.current_proxy_index = 0
+                return True
+            # 备用列表也用完了
+            return False
+        
+        return True
 
     def get_current_version(self) -> str:
         """获取当前版本号"""
@@ -208,23 +250,34 @@ class Updater:
                 latest_ver_tuple = parse_version(latest_version)
 
                 if latest_ver_tuple > current_ver_tuple:
-                    release_url = self.get_proxy_url(f"{self.GITHUB_API}/releases/latest")
-                    response = requests.get(
-                        release_url,
-                        headers=headers,
-                        timeout=10
-                    )
-                    
-                    if response.status_code == 404:
-                        download_url = f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}"
+                    # 根据当前使用的代理列表选择下载方式
+                    if self.use_fallback_proxies:
+                        # 备用代理使用Tag下载 (支持率更高)
+                        logger.info("使用备用代理,采用Tag下载方式")
+                        download_url = f"https://github.com/{self.REPO_OWNER}/{self.REPO_NAME}/archive/refs/tags/{latest_version}.zip"
+                        # 如果没有tag,使用main分支
+                        if not latest_version or latest_version == '0.0.0':
+                            download_url = f"https://github.com/{self.REPO_OWNER}/{self.REPO_NAME}/archive/{self.REPO_BRANCH}.zip"
                     else:
-                        try:
-                            release_info = response.json()
-                            # 安全地获取 zipball_url，如果不存在则使用分支下载
-                            download_url = release_info.get('zipball_url', f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}")
-                        except (json.JSONDecodeError, KeyError, TypeError) as e:
-                            logger.warning(f"解析release信息失败: {str(e)}，使用分支下载")
+                        # 主代理使用API Zipball下载
+                        logger.info("使用主代理,采用API Zipball下载方式")
+                        release_url = self.get_proxy_url(f"{self.GITHUB_API}/releases/latest")
+                        response = requests.get(
+                            release_url,
+                            headers=headers,
+                            timeout=10
+                        )
+                        
+                        if response.status_code == 404:
                             download_url = f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}"
+                        else:
+                            try:
+                                release_info = response.json()
+                                # 安全地获取 zipball_url，如果不存在则使用分支下载
+                                download_url = release_info.get('zipball_url', f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}")
+                            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                                logger.warning(f"解析release信息失败: {str(e)}，使用分支下载")
+                                download_url = f"{self.GITHUB_API}/zipball/{self.REPO_BRANCH}"
                     
                     # 返回原始下载URL（关键修改点）
                     return {
@@ -234,7 +287,7 @@ class Updater:
                         'description': remote_version_info.get('description', '无更新说明'),
                         'last_update': remote_version_info.get('last_update', ''),
                         'output': self.format_version_info(current_version, remote_version_info),
-                        'source': 'GitHub'
+                        'source': 'GitHub (备用代理-Tag下载)' if self.use_fallback_proxies else 'GitHub (主代理-API)'
                     }
                 
                 return {
@@ -557,11 +610,27 @@ class Updater:
                 if is_gitee:
                     # Gitee链接直接使用，不应用代理
                     proxied_url = download_url
-                    logger.info(f"正在从Gitee下载更新: {proxied_url}")
+                    msg = f"[下载更新] 使用Gitee源"
+                    print(msg)
+                    logger.info(msg)
                 else:
                     # GitHub链接使用代理
-                    proxied_url = self.get_proxy_url(download_url)
-                    logger.info(f"正在从 {proxied_url} 下载更新...")
+                    # 先打印节点信息
+                    node_type = "备用更新节点" if self.use_fallback_proxies else "主更新节点"
+                    node_number = self.current_proxy_index + 1
+                    proxy_list = self.get_current_proxy_list()
+                    current_proxy = proxy_list[self.current_proxy_index] if self.current_proxy_index < len(proxy_list) else ""
+                    
+                    if current_proxy:
+                        msg = f"[下载更新] 使用 {node_type}{node_number}"
+                        print(msg)
+                        logger.info(msg)
+                    else:
+                        msg = f"[下载更新] 使用直连方式 (主更新节点{node_number})"
+                        print(msg)
+                        logger.info(msg)
+                    
+                    proxied_url = self.get_proxy_url(download_url, log_info=False)  # 不重复打印日志
                 
                 response = requests.get(
                     proxied_url,
