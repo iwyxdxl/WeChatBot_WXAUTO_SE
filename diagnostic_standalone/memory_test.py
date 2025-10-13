@@ -22,6 +22,13 @@ import re
 from datetime import datetime
 from openai import OpenAI
 
+# 导入安全工具
+try:
+    from security_utils import SecurityValidator, sanitize_ai_prompt_input
+except ImportError:
+    SecurityValidator = None
+    sanitize_ai_prompt_input = None
+
 # 确保项目根目录在Python路径中
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
@@ -81,12 +88,24 @@ class MemoryTestTool:
         try:
             # 获取配置中的记忆目录，如果是相对路径则转换为从diagnostic_standalone目录的相对路径
             config_memory_dir = getattr(self.config, 'MEMORY_TEMP_DIR', 'Memory_Temp')
-            if config_memory_dir.startswith('../'):
-                # 如果已经是相对于上级目录的路径，直接使用
-                memory_dir = config_memory_dir
+            
+            # 使用安全的路径验证
+            if SecurityValidator:
+                try:
+                    project_root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    memory_dir = SecurityValidator.validate_path(
+                        config_memory_dir,
+                        project_root_path
+                    )
+                except ValueError as e:
+                    self.log_func(f"✗ 记忆目录路径验证失败: {str(e)}")
+                    return False
             else:
-                # 如果是相对于项目根目录的路径，需要添加../前缀
-                memory_dir = f'../{config_memory_dir}'
+                # 回退到原有逻辑
+                if config_memory_dir.startswith('../'):
+                    memory_dir = config_memory_dir
+                else:
+                    memory_dir = f'../{config_memory_dir}'
             
             if not os.path.exists(memory_dir):
                 self.log_func(f"✗ 记忆目录不存在: {memory_dir}")
@@ -130,19 +149,30 @@ class MemoryTestTool:
             self.log_func(f"✗ 记忆日志文件查找失败: {str(e)}")
             return False
         
-        # 步骤5: 读取并分析记忆日志内容
+        # 步骤5: 读取并分析记忆日志内容（带大小限制）
         self.log_func("步骤5: 读取并分析记忆日志内容")
         try:
             # 选择第一个日志文件进行测试
             test_log_file = log_files[0]
             test_log_path = os.path.join(memory_dir, test_log_file)
             
+            # 验证文件大小，防止资源耗尽
+            MAX_LOG_SIZE = 10 * 1024 * 1024  # 10MB
+            if SecurityValidator:
+                try:
+                    SecurityValidator.validate_file_size(test_log_path, MAX_LOG_SIZE)
+                except ValueError as e:
+                    self.log_func(f"✗ {str(e)}")
+                    return False
+            else:
+                # 回退检查
+                file_size = os.path.getsize(test_log_path)
+                if file_size > MAX_LOG_SIZE:
+                    self.log_func(f"✗ 日志文件过大: {file_size} bytes (最大允许: {MAX_LOG_SIZE} bytes)")
+                    return False
+            
             with open(test_log_path, 'r', encoding='utf-8') as f:
                 logs = [line.strip() for line in f if line.strip()]
-            
-            if not logs:
-                self.log_func(f"✗ 日志文件 {test_log_file} 为空")
-                return False
             
             if not logs:
                 self.log_func(f"✗ 日志文件 {test_log_file} 为空")
@@ -163,8 +193,13 @@ class MemoryTestTool:
             user_name = test_log_file.split('_')[0]  # 从文件名提取用户名
             prompt_name = test_log_file.split('_')[1].replace('_log.txt', '')  # 提取prompt名
             
-            # 使用所有日志内容进行测试
+            # 使用所有日志内容进行测试（带AI提示注入防护）
             full_logs = '\n'.join(logs)
+            
+            # 清理输入，防止AI提示注入
+            if sanitize_ai_prompt_input:
+                full_logs = sanitize_ai_prompt_input(full_logs)
+            
             summary_prompt = f"请以{prompt_name}的视角，用中文总结与{user_name}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{full_logs}"
             
             # 调用AI进行总结
@@ -224,10 +259,15 @@ class MemoryTestTool:
                 self.add_log(f"\033[31m{error_message}\033[0m", "error")
             return False
         
-        # 步骤7: 测试重要性评估功能
+        # 步骤7: 测试重要性评估功能（带AI提示注入防护）
         self.log_func("步骤7: 测试重要性评估功能")
         try:
-            importance_prompt = f"为以下记忆的重要性评分（1-5，直接回复数字）：\n{cleaned_summary}"
+            # 清理总结内容，防止AI提示注入
+            safe_summary = cleaned_summary
+            if sanitize_ai_prompt_input:
+                safe_summary = sanitize_ai_prompt_input(cleaned_summary)
+            
+            importance_prompt = f"为以下记忆的重要性评分（1-5，直接回复数字）：\n{safe_summary}"
             
             response = self.client.chat.completions.create(
                 model=self.config.MODEL,

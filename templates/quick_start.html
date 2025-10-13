@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 <!-----------------------------------------------------------------------
 - Copyright (C) 2025, iwyxdxl
 - Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -310,10 +312,11 @@
     <div class="container">
         <h1>WeChatBot 快速上手配置</h1>
         <form method="post" action="{{ url_for('quick_start') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <h2>1. API 配置</h2>
             <div class="form-group">
                 <label for="quick_start_api_provider">API 服务商:</label>
-                <select id="quick_start_api_provider" name="quick_start_api_provider">
+                <select id="quick_start_api_provider" name="quick_start_api_provider" title="API 服务商">
                     <option value="weapis" {% if current_api_provider == 'weapis' %}selected{% endif %}>WeAPIs (推荐, 支持聊天/识图/联网)</option>
                     <option value="siliconflow" {% if current_api_provider == 'siliconflow' %}selected{% endif %}>硅基流动 (仅聊天)</option>
                     <option value="deepseek_official" {% if current_api_provider == 'deepseek_official' %}selected{% endif %}>DeepSeek官方 (仅聊天)</option>
@@ -345,7 +348,7 @@
                     {% for item in config.LISTEN_LIST %}
                     <div class="entry">
                         <input type="text" name="nickname" value="{{ item[0] }}" placeholder="微信昵称/备注" required>
-                        <select name="prompt_file" required>
+                        <select name="prompt_file" required title="选择 Prompt 文件">
                             <option value="">-- 选择Prompt文件 --</option>
                             {% for file in prompt_files %}
                             <option value="{{ file }}" {% if item[1] == file %}selected{% endif %}>{{ file }}</option>
@@ -526,7 +529,7 @@
             div.className = 'entry';
             div.innerHTML = `
                 <input type="text" name="nickname" placeholder="微信昵称/备注" required>
-                <select name="prompt_file" required>
+                <select name="prompt_file" required title="选择 Prompt 文件">
                     <option value="">-- 选择Prompt文件 --</option>
                     {% for file in prompt_files %}
                     <option value="{{ file }}">{{ file }}</option>

@@ -27,6 +27,16 @@ from flask_cors import CORS
 import psutil
 import socket
 
+# 导入安全工具模块
+try:
+    from security_utils import SecurityValidator, AuthenticationManager, SecurityAuditor, sanitize_ai_prompt_input
+except ImportError:
+    print("警告: 安全工具模块未找到，部分安全功能将不可用")
+    SecurityValidator = None
+    AuthenticationManager = None
+    SecurityAuditor = None
+    sanitize_ai_prompt_input = None
+
 # 尝试导入所需的模块
 try:
     from openai import OpenAI
@@ -39,6 +49,8 @@ try:
 except ImportError:
     WeChat = None
     WxParam = None
+
+from waitress import serve
 
 # Windows COM初始化
 try:
@@ -75,6 +87,8 @@ class DiagnosticTool:
         self.is_testing = False
         self.current_test = 0
         self.config = None
+        self.max_logs = 500  # 最大日志条数
+        self.auditor = SecurityAuditor() if SecurityAuditor else None
         self.load_config()
 
     def load_config(self):
@@ -88,14 +102,24 @@ class DiagnosticTool:
             self.add_log(f"配置文件加载失败: {str(e)}", "error")
 
     def add_log(self, message, level="info"):
-        """添加日志"""
+        """添加日志（带资源限制）"""
         timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # 清理日志消息，防止日志注入
+        if SecurityValidator:
+            message = SecurityValidator.sanitize_log_message(message)
+        
         log_entry = {
             'timestamp': timestamp,
             'message': message,
             'level': level
         }
         self.logs.append(log_entry)
+        
+        # 限制日志数量，防止资源耗尽
+        if len(self.logs) > self.max_logs:
+            self.logs = self.logs[-self.max_logs:]
+        
         print(f"[{timestamp}] {level.upper()}: {message}")
 
     def update_test_status(self, test_id, status, message):
@@ -294,10 +318,23 @@ class DiagnosticTool:
             
             # 步骤2: 检查记忆目录（使用配置或默认路径）
             config_memory_dir = getattr(self.config, 'MEMORY_TEMP_DIR', 'Memory_Temp')
-            if config_memory_dir.startswith('../'):
-                memory_dir = config_memory_dir
+            
+            # 使用安全的路径验证
+            if SecurityValidator:
+                try:
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    memory_dir = SecurityValidator.validate_path(
+                        config_memory_dir, 
+                        project_root
+                    )
+                except ValueError as e:
+                    raise Exception(f"记忆目录路径验证失败: {str(e)}")
             else:
-                memory_dir = f'../{config_memory_dir}'
+                # 回退到原有逻辑
+                if config_memory_dir.startswith('../'):
+                    memory_dir = config_memory_dir
+                else:
+                    memory_dir = f'../{config_memory_dir}'
             
             if not os.path.exists(memory_dir):
                 os.makedirs(memory_dir, exist_ok=True)
@@ -442,10 +479,23 @@ class DiagnosticTool:
         try:
             # 检查表情包目录（使用配置或默认路径）
             config_emoji_dir = getattr(self.config, 'EMOJI_DIR', 'emojis') if self.config else 'emojis'
-            if config_emoji_dir.startswith('../'):
-                emoji_dir = config_emoji_dir
+            
+            # 使用安全的路径验证
+            if SecurityValidator:
+                try:
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    emoji_dir = SecurityValidator.validate_path(
+                        config_emoji_dir, 
+                        project_root
+                    )
+                except ValueError as e:
+                    raise Exception(f"表情目录路径验证失败: {str(e)}")
             else:
-                emoji_dir = f'../{config_emoji_dir}'
+                # 回退到原有逻辑
+                if config_emoji_dir.startswith('../'):
+                    emoji_dir = config_emoji_dir
+                else:
+                    emoji_dir = f'../{config_emoji_dir}'
             
             if not os.path.exists(emoji_dir):
                 raise Exception(f"表情包目录不存在: {emoji_dir}")
@@ -467,8 +517,15 @@ class DiagnosticTool:
             self.add_log(f"找到测试表情文件: {emoji_file}", "info")
             
             if send_real_message:
-                # 真实消息发送模式 - 使用subprocess在新进程中执行
+                # 真实消息发送模式 - 使用安全脚本和命令行参数
                 self.add_log("⚠️ 真实消息发送模式已启用", "warning")
+                
+                # 安全审计
+                if self.auditor:
+                    self.auditor.log_action(
+                        action='real_message_send_initiated',
+                        details={'mode': 'test7_wechat_interaction'}
+                    )
                 
                 # 检查配置和文件
                 if self.config and hasattr(self.config, 'LISTEN_LIST') and self.config.LISTEN_LIST:
@@ -477,90 +534,35 @@ class DiagnosticTool:
                     self.add_log(f"测试表情文件: {os.path.basename(emoji_file)}", "info")
                     
                     try:
-                        # 创建临时发送脚本
-                        script_content = f'''import os
-import sys
-import time
-sys.path.insert(0, r"{os.path.dirname(os.path.abspath(__file__))}")
-
-try:
-    from wxautox_wechatbot import WeChat
-    try:
-        from wxautox_wechatbot.param import WxParam
-    except ImportError:
-        try:
-            from wxautox_wechatbot import WxParam
-        except ImportError:
-            # 如果无法导入WxParam，跳过参数设置
-            WxParam = None
-    
-    # 初始化
-    os.environ["PROJECT_NAME"] = 'iwyxdxl/WeChatBot_WXAUTO_SE'
-    if WxParam:
-        WxParam.ENABLE_FILE_LOGGER = False
-    
-    wx = WeChat()
-    
-    # 确保微信窗口在前台
-    try:
-        import win32gui
-        import win32con
-        
-        def find_wechat_window():
-            def enum_windows_proc(hwnd, param):
-                if win32gui.IsWindowVisible(hwnd):
-                    window_text = win32gui.GetWindowText(hwnd)
-                    if "微信" in window_text or "WeChat" in window_text:
-                        param.append(hwnd)
-                return True
-            
-            windows = []
-            win32gui.EnumWindows(enum_windows_proc, windows)
-            return windows[0] if windows else None
-        
-        wechat_hwnd = find_wechat_window()
-        if wechat_hwnd:
-            # 激活微信窗口
-            win32gui.ShowWindow(wechat_hwnd, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(wechat_hwnd)
-            time.sleep(1)  # 等待窗口激活
-            print("微信窗口已激活")
-        else:
-            print("未找到微信窗口，继续尝试发送")
-    except ImportError:
-        print("win32gui未安装，跳过窗口激活")
-    except Exception as e:
-        print(f"窗口激活失败: {{e}}，继续尝试发送")
-    
-    # 发送消息
-    wx.ChatWith(r"{first_contact}")
-    time.sleep(0.5)  # 等待聊天窗口打开
-    wx.SendFiles(r"{emoji_file}")
-    
-    print("SUCCESS: 测试表情发送成功")
-    
-except Exception as e:
-    print(f"ERROR: {{e}}")
-finally:
-    # 确保脚本正常退出
-    import sys
-    sys.exit(0)
-'''
+                        # 验证输入参数
+                        if SecurityValidator:
+                            try:
+                                # 清理文件路径
+                                emoji_file = SecurityValidator.sanitize_file_path(emoji_file)
+                            except ValueError as e:
+                                raise Exception(f"文件路径包含危险字符: {str(e)}")
                         
-                        # 写入临时脚本
-                        temp_script = "temp_send_message.py"
-                        with open(temp_script, 'w', encoding='utf-8') as f:
-                            f.write(script_content)
+                        # 检查安全脚本是否存在
+                        safe_script = os.path.join(
+                            os.path.dirname(__file__), 
+                            'safe_send_script.py'
+                        )
+                        
+                        if not os.path.exists(safe_script):
+                            raise Exception("安全发送脚本不存在，请确保 safe_send_script.py 文件存在")
                         
                         self.add_log("正在发送测试表情...", "info")
                         
-                        # 使用Popen异步执行，避免阻塞
+                        # 使用安全的命令行参数方式，避免代码注入
                         try:
                             self.add_log("启动发送进程...", "info")
                             
-                            # 使用Popen启动进程
+                            # 使用命令行参数传递数据，不使用shell
                             process = subprocess.Popen([
-                                sys.executable, temp_script
+                                sys.executable,
+                                safe_script,
+                                '--contact', first_contact,
+                                '--file', emoji_file
                             ], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding='utf-8', errors='ignore',
                             creationflags=subprocess.CREATE_NO_WINDOW)
@@ -601,13 +603,18 @@ finally:
                                 result_msg = f"发送超时失败 - 请检查微信是否正常运行，然后重试"
                                 self.update_test_status('7', 'error', result_msg)
                                 self.add_log("微信交互测试失败（超时）", "error")
+                                
+                                # 安全审计
+                                if self.auditor:
+                                    self.auditor.log_security_event(
+                                        'message_send_timeout',
+                                        severity='warning',
+                                        details={'contact': first_contact}
+                                    )
                         
-                        finally:
-                            # 确保删除临时文件
-                            try:
-                                os.remove(temp_script)
-                            except:
-                                pass
+                        except Exception as e:
+                            # 发送进程异常
+                            raise Exception(f"消息发送进程异常: {str(e)}")
                             
                     except Exception as e:
                         raise Exception(f"真实消息发送失败: {str(e)}")
@@ -722,13 +729,24 @@ app = Flask(__name__)
 CORS(app)
 diagnostic = DiagnosticTool()
 
+# 初始化认证管理器（如果可用）
+auth_manager = AuthenticationManager() if AuthenticationManager else None
+
 @app.route('/')
 def index():
-    return render_template('diagnostic.html')
+    """首页 - 传递认证令牌"""
+    token = auth_manager.session_token if auth_manager else None
+    return render_template('diagnostic.html', token=token)
 
 @app.route('/api/start_test', methods=['POST'])
 def start_test():
-    """开始测试"""
+    """开始测试（需要认证）"""
+    # 认证检查（如果启用）
+    if auth_manager:
+        token = request.headers.get('X-Diagnostic-Token') or request.args.get('token')
+        if not auth_manager.verify_token(token):
+            return jsonify({'success': False, 'error': '未授权访问'}), 401
+    
     if not diagnostic.is_testing:
         # 获取请求数据
         request_data = request.get_json() or {}
@@ -738,6 +756,13 @@ def start_test():
         diagnostic.add_log(f"全自动测试接收到的请求数据: {request_data}", "info")
         diagnostic.add_log(f"测试7真实发送模式: {send_real_message_for_test7}", "info")
         
+        # 安全审计
+        if diagnostic.auditor:
+            diagnostic.auditor.log_action(
+                action='start_all_tests',
+                details={'real_message': send_real_message_for_test7}
+            )
+        
         threading.Thread(target=diagnostic.run_all_tests, args=(send_real_message_for_test7,), daemon=True).start()
         return jsonify({'success': True, 'message': '诊断已开始'})
     else:
@@ -745,19 +770,38 @@ def start_test():
 
 @app.route('/api/status')
 def get_status():
-    """获取状态"""
+    """获取状态（需要认证）"""
+    # 认证检查（如果启用）
+    if auth_manager:
+        token = request.headers.get('X-Diagnostic-Token') or request.args.get('token')
+        if not auth_manager.verify_token(token):
+            return jsonify({'success': False, 'error': '未授权访问'}), 401
+    
     return jsonify(diagnostic.get_status())
 
 @app.route('/api/retest/<test_id>', methods=['POST'])
 def retest_single(test_id):
-    """重新测试单个项目"""
+    """重新测试单个项目（需要认证）"""
+    # 认证检查（如果启用）
+    if auth_manager:
+        token = request.headers.get('X-Diagnostic-Token') or request.args.get('token')
+        if not auth_manager.verify_token(token):
+            return jsonify({'success': False, 'error': '未授权访问'}), 401
+    
     if diagnostic.is_testing:
         return jsonify({'success': False, 'message': '诊断正在进行中，请等待完成后再试'})
     
     try:
-        # 验证test_id是否有效
-        if test_id not in diagnostic.test_results:
-            return jsonify({'success': False, 'message': f'无效的测试ID: {test_id}'})
+        # 使用安全验证器验证test_id
+        if SecurityValidator:
+            try:
+                test_id = SecurityValidator.validate_test_id(test_id)
+            except ValueError as e:
+                return jsonify({'success': False, 'message': str(e)}), 400
+        else:
+            # 回退验证
+            if test_id not in diagnostic.test_results:
+                return jsonify({'success': False, 'message': f'无效的测试ID: {test_id}'}), 400
         
         # 获取请求数据
         request_data = request.get_json() or {}
@@ -813,9 +857,36 @@ def retest_single(test_id):
 
 @app.route('/api/solutions/<test_id>')
 def get_solutions(test_id):
-    """获取解决方案"""
+    """获取解决方案（需要认证）"""
+    # 认证检查（如果启用）
+    if auth_manager:
+        token = request.headers.get('X-Diagnostic-Token') or request.args.get('token')
+        if not auth_manager.verify_token(token):
+            return jsonify({'success': False, 'error': '未授权访问'}), 401
+    
     try:
-        with open('diagnostic_solutions.md', 'r', encoding='utf-8') as f:
+        # 使用安全验证器验证test_id
+        if SecurityValidator:
+            try:
+                test_id = SecurityValidator.validate_test_id(test_id)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+        else:
+            # 回退验证
+            valid_ids = ['1', '2', '3', '4', '5', '6', '7']
+            if test_id not in valid_ids:
+                return jsonify({'error': '无效的测试ID'}), 400
+        
+        # 使用安全的文件路径
+        solutions_file = os.path.join(
+            os.path.dirname(__file__), 
+            'diagnostic_solutions.md'
+        )
+        
+        if not os.path.exists(solutions_file):
+            return jsonify({'solution': '解决方案文件不存在'}), 404
+        
+        with open(solutions_file, 'r', encoding='utf-8') as f:
             content = f.read()
             # 简单解析markdown，提取对应测试的解决方案
             sections = content.split('## ')
@@ -829,34 +900,77 @@ def get_solutions(test_id):
                     formatted_solution = formatted_solution.replace(':', ':</h4>', 1)
                     return jsonify({'solution': formatted_solution})
         return jsonify({'solution': '未找到相关解决方案'})
-    except FileNotFoundError:
-        return jsonify({'solution': '解决方案文件不存在，请确保diagnostic_solutions.md文件存在'})
     except Exception as e:
-        return jsonify({'solution': f'读取解决方案时出错: {str(e)}'})
+        # 不暴露详细错误信息
+        return jsonify({'solution': '读取解决方案时出错'}), 500
 
 def shutdown_server():
-    """关闭Flask服务器的函数"""
-    print("\n一分钟时间到，诊断工具即将关闭...")
+    """关闭服务器的函数（安全版本）"""
+    print("\n两分钟时间到，诊断工具即将关闭...")
     # 获取当前进程
     current_pid = os.getpid()
     try:
-        # Windows下使用taskkill命令强制结束进程
+        # Windows下使用安全的进程终止方式（不使用shell=True）
         if sys.platform.startswith('win'):
-            subprocess.run(f"taskkill /F /PID {current_pid}", shell=True)
+            # 使用列表形式的参数，避免命令注入
+            subprocess.run(['taskkill', '/F', '/PID', str(current_pid)])
         else:
-            #非Windows系统使用os.kill
+            # 非Windows系统使用os.kill
             import signal
             os.kill(current_pid, signal.SIGTERM)
     except Exception as e:
         print(f"关闭服务器时出错: {e}")
         sys.exit(1)
 
+def get_diagnostic_port():
+    """获取诊断工具端口，基于config.py的PORT配置自动调整"""
+    try:
+        # 尝试导入配置
+        import config
+        main_port = getattr(config, 'PORT', 5000)
+        # 诊断工具使用主端口+1
+        diagnostic_port = int(main_port) + 1
+        
+        # 检查端口是否被占用
+        for conn in psutil.net_connections():
+            if conn.laddr and conn.laddr.port == diagnostic_port:
+                if conn.status in ('LISTEN', 'LISTENING'):
+                    # 如果被占用，继续尝试下一个端口
+                    diagnostic_port += 1
+                    break
+        
+        print(f"✓ 检测到主程序端口为 {main_port}")
+        print(f"✓ 诊断工具将使用端口 {diagnostic_port}")
+        return diagnostic_port
+    except Exception as e:
+        print(f"⚠ 无法读取配置文件，使用默认端口 5001: {e}")
+        return 5001
 
 if __name__ == '__main__':
+    # 获取诊断工具端口
+    diagnostic_port = get_diagnostic_port()
+    
+    # 设置2分钟后自动关闭
     shutdown_timer = threading.Timer(120.0, shutdown_server)
     shutdown_timer.daemon = True  # 设置为守护线程，这样主程序退出时，定时器也会退出
     shutdown_timer.start()
 
-    print("微信机器人诊断工具启动中...")
-    print("请在浏览器中访问: http://localhost:5001")
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    print("\n" + "="*60)
+    print("  微信机器人诊断工具")
+    print("="*60)
+    print(f"监听地址: 127.0.0.1:{diagnostic_port}")
+    print(f"访问地址: http://localhost:{diagnostic_port}")
+    print(f"自动关闭: 2分钟后")
+    print("="*60 + "\n")
+    
+    # 使用Waitress生产级WSGI服务器
+    serve(
+        app,
+        host='127.0.0.1',
+        port=diagnostic_port,
+        threads=4,              # 4个工作线程
+        channel_timeout=60,     # 60秒通道超时
+        connection_limit=500,   # 最大500个连接（诊断工具不需要太多）
+        cleanup_interval=30,    # 30秒清理间隔
+        asyncore_use_poll=True  # Windows优化
+    )

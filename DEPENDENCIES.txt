@@ -12,54 +12,59 @@
 - wxautox: 私有许可证，用户需自行安装并取得作者授权
 - wxauto: Apache License 2.0 (开源备选方案)
 
-重要说明：本项目使用动态导入和fallback机制，优先尝试私有授权库，
-如无法使用则自动回退到Apache 2.0许可的开源版本(wxauto)，
-确保在任何情况下都有GPL-3.0兼容的实现可用。
+重要说明：
+1. 微信自动化库为可选增强，本项目使用动态导入和fallback机制
+2. 优先尝试私有授权库，如无法使用则自动回退到Apache 2.0许可的开源版本(wxauto)
+3. 确保在任何情况下都有GPL-3.0兼容的实现可用
 
 主要依赖 / Main Dependencies:
 -----------------------------
 
-1. Flask (BSD License)
+1. Waitress (ZPL License) 
+   - 许可证：Zope Public License 2.1 (GPL-3.0兼容)
+   - 用途：生产级WSGI服务器
+
+2. Flask (BSD License)
    - 许可证：BSD 3-Clause License (GPL-3.0兼容)
    - 用途：Web UI框架
 
-2. Flask-CORS (MIT License)
+3. Flask-CORS (MIT License)
    - 许可证：MIT License (GPL-3.0兼容)
    - 用途：跨域资源共享
 
-3. SQLAlchemy (MIT License)
+4. SQLAlchemy (MIT License)
    - 许可证：MIT License (GPL-3.0兼容)
    - 用途：数据库ORM
 
-4. OpenAI (Apache License 2.0)
+5. OpenAI (Apache License 2.0)
    - 许可证：Apache License 2.0 (GPL-3.0兼容)
    - 用途：AI模型接口
 
-5. Requests (Apache License 2.0)
+6. Requests (Apache License 2.0)
    - 许可证：Apache License 2.0 (GPL-3.0兼容)
    - 用途：HTTP请求库
 
-6. BeautifulSoup4 (MIT License)
+7. BeautifulSoup4 (MIT License)
    - 许可证：MIT License (GPL-3.0兼容)
    - 用途：HTML解析
 
-7. Pillow (PIL License / HPND)
+8. Pillow (PIL License / HPND)
    - 许可证：Historical Permission Notice and Disclaimer (GPL-3.0兼容)
    - 用途：图像处理
 
-8. PyAutoGUI (BSD License)
+9. PyAutoGUI (BSD License)
    - 许可证：BSD 3-Clause License (GPL-3.0兼容)
    - 用途：自动化GUI操作
 
-9. psutil (BSD License)
-   - 许可证：BSD 3-Clause License (GPL-3.0兼容)
-   - 用途：系统进程监控
+10. psutil (BSD License)
+    - 许可证：BSD 3-Clause License (GPL-3.0兼容)
+    - 用途：系统进程监控
 
-10. comtypes (MIT License)
+11. comtypes (MIT License)
     - 许可证：MIT License (GPL-3.0兼容)
     - 用途：COM接口
 
-11. pywin32 (PSF License)
+12. pywin32 (PSF License)
     - 许可证：Python Software Foundation License (GPL-3.0兼容)
     - 用途：Windows API接口
 
@@ -73,11 +78,12 @@
 许可证兼容性说明 / License Compatibility Notes:
 =============================================
 - 所有列出的依赖库许可证均与GPL-3.0兼容
-- BSD、MIT、Apache 2.0许可证都是允许性许可证，可以与GPL-3.0组合使用
+- BSD、MIT、Apache 2.0、ZPL 2.1许可证都是允许性许可证，可以与GPL-3.0组合使用
 - 本项目作为整体遵循GPL-3.0许可证
 - 用户在重新分发时需要遵循GPL-3.0的所有条款
 
-更新日期：2025年9月
+
+更新日期：2025年10月
 维护者：iwyxdxl
 
 注意：本文件应在依赖更新时同步更新，以确保许可证信息的准确性。

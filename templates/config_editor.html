@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 <!-----------------------------------------------------------------------
 - Copyright (C) 2025, iwyxdxl
 - Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -392,6 +394,7 @@
             background: #f3f4f6;
             cursor: pointer;
             user-select: none;
+            -webkit-user-select: none; /* Safari */
         }
         .npc-individual-settings .npc-card-title {
             margin: 0;
@@ -1815,7 +1818,7 @@
                 div.className = 'entry';
                 div.innerHTML = `
                     <input type="text" name="nickname" placeholder="微信昵称" required>
-                    <select name="prompt_file" required>
+                    <select name="prompt_file" required title="选择 Prompt 文件">
                         <option value="">-- 选择Prompt文件 --</option>
                         {% for file in prompt_files %}
                         <option value="{{ file }}">{{ file }}</option>
@@ -1832,6 +1835,23 @@
             }
             window.removeEntry = removeEntry;
 
+
+            // 辅助函数：获取CSRF token
+            function getCSRFToken() {
+                return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            }
+            window.getCSRFToken = getCSRFToken;
+            
+            // 辅助函数：获取包含CSRF token的headers
+            function getCSRFHeaders(additionalHeaders = {}) {
+                const csrfToken = getCSRFToken();
+                const headers = { ...additionalHeaders };
+                if (csrfToken) {
+                    headers['X-CSRFToken'] = csrfToken;
+                }
+                return headers;
+            }
+            window.getCSRFHeaders = getCSRFHeaders;
 
             async function initBotStatus() {
                 const button = document.getElementById('botButton');
@@ -1927,7 +1947,7 @@
                         try {
                             const response = await fetch('/reset_default_config', {
                                 method: 'POST',
-                                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                                headers: getCSRFHeaders({ 'X-Requested-With': 'XMLHttpRequest' })
                             });
                             
                             if (response.ok) {
@@ -1982,7 +2002,10 @@
                     }
 
                     const targetAction = status === 'stopped' ? 'start_bot' : 'stop_bot';
-                    const actionResponse = await fetch('/' + targetAction, { method: 'POST' });
+                    const actionResponse = await fetch('/' + targetAction, { 
+                        method: 'POST',
+                        headers: getCSRFHeaders()
+                    });
 
                     if (!actionResponse.ok) {
                         const errorData = await actionResponse.json().catch(() => ({message: "操作失败，未知错误"}));
@@ -1995,6 +2018,20 @@
                     button.className = newStatusData.status === 'stopped' ? 'nav-button' : 'nav-button stop';
                     button.innerHTML = newStatusData.status === 'stopped' ? 'Bot 已停止' : 'Bot 已启动';
                     showAlert(newStatusData.status === 'stopped' ? 'Bot 已停止' : 'Bot 已启动', true);
+
+                    // 直接根据最新状态管理日志连接，避免等待下一轮状态轮询
+                    if (newStatusData.status !== 'stopped') {
+                        window.autoReconnectEnabled = true;
+                        window.reconnectAttempts = 0;
+                        if (!window.currentEventSource || window.currentEventSource.readyState === EventSource.CLOSED) {
+                            setTimeout(window.initEventSource, 100);
+                        }
+                    } else {
+                        if (window.currentEventSource && window.currentEventSource.readyState !== EventSource.CLOSED) {
+                            window.closeEventSource();
+                            window.isLogStreamInitialized = false;
+                        }
+                    }
 
                 } catch (error) {
                     console.error('操作失败:', error);
@@ -2022,12 +2059,46 @@
                     button.className = status === 'stopped' ? 'nav-button' : 'nav-button stop';
                     button.innerHTML = status === 'stopped' ? 'Start Bot' : 'Stop Bot';
                     if(alertDiv) alertDiv.style.display = 'none';
+                    
+                    // 根据 Bot 状态自动管理日志连接
+                    console.log('[Bot状态检查] status:', status, 'isLogStreamInitialized:', window.isLogStreamInitialized, 'currentEventSource:', window.currentEventSource);
+                    
+                    if (status !== 'stopped') {
+                        // Bot 正在运行，确保日志流已连接
+                        if (!window.isLogStreamInitialized || 
+                            !window.currentEventSource || 
+                            window.currentEventSource.readyState === EventSource.CLOSED) {
+                            console.log('✅ Bot 正在运行，初始化日志流连接');
+                            window.autoReconnectEnabled = true;
+                            window.reconnectAttempts = 0;
+                            setTimeout(window.initEventSource, 100);
+                        } else {
+                            console.log('✅ Bot 正在运行，日志流已连接，ReadyState:', window.currentEventSource.readyState);
+                        }
+                    } else {
+                        // Bot 已停止，断开日志连接
+                        if (window.currentEventSource && window.currentEventSource.readyState !== EventSource.CLOSED) {
+                            console.log('⚠️ Bot 已停止，断开日志流连接');
+                            window.closeEventSource();
+                            window.isLogStreamInitialized = false;
+                        } else {
+                            console.log('⚠️ Bot 已停止，日志流未连接');
+                        }
+                    }
+                    
                     return true;
                 } catch (error) {
                     console.error('状态检查失败:', error);
                     button.className = 'nav-button';
                     button.innerHTML = 'Start Bot';
                     if(alertDiv && showAlerts) alertDiv.style.display = 'block';
+                    
+                    // 后端不可用时也断开日志连接
+                    if (window.currentEventSource) {
+                        window.closeEventSource();
+                        window.isLogStreamInitialized = false;
+                    }
+                    
                     return false;
                 }
             }
@@ -2109,10 +2180,26 @@
                     if (container) {
                         container.classList.remove('collapsed');
                         container.classList.add('expanded');
-                        if(!userHoveringLogs && container.classList.contains('expanded')) {
+                        if(!window.userHoveringLogs && container.classList.contains('expanded')) {
                              setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
                         }
+                        // 若Bot已运行，确保日志流已连接（立即触发一次，不用等轮询）
+                        try {
+                            fetch('/bot_status?_=' + Date.now())
+                                .then(res => res.json())
+                                .then(statusJson => {
+                                    if (statusJson && statusJson.status && statusJson.status !== 'stopped') {
+                                        if (!window.currentEventSource || window.currentEventSource.readyState === EventSource.CLOSED) {
+                                            window.autoReconnectEnabled = true;
+                                            window.reconnectAttempts = 0;
+                                            setTimeout(window.initEventSource, 50);
+                                        }
+                                    }
+                                })
+                                .catch(() => {});
+                        } catch (_) {}
                     }
+                    // 日志连接现在由 Bot 状态自动管理，不需要手动初始化
                 } else {
                     const logContainerElem = document.getElementById('log-container');
                     if (logContainerElem && logContainerElem.classList.contains('expanded')) {
@@ -2229,9 +2316,9 @@
                     try {
                         const response = await fetch('/create_prompt', {
                             method: 'POST',
-                            headers: {
+                            headers: getCSRFHeaders({
                                 'Content-Type': 'application/x-www-form-urlencoded', // 保持这个格式
-                            },
+                            }),
                             body: `filename=${encodeURIComponent(filename)}&content=${encodeURIComponent(content)}`
                         });
                         
@@ -2298,9 +2385,9 @@
                         // URL中的originalFilename应该是带.md后缀的，且经过encodeURIComponent
                         const response = await fetch(`edit_prompt/${encodeURIComponent(originalFilename)}`, {
                             method: 'POST',
-                            headers: {
+                            headers: getCSRFHeaders({
                                 'Content-Type': 'application/x-www-form-urlencoded',
-                            },
+                            }),
                             body: `filename=${encodeURIComponent(filename)}&content=${encodeURIComponent(content)}`
                         });
                         
@@ -2338,9 +2425,9 @@
                     try {
                         const response = await fetch('/generate_prompt', {
                             method: 'POST',
-                            headers: {
+                            headers: getCSRFHeaders({
                                 'Content-Type': 'application/json',
-                            },
+                            }),
                             body: JSON.stringify({
                                 prompt: "[系统指令]请根据以下需求生成高质量的微信对话提示词：\n" + userInput + "\n[生成要求]"
                             })
@@ -2437,7 +2524,10 @@
         function confirmDeletePrompt(filenameWithoutExt) { 
             const filenameWithExt = filenameWithoutExt.endsWith('.md') ? filenameWithoutExt : filenameWithoutExt + '.md';
             if (confirm('确定要删除文件 "' + filenameWithExt + '" 吗？')) {
-                fetch(`delete_prompt/${encodeURIComponent(filenameWithExt)}`, { method: 'POST' })
+                fetch(`delete_prompt/${encodeURIComponent(filenameWithExt)}`, { 
+                    method: 'POST',
+                    headers: getCSRFHeaders()
+                })
                     .then(response => {
                         if (response.ok) {
                             location.reload();
@@ -2573,13 +2663,13 @@
             }
 
             div.innerHTML = `
-                <select class="reminder-type">
+                <select class="reminder-type" title="提醒类型">
                     <option value="recurring" ${type === 'recurring' ? 'selected' : ''}>每日重复</option>
                     <option value="one-off" ${type === 'one-off' ? 'selected' : ''}>一次性</option>
                 </select>
                 <input type="text" class="reminder-user-id" placeholder="微信昵称/备注" value="${userId}">
-                <input type="time" class="reminder-time" value="${timeStr}" step="60" style="display: ${type === 'recurring' ? 'block' : 'none'};">
-                <input type="datetime-local" class="reminder-datetime" value="${dateTimeStr}" style="display: ${type === 'one-off' ? 'block' : 'none'};">
+                <input type="time" class="reminder-time" value="${timeStr}" step="60" style="display: ${type === 'recurring' ? 'block' : 'none'};" title="提醒时间">
+                <input type="datetime-local" class="reminder-datetime" value="${dateTimeStr}" style="display: ${type === 'one-off' ? 'block' : 'none'};" title="提醒日期时间">
                 <input type="text" class="reminder-content" placeholder="提醒内容" value="${content}">
                 <button type="button" onclick="removeReminder(this)">删除</button>
             `;
@@ -2608,7 +2698,8 @@
 
             try {
                 const response = await fetch('/save_all_reminders', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    method: 'POST', 
+                    headers: getCSRFHeaders({'Content-Type': 'application/json'}),
                     body: JSON.stringify(remindersPayload)
                 });
                 const result = await response.json();
@@ -2689,8 +2780,13 @@
             }
             const formData = new FormData();
             formData.append('config_file', file);
+            
             try {
-                const response = await fetch('/import_config', { method: 'POST', body: formData });
+                const response = await fetch('/import_config', { 
+                    method: 'POST', 
+                    headers: getCSRFHeaders(),
+                    body: formData 
+                });
                 const result = await response.json();
                 if (response.ok) {
                     alert(result.message || '配置导入成功，请刷新页面查看导入的参数。');
@@ -2722,8 +2818,41 @@
                 return;
             }
             
+            // 检查文件数量限制
+            const MAX_FILES = 2000;
+            if (files.length > MAX_FILES) {
+                alert(`文件数量超过限制！\n当前选择: ${files.length} 个文件\n最多允许: ${MAX_FILES} 个文件\n\n请删除不必要的文件后重试。`);
+                return;
+            }
+            
+            // 检查文件大小限制
+            const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+            const MAX_TOTAL_SIZE = 1024 * 1024 * 1024; // 1GB
+            let totalSize = 0;
+            let oversizedFiles = [];
+            
+            for (const file of files) {
+                if (file.size > MAX_FILE_SIZE) {
+                    oversizedFiles.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+                }
+                totalSize += file.size;
+            }
+            
+            // 检查是否有单个文件超过限制
+            if (oversizedFiles.length > 0) {
+                alert(`以下文件大小超过100MB限制：\n\n${oversizedFiles.join('\n')}\n\n请删除或压缩这些文件后重试。`);
+                return;
+            }
+            
+            // 检查总大小是否超过限制
+            if (totalSize > MAX_TOTAL_SIZE) {
+                alert(`文件总大小超过限制！\n当前总大小: ${(totalSize / 1024 / 1024).toFixed(2)}MB\n最大允许: 1024MB (1GB)\n\n请删除不必要的文件后重试。`);
+                return;
+            }
+            
             // 确认导入操作
-            if (!confirm(`完整目录导入会替换现有数据（会自动备份）。\n将导入 ${files.length} 个文件。确定要继续吗？`)) {
+            const sizeInfo = `总大小: ${(totalSize / 1024 / 1024).toFixed(2)}MB`;
+            if (!confirm(`完整目录导入会替换现有数据（会自动备份）。\n将导入 ${files.length} 个文件 (${sizeInfo})。\n\n确定要继续吗？`)) {
                 return;
             }
             
@@ -2742,7 +2871,11 @@
                 event.target.textContent = '导入中...';
                 event.target.disabled = true;
                 
-                const response = await fetch('/import_full_directory', { method: 'POST', body: formData });
+                const response = await fetch('/import_full_directory', { 
+                    method: 'POST',
+                    headers: getCSRFHeaders(),
+                    body: formData 
+                });
                 const result = await response.json();
                 
                 if (response.ok) {
@@ -2774,9 +2907,9 @@
             try {
                 const response = await fetch(`/clear_chat_context/${encodeURIComponent(username)}`, {
                     method: 'POST',
-                    headers: {
+                    headers: getCSRFHeaders({
                         'X-Requested-With': 'XMLHttpRequest' // 如果你的后端需要
-                    }
+                    })
                 });
                 const result = await response.json();
                 if (response.ok && result.status === 'success') {
@@ -3130,7 +3263,7 @@
             }
             fetch(`/api/save_chat_context/${encodeURIComponent(username)}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getCSRFHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ context: JSON.stringify(arr) })
             })
             .then(res => res.json())
@@ -3443,7 +3576,7 @@
             
             fetch(`/api/save_core_memory/${encodeURIComponent(filename)}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getCSRFHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ memories: memories })
             })
             .then(res => res.json())
@@ -3553,7 +3686,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.24.3</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.25</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>
@@ -3604,6 +3737,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
 
         <div class="content-area">
             <form method="post" id="configForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div id="section-user-list" class="content-panel">
                     <h2>用户列表</h2>
                     <div class="form-group">
@@ -3612,7 +3746,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                             {% for item in config.LISTEN_LIST %}
                             <div class="entry">
                                 <input type="text" name="nickname" value="{{ item[0] }}" placeholder="微信昵称" required>
-                                <select name="prompt_file" required>
+                                <select name="prompt_file" required title="选择 Prompt 文件">
                                     <option value="">-- 选择Prompt文件 --</option>
                                     {% for file in prompt_files %}
                                     <option value="{{ file }}" {% if item[1] == file %}selected{% endif %}>{{ file }}</option>
@@ -3673,7 +3807,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                         <div id="forumCustomModelConfig" class="{% if config.ENABLE_FORUM_CUSTOM_MODEL %}assistant-config-visible{% else %}assistant-config-hidden{% endif %}">
                             <div class="form-group">
                                 <label>API 服务商：</label>
-                                <select id="forumApiProvider" name="temp_FORUM_BASE_URL">
+                                <select id="forumApiProvider" name="temp_FORUM_BASE_URL" title="论坛API服务商">
                                     <option value="https://api.siliconflow.cn/v1/" {% if config.FORUM_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                                     <option value="https://api.deepseek.com" {% if config.FORUM_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
                                     <option value="https://vg.v1api.cc/v1" {% if config.FORUM_BASE_URL == 'https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
@@ -3685,7 +3819,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
 
                             <div class="form-group">
                                 <label>模型选择：</label>
-                                <select id="forumModelSelect" name="temp_FORUM_MODEL"></select>
+                                <select id="forumModelSelect" name="temp_FORUM_MODEL" title="论坛模型选择"></select>
                                 <input type="text" id="customForumModel" placeholder="请输入自定义模型名称" class="custom-input" value="{% if config.FORUM_MODEL %}{{ config.FORUM_MODEL }}{% endif %}">
                                 <input type="hidden" id="finalForumModel" name="FORUM_MODEL" value="{{ config.FORUM_MODEL }}">
                             </div>
@@ -3781,7 +3915,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     <h2>Chat 模型配置</h2>
                     <div class="form-group">
                         <label>API 服务商: (推荐WeAPIs 注册地址 <a href="https://linkvg.v1chat.cc/register?aff=Rf3h" target="_blank">https://vg.v1api.cc/register?aff=Rf3h</a> 教程：<a href="https://www.bilibili.com/video/BV1JNJczqEd9/?share_source=copy_web&vd_source=2739a8fcd01af470894edf97af25f655&t=103" target="_blank">[查看使用教程]</a> )</label>
-                        <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL">
+                        <select id="apiProvider" name="temp_DEEPSEEK_BASE_URL" title="聊天API服务商">
                             <option value="https://api.siliconflow.cn/v1/" {% if config.DEEPSEEK_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                             <option value="https://api.deepseek.com" {% if config.DEEPSEEK_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
                             <option value="https://vg.v1api.cc/v1" {% if config.DEEPSEEK_BASE_URL == 'https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
@@ -3792,7 +3926,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>模型选择: (首次使用推荐DeepSeek V3模型,带*的模型收费较高)</label>
-                        <select id="modelSelect" name="temp_MODEL">
+                        <select id="modelSelect" name="temp_MODEL" title="聊天模型选择">
                         </select>
                         <input type="text" id="customModel" placeholder="请输入自定义模型名称" class="custom-input" value="{{ config.MODEL if config.MODEL not in popular_models else '' }}">
                         <input type="hidden" id="finalModel" name="MODEL" value="{{ config.MODEL }}">
@@ -3839,7 +3973,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     <div id="assistantModelConfig" class="{% if config.ENABLE_ASSISTANT_MODEL %}assistant-config-visible{% else %}assistant-config-hidden{% endif %}">
                         <div class="form-group">
                             <label>辅助模型API服务商:</label>
-                            <select id="assistantApiProvider" name="temp_ASSISTANT_BASE_URL">
+                            <select id="assistantApiProvider" name="temp_ASSISTANT_BASE_URL" title="辅助模型API服务商">
                                 <option value="https://api.siliconflow.cn/v1/" {% if config.ASSISTANT_BASE_URL == 'https://api.siliconflow.cn/v1/' %}selected{% endif %}>硅基流动</option>
                                 <option value="https://api.deepseek.com" {% if config.ASSISTANT_BASE_URL == 'https://api.deepseek.com' %}selected{% endif %}>DeepSeek官方API</option>
                                 <option value="https://vg.v1api.cc/v1" {% if config.ASSISTANT_BASE_URL == 'https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
@@ -3850,7 +3984,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                         </div>
                         <div class="form-group">
                             <label>辅助模型选择: (推荐使用成本较低的模型)</label>
-                            <select id="assistantModelSelect" name="temp_ASSISTANT_MODEL">
+                            <select id="assistantModelSelect" name="temp_ASSISTANT_MODEL" title="辅助模型选择">
                             </select>
                             <input type="text" id="customAssistantModel" placeholder="请输入自定义辅助模型名称" class="custom-input" value="{{ config.ASSISTANT_MODEL if config.ASSISTANT_MODEL not in assistant_popular_models else '' }}">
                             <input type="hidden" id="finalAssistantModel" name="ASSISTANT_MODEL" value="{{ config.ASSISTANT_MODEL }}">
@@ -3897,7 +4031,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>图像识别API服务商：</label>
-                        <select id="imageApiProvider" name="temp_IMAGE_BASE_URL">
+                        <select id="imageApiProvider" name="temp_IMAGE_BASE_URL" title="图像识别API服务商">
                             <option value="https://api.moonshot.cn/v1" {% if config.MOONSHOT_BASE_URL=='https://api.moonshot.cn/v1' %}selected{% endif %}>MOONSHOT月之暗面</option>
                             <option value="https://vg.v1api.cc/v1" {% if config.MOONSHOT_BASE_URL=='https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
                             <option value="other" {% if config.MOONSHOT_BASE_URL not in ['https://api.moonshot.cn/v1','https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
@@ -3909,7 +4043,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>识图模型选择：</label>
-                        <select id="imageModelSelect" name="temp_IMAGE_MODEL"></select>
+                        <select id="imageModelSelect" name="temp_IMAGE_MODEL" title="识图模型选择"></select>
                         <input type="text" id="customImageModel" class="custom-input" placeholder="请输入自定义模型名称" {% if config.MOONSHOT_MODEL not in ['moonshot-v1-128k-vision-preview','moonshot-v1-32k-vision-preview','moonshot-v1-8k-vision-preview','gpt-4o'] %} value="{{ config.MOONSHOT_MODEL }}" style="display:block;" {% endif %}>
                         <input type="hidden" id="finalImageModel" name="MOONSHOT_MODEL" value="{{ config.MOONSHOT_MODEL }}">
                     </div>
@@ -3938,7 +4072,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>联网API服务商：</label>
-                        <select id="onlineApiProvider" name="temp_ONLINE_BASE_URL">
+                        <select id="onlineApiProvider" name="temp_ONLINE_BASE_URL" title="联网API服务商">
                             <option value="https://vg.v1api.cc/v1" {% if config.ONLINE_BASE_URL=='https://vg.v1api.cc/v1' %}selected{% endif %}>WeAPIs</option>
                             <option value="other" {% if config.ONLINE_BASE_URL not in ['https://vg.v1api.cc/v1'] %}selected{% endif %}>其它</option>
                         </select>
@@ -3948,7 +4082,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     </div>
                     <div class="form-group">
                         <label>联网搜索模型：</label>
-                        <select id="onlineModelSelect" name="temp_ONLINE_MODEL"></select>
+                        <select id="onlineModelSelect" name="temp_ONLINE_MODEL" title="联网搜索模型"></select>
                         <input type="text" id="customOnlineModel" class="custom-input" placeholder="请输入自定义模型名称 (请使用带联网功能的模型)" {% if config.ONLINE_MODEL not in ['deepseek-r1-searching','net-gpt-4o-mini'] %} value="{{ config.ONLINE_MODEL }}" style="display:block;" {% endif %}>
                         <input type="hidden" id="finalOnlineModel" name="ONLINE_MODEL" value="{{ config.ONLINE_MODEL }}">
                     </div>
@@ -4000,7 +4134,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     <h2>群聊消息接收配置</h2>
                     <div class="form-group">
                         <label>群聊消息处理模式:</label>
-                        <select name="ACCEPT_ALL_GROUP_CHAT_MESSAGES" id="acceptAllGroupMessagesSelect">
+                        <select name="ACCEPT_ALL_GROUP_CHAT_MESSAGES" id="acceptAllGroupMessagesSelect" title="群聊消息处理模式">
                             <option value="False" {% if config.ACCEPT_ALL_GROUP_CHAT_MESSAGES == False %}selected{% endif %}>仅接收满足条件的消息</option>
                             <option value="True" {% if config.ACCEPT_ALL_GROUP_CHAT_MESSAGES == True %}selected{% endif %}>接收所有群聊消息</option>
                         </select>
@@ -4364,6 +4498,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                     <ul style="padding-left:20px; margin-bottom:0;">
                         <li>仅导入配置文件中已存在的参数。</li>
                         <li>不会删除或覆盖当前配置中的其他参数。</li>
+                        <li><strong>以下设置不会被导入</strong>：PORT（端口号）、LOGIN_PASSWORD（登录密码）、PASSWORD_IS_VALID（密码有效性）、ALLOW_OPEN_PORT（外网访问权限）</li>
                         <li>导入后需要点击"保存配置"才会生效。</li>
                     </ul>
                 </div>
@@ -4379,6 +4514,8 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                         <li><strong>会自动备份</strong>当前数据到"数据备份/{时间}_导入备份"目录</li>
                         <li>将导入以下内容：config.py、prompts文件夹、emojis文件夹、forum_data文件夹、CoreMemory文件夹、Memory_Temp文件夹、recurring_reminders.json文件、chat_contexts.json文件</li>
                         <li><strong>现有数据会被完全替换</strong>（已备份，可手动恢复）</li>
+                        <li><strong>config.py中以下设置不会被导入</strong>：PORT（端口号）、LOGIN_PASSWORD（登录密码）、PASSWORD_IS_VALID（密码有效性）、ALLOW_OPEN_PORT（外网访问权限）</li>
+                        <li><strong>上传限制</strong>：单个文件最大100MB，总大小最多1GB，最多2000个文件</li>
                         <li>请选择包含完整程序目录结构的文件夹</li>
                         <li>若无法导入文件夹，请尝试更换您的浏览器</li>
                     </ul>
@@ -4649,81 +4786,172 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
     </style>
 
     <script>
-        let userHoveringLogs = false;
-        const logContainer = document.getElementById('log-container');
-        const logElement = document.getElementById('logs');
-        const maxLogLines = 200;
-        let logScrollTimeout;
+        // 将日志相关的变量定义为全局变量，以便在面板切换时访问
+        window.userHoveringLogs = false;
+        window.logContainer = document.getElementById('log-container');
+        window.logElement = document.getElementById('logs');
+        window.maxLogLines = 200;
+        window.logScrollTimeout = null;
+        
+        // 日志流连接状态
+        window.currentEventSource = null;
+        window.reconnectAttempts = 0;
+        window.isLogStreamInitialized = false;
+        window.autoReconnectEnabled = true;
+        window.maxReconnectAttempts = 3;
+        
+        // 调试：检查元素是否正确获取
+        console.log('日志元素初始化:', {
+            logContainer: window.logContainer,
+            logElement: window.logElement
+        });
 
-        if (logContainer) {
-            logContainer.addEventListener('mouseenter', () => {
-                clearTimeout(logScrollTimeout);
-                userHoveringLogs = true;
+        if (window.logContainer) {
+            window.logContainer.addEventListener('mouseenter', () => {
+                clearTimeout(window.logScrollTimeout);
+                window.userHoveringLogs = true;
             });
-            logContainer.addEventListener('mouseleave', () => {
-                userHoveringLogs = false;
+            window.logContainer.addEventListener('mouseleave', () => {
+                window.userHoveringLogs = false;
                 const currentPanelIsLogs = document.querySelector('.sidebar a.active[data-target="section-logs"]');
-                if(currentPanelIsLogs && logContainer.classList.contains('expanded')) {
-                    logScrollTimeout = setTimeout(() => {
-                        if(!userHoveringLogs) {
-                           logContainer.scrollTop = logContainer.scrollHeight;
+                if(currentPanelIsLogs && window.logContainer.classList.contains('expanded')) {
+                    window.logScrollTimeout = setTimeout(() => {
+                        if(!window.userHoveringLogs) {
+                           window.logContainer.scrollTop = window.logContainer.scrollHeight;
                         }
                     }, 3000);
                 }
             });
         }
-
-        const initEventSource = () => {
-            const es = new EventSource('/stream');
-            es.addEventListener('message', e => {
-                if(e.data.trim()) {
-                    const logType = e.data.includes('ERROR') ? 'error' : e.data.includes('WARNING') ? 'warning' : 'info';
-                    addLogEntry(e.data, logType);
-                }
-            });
-            es.addEventListener('error', (e) => {
-                console.error('SSE Error:', e); es.close();
-                addLogEntry('[系统] 日志连接中断，5秒后尝试重连...', 'error');
-                setTimeout(initEventSource, 5000);
-            });
+        
+        // 定义为全局函数以便在面板切换时调用
+        window.initEventSource = () => {
+            console.log('🚀 [initEventSource] 开始初始化日志流连接');
+            
+            // 清理已存在的连接
+            if (window.currentEventSource) {
+                console.log('关闭现有连接');
+                window.currentEventSource.close();
+            }
+            
+            // 标记为已初始化
+            window.isLogStreamInitialized = true;
+            
+            try {
+                console.log('创建新的 EventSource: /stream');
+                const es = new EventSource('/stream');
+                window.currentEventSource = es;
+                console.log('EventSource 已创建，当前 ReadyState:', es.readyState);
+                
+                es.addEventListener('open', () => {
+                    console.log('SSE连接已建立');
+                    window.reconnectAttempts = 0;
+                    // 只在日志面板激活时显示连接成功信息
+                    const isOnLogPanel = document.querySelector('.sidebar a.active[data-target="section-logs"]');
+                    if (isOnLogPanel) {
+                        window.addLogEntry('[系统] 日志流已连接，等待日志数据...', 'info');
+                    }
+                });
+                
+                es.addEventListener('message', e => {
+                    console.log('[SSE Message]', e.data);
+                    if(e.data.trim()) {
+                        const logType = e.data.includes('ERROR') ? 'error' : e.data.includes('WARNING') ? 'warning' : 'info';
+                        window.addLogEntry(e.data, logType);
+                    } else {
+                        console.log('[SSE] 收到空消息');
+                    }
+                });
+                
+                es.addEventListener('error', (e) => {
+                    console.warn('SSE Error:', e, 'ReadyState:', es.readyState);
+                    // 某些中间层会主动关闭空闲SSE，收到错误时统一按 CLOSED 处理重连
+                    if (!e || es.readyState !== EventSource.OPEN) {
+                        try { es.close(); } catch(_) {}
+                        window.reconnectAttempts++;
+                        const delay = Math.min(3000 * window.reconnectAttempts, 15000);
+                        if (window.autoReconnectEnabled && window.reconnectAttempts <= window.maxReconnectAttempts) {
+                            console.log(`日志连接中断，${Math.round(delay/1000)}秒后重连（第 ${window.reconnectAttempts} 次）`);
+                            setTimeout(window.initEventSource, delay);
+                        } else if (window.reconnectAttempts > window.maxReconnectAttempts) {
+                            console.log('日志连接失败次数过多，等待 Bot 状态检查重新初始化');
+                            window.autoReconnectEnabled = false;
+                            window.isLogStreamInitialized = false;
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('创建EventSource失败:', error);
+                // 不在前端显示错误，因为 Bot 状态检查会自动管理连接
+                window.isLogStreamInitialized = false;
+            }
         };
-        initEventSource();
+        
+        window.closeEventSource = () => {
+            if (window.currentEventSource) {
+                console.log('关闭日志流连接');
+                window.currentEventSource.close();
+                window.currentEventSource = null;
+            }
+        };
+        
+        // 不再在页面加载时自动初始化，而是在切换到日志面板时初始化
+        // 这样可以避免在 bot 未运行时显示连接错误
 
-        function addLogEntry(text, type = 'info') {
-            if (!logElement || !logContainer) return;
+        window.addLogEntry = function(text, type = 'info') {
+            console.log('[addLogEntry]', text, 'type:', type, 'elements:', {
+                logElement: window.logElement,
+                logContainer: window.logContainer
+            });
+            
+            if (!window.logElement || !window.logContainer) {
+                console.error('日志元素未找到！');
+                return;
+            }
             const entry = document.createElement('div');
             entry.innerHTML = ansiToHtml(text);
             entry.className = `log-entry ${type}`;
             entry.style.whiteSpace = 'pre-wrap';
-            logElement.appendChild(entry);
+            window.logElement.appendChild(entry);
+            console.log('日志条目已添加到 DOM');
 
-            if(!userHoveringLogs && logContainer.classList.contains('expanded')) {
-                 const isNearBottom = logContainer.scrollHeight - logContainer.clientHeight - logContainer.scrollTop < 50;
+            if(!window.userHoveringLogs && window.logContainer.classList.contains('expanded')) {
+                 const isNearBottom = window.logContainer.scrollHeight - window.logContainer.clientHeight - window.logContainer.scrollTop < 50;
                  if(isNearBottom) {
-                    clearTimeout(logScrollTimeout);
-                    logScrollTimeout = setTimeout(() => {
-                        if (!userHoveringLogs) {
-                           logContainer.scrollTop = logContainer.scrollHeight;
+                    clearTimeout(window.logScrollTimeout);
+                    window.logScrollTimeout = setTimeout(() => {
+                        if (!window.userHoveringLogs) {
+                           window.logContainer.scrollTop = window.logContainer.scrollHeight;
                         }
                     }, 100);
                  }
             }
-            while(logElement.children.length > maxLogLines) {
-                if (logElement.firstChild) {
-                    logElement.removeChild(logElement.firstChild);
+            while(window.logElement.children.length > window.maxLogLines) {
+                if (window.logElement.firstChild) {
+                    window.logElement.removeChild(window.logElement.firstChild);
                 } else {
                     break; 
                 }
             }
-        }
+        };
 
-        if (logContainer) {
+        if (window.logContainer) {
             const activeLogTab = document.querySelector('.sidebar a.active[data-target="section-logs"]');
             if (!activeLogTab) {
-                logContainer.classList.add('collapsed');
-                logContainer.classList.remove('expanded');
+                window.logContainer.classList.add('collapsed');
+                window.logContainer.classList.remove('expanded');
             }
         }
+        
+        // 测试：添加一条初始化日志以验证功能正常
+        setTimeout(() => {
+            console.log('准备添加测试日志...');
+            if (window.addLogEntry) {
+                window.addLogEntry('[系统] 日志系统已初始化 - 等待Bot启动后自动连接', 'info');
+            } else {
+                console.error('addLogEntry 函数未定义！');
+            }
+        }, 500);
 
         const legalToggle = document.getElementById('toggleLegal');
         if(legalToggle) {
@@ -4811,7 +5039,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
             detail.innerHTML = `
                 <div class="npc-setting-group">
                     <label>语言风格:</label>
-                    <select class="npc_languageStyle">
+                    <select class="npc_languageStyle" title="语言风格">
                         <option value="formal">正式</option>
                         <option value="casual">随意</option>
                         <option value="friendly">友好</option>
@@ -4822,7 +5050,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
                 </div>
                 <div class="npc-setting-group">
                     <label>关系:</label>
-                    <select class="npc_relationship">
+                    <select class="npc_relationship" title="关系">
                         <option value="friend">朋友</option>
                         <option value="colleague">同事</option>
                         <option value="family">家人</option>
@@ -4928,7 +5156,7 @@ document.getElementById('oneKeyDiagnosticButton').addEventListener('click', asyn
 
                 const response = await fetch('/api/npc/save_settings', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getCSRFHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(configData)
                 });
                 if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);

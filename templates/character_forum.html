@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 <!-----------------------------------------------------------------------
 - Copyright (C) 2025, iwyxdxl
 - Licensed under GNU GPL-3.0 or higher, see the LICENSE file for details.
@@ -832,6 +833,23 @@
         const characterName = '{{ character_name }}';
         let isRefreshing = false;
         let currentTab = 'posts';
+        
+        // 辅助函数：获取CSRF token
+        function getCSRFToken() {
+            return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        }
+        window.getCSRFToken = getCSRFToken;
+        
+        // 辅助函数：获取包含CSRF token的headers
+        function getCSRFHeaders(additionalHeaders = {}) {
+            const csrfToken = getCSRFToken();
+            const headers = { ...additionalHeaders };
+            if (csrfToken) {
+                headers['X-CSRFToken'] = csrfToken;
+            }
+            return headers;
+        }
+        window.getCSRFHeaders = getCSRFHeaders;
 
         // 更新时间显示
         function updateTime() {
@@ -1007,9 +1025,9 @@
                 
                 const response = await fetch(`/api/forum/refresh/${characterName}`, {
                     method: 'POST',
-                    headers: {
+                    headers: getCSRFHeaders({
                         'Content-Type': 'application/json'
-                    },
+                    }),
                     signal: controller.signal
                 });
                 
@@ -1410,7 +1428,10 @@
             try {
                 const btn = document.getElementById('refreshLikesBtn');
                 btn.disabled = true; const oldText = btn.textContent; btn.textContent = '💖 生成中...';
-                const res = await fetch(`/api/forum/refresh_likes/${characterName}`, { method: 'POST' });
+                const res = await fetch(`/api/forum/refresh_likes/${characterName}`, { 
+                    method: 'POST',
+                    headers: getCSRFHeaders()
+                });
                 const ct = res.headers.get('content-type') || '';
                 if (!ct.includes('application/json')) {
                     throw new Error('会话可能失效，请刷新页面后重试');
@@ -1443,7 +1464,7 @@
                 // 请求后端
                 const res = await fetch(`/api/forum/like/${characterName}/${postId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getCSRFHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ like: nextLiked })
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1500,7 +1521,7 @@
                 if (btn) { btn.disabled = true; btn.textContent = '发送中...'; }
                 const res = await fetch(`/api/forum/reply/${characterName}/${postId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getCSRFHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ content })
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1710,6 +1731,7 @@
                 
                 const response = await fetch(`/api/forum/avatar/upload/${characterName}`, {
                     method: 'POST',
+                    headers: getCSRFHeaders(),
                     body: formData
                 });
                 

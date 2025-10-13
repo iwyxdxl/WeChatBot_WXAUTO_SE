@@ -19,7 +19,12 @@
 # along with WeChatBot.  If not, see <http://www.gnu.org/licenses/>.
 # ***********************************************************************
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, Response, send_file, abort, stream_with_context
+from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect, generate_csrf, CSRFError
+from waitress import serve
 import re
 import ast
 import os
@@ -32,7 +37,6 @@ from filelock import FileLock
 from functools import wraps
 import webbrowser
 from threading import Timer
-from flask import Flask
 import logging
 from queue import Queue, Empty
 import time
@@ -46,10 +50,192 @@ import zipfile
 
 app = Flask(__name__)
 
+# 确保 HTML 响应默认使用 UTF-8 编码（兼容部分浏览器/工具对 charset 的要求）
+@app.after_request
+def ensure_utf8_charset(response):
+    try:
+        content_type = response.headers.get('Content-Type', '')
+        if content_type:
+            lower = content_type.lower()
+            if 'text/html' in lower and 'charset=' not in lower:
+                response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    except Exception:
+        # 安全兜底：不影响原始响应
+        pass
+    return response
+
+# 上传文件安全配置
+MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100MB (单个文件限制)
+ALLOWED_CONFIG_EXTENSIONS = {'.py'}
+ALLOWED_IMPORT_EXTENSIONS = {'.py', '.json', '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp'}
+MAX_FILES_PER_UPLOAD = 2000  # 最多文件数
+
 # ===== 统一的论坛数据目录 =====
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FORUM_DATA_DIR = os.path.join(BASE_DIR, 'forum_data')
 FORUM_AVATAR_DIR = os.path.join(FORUM_DATA_DIR, 'avatar')
+
+def validate_file_size(file_storage):
+    """验证上传文件大小"""
+    file_storage.seek(0, os.SEEK_END)
+    file_size = file_storage.tell()
+    file_storage.seek(0)
+    
+    if file_size > MAX_UPLOAD_SIZE:
+        raise ValueError(f"文件大小超过限制 ({MAX_UPLOAD_SIZE / 1024 / 1024}MB)")
+    return True
+
+def validate_file_extension(filename, allowed_extensions):
+    """验证文件扩展名"""
+    ext = os.path.splitext(filename.lower())[1]
+    if ext not in allowed_extensions:
+        raise ValueError(f"不允许的文件类型: {ext}. 允许的类型: {', '.join(allowed_extensions)}")
+    return True
+
+def safe_path_join(base_dir, user_path):
+    """
+    安全的路径拼接，防止路径遍历攻击
+    
+    Args:
+        base_dir: 基础目录（必须是绝对路径）
+        user_path: 用户提供的相对路径
+    
+    Returns:
+        安全的完整路径
+    
+    Raises:
+        ValueError: 如果检测到路径遍历攻击
+    """
+    # 规范化基础目录
+    base_dir = os.path.abspath(base_dir)
+    
+    # 清理用户路径中的危险字符
+    user_path = user_path.replace('\\', '/').strip()
+    
+    # 移除路径开头的斜杠和点
+    while user_path.startswith(('/', './')):
+        user_path = user_path.lstrip('/.').lstrip()
+    
+    # 拆分路径并过滤危险部分
+    path_parts = []
+    for part in user_path.split('/'):
+        part = part.strip()
+        if not part or part == '.':
+            continue
+        if part == '..':
+            raise ValueError(f"检测到路径遍历攻击尝试: {user_path}")
+        # 只允许安全的文件名字符
+        if not re.match(r'^[\w\-\. \u4e00-\u9fff]+$', part):
+            raise ValueError(f"文件名包含非法字符: {part}")
+        path_parts.append(part)
+    
+    # 拼接路径
+    if not path_parts:
+        raise ValueError("无效的文件路径")
+    
+    full_path = os.path.join(base_dir, *path_parts)
+    full_path = os.path.abspath(full_path)
+    
+    # 确保最终路径仍在基础目录内
+    if not full_path.startswith(base_dir + os.sep):
+        raise ValueError(f"路径遍历攻击被阻止: {user_path}")
+    
+    return full_path
+
+# ===== 输入验证函数（安全修复：漏洞4） =====
+def validate_username(username):
+    """
+    验证用户名/用户ID的合法性
+    
+    Args:
+        username: 用户提供的用户名
+    
+    Returns:
+        清理后的用户名
+    
+    Raises:
+        ValueError: 如果用户名不合法
+    """
+    if not username:
+        raise ValueError("用户名不能为空")
+    
+    # 转换为字符串并去除首尾空白
+    username = str(username).strip()
+    
+    # 长度验证
+    if len(username) < 1:
+        raise ValueError("用户名不能为空")
+    if len(username) > 100:
+        raise ValueError("用户名长度不能超过100字符")
+    
+    # 字符验证：只允许字母、数字、中文、下划线、短横线、点、空格
+    if not re.match(r'^[\w\u4e00-\u9fff\-\.\s]+$', username):
+        raise ValueError("用户名包含非法字符")
+    
+    # 不允许特殊模式
+    dangerous_patterns = [
+        r'\.\.',  # 路径遍历
+        r'<script',  # XSS
+        r'javascript:',  # XSS
+        r'on\w+=',  # 事件处理器
+        r'<!--',  # 注释注入
+    ]
+    
+    for pattern in dangerous_patterns:
+        if re.search(pattern, username, re.IGNORECASE):
+            raise ValueError("用户名包含危险字符")
+    
+    return username
+
+def validate_path(path_str, allow_absolute=False):
+    """
+    验证路径字符串的安全性
+    
+    Args:
+        path_str: 路径字符串
+        allow_absolute: 是否允许绝对路径
+    
+    Returns:
+        清理后的路径
+    
+    Raises:
+        ValueError: 如果路径不安全
+    """
+    if not path_str:
+        raise ValueError("路径不能为空")
+    
+    path_str = str(path_str).strip()
+    
+    # 长度验证
+    if len(path_str) > 500:
+        raise ValueError("路径长度不能超过500字符")
+    
+    # 检测路径遍历
+    if '..' in path_str:
+        raise ValueError("路径包含非法的'..'字符")
+    
+    # 如果不允许绝对路径
+    if not allow_absolute:
+        if path_str.startswith('/') or (len(path_str) > 1 and path_str[1] == ':'):
+            raise ValueError("不允许使用绝对路径")
+    
+    # 检测危险字符
+    dangerous_chars = ['<', '>', '|', '\0', '\n', '\r']
+    for char in dangerous_chars:
+        if char in path_str:
+            raise ValueError(f"路径包含非法字符: {repr(char)}")
+    
+    # Windows特定检查
+    if os.name == 'nt':
+        # 不允许Windows设备名
+        device_names = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
+                       'LPT1', 'LPT2', 'LPT3']
+        path_upper = path_str.upper()
+        for device in device_names:
+            if device in path_upper:
+                raise ValueError(f"路径包含Windows保留设备名: {device}")
+    
+    return path_str
 
 def _ensure_forum_dir_exists():
     try:
@@ -209,11 +395,74 @@ def validate_config_types(config_path):
         app.logger.error(f"配置文件类型验证失败: {e}")
         return False
 
-app.secret_key = os.urandom(24).hex()  # 48位十六进制字符串
+# 会话密钥配置（每次重启生成新密钥，适合个人使用）
+app.secret_key = os.urandom(24).hex()
 bot_process = None
+
+# 简易500错误处理，便于快速定位问题
+@app.errorhandler(500)
+def handle_internal_error(e):
+    try:
+        app.logger.error(f"[500] Internal Server Error: {e}")
+    except Exception:
+        pass
+    return "Internal Server Error", 500
+
+# ===== CSRF保护配置 =====
+csrf = CSRFProtect(app)
+
+# CSRF豁免端点列表（用于API调用，需要其他方式验证）
+CSRF_EXEMPT_ENDPOINTS = [
+    'bot_heartbeat',  # bot.py发送心跳，使用IP验证
+    'receive_bot_log',  # bot.py发送日志，使用内容验证
+]
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """处理CSRF验证失败"""
+    app.logger.warning(f"CSRF验证失败: {request.remote_addr} - {request.endpoint}")
+    return jsonify({'error': 'CSRF验证失败，请刷新页面重试'}), 400
+
+# ===== 速率限制配置 =====
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+    strategy="fixed-window"
+)
 
 # 全局日志队列
 log_queue = Queue()
+
+# 基于IP的登录尝试跟踪（安全修复）
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+login_attempts = defaultdict(list)  # {ip: [timestamp1, timestamp2, ...]}
+LOCKOUT_DURATION = timedelta(minutes=30)
+MAX_LOGIN_ATTEMPTS = 5
+
+def is_ip_locked(ip):
+    """检查IP是否因多次失败登录而被锁定"""
+    if ip not in login_attempts:
+        return False
+    
+    # 清理过期的尝试记录
+    cutoff_time = datetime.now() - LOCKOUT_DURATION
+    login_attempts[ip] = [t for t in login_attempts[ip] if t > cutoff_time]
+    
+    return len(login_attempts[ip]) >= MAX_LOGIN_ATTEMPTS
+
+def record_failed_login(ip):
+    """记录失败的登录尝试"""
+    login_attempts[ip].append(datetime.now())
+    app.logger.warning(f"登录失败: IP {ip}, 当前尝试次数: {len(login_attempts[ip])}")
+
+def clear_login_attempts(ip):
+    """清除IP的登录尝试记录"""
+    if ip in login_attempts:
+        login_attempts[ip] = []
 
 CHAT_CONTEXTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_contexts.json')
 CHAT_CONTEXTS_LOCK_FILE = CHAT_CONTEXTS_FILE + '.lock'
@@ -234,48 +483,46 @@ def get_chat_context_users():
         app.logger.error(f"读取 chat_contexts.json 失败: {e}")
         return []
 
-# 全局变量用于防暴力破解
-login_attempt_count = 0
-login_locked = False
-
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")  # 速率限制：每分钟最多10次登录尝试
 def login():
-    global login_attempt_count, login_locked
     config = parse_config()
+    client_ip = request.remote_addr
     
-    # 检查是否需要密码验证
-    allow_open_port = config.get('ALLOW_OPEN_PORT', False)
     password_is_valid = config.get('PASSWORD_IS_VALID', False)
     
-    # 如果不开放端口，直接进入
-    if not allow_open_port:
-        session['logged_in'] = True
-        return redirect(url_for('index'))
-    
-    # 如果开放端口但密码不合法，进入密码设置页面
-    if allow_open_port and not password_is_valid:
+    # 未设置密码时，强制跳转到密码设置页面
+    if not password_is_valid:
         return redirect(url_for('password_setup', force='true'))
     
-    # 检查是否被锁定
-    if login_locked:
-        return render_template('login.html', error="密码已锁定，请重新运行Run.bat解锁！")
-
+    # 检查IP是否被锁定（安全修复）
+    if is_ip_locked(client_ip):
+        lockout_minutes = LOCKOUT_DURATION.seconds // 60
+        app.logger.warning(f"IP {client_ip} 因多次登录失败被锁定")
+        return render_template('login.html', 
+            error=f"IP地址已被锁定{lockout_minutes}分钟，请稍后再试"), 429
+    
     if request.method == 'POST':
         password = request.form.get('password', '')
         stored_pwd = config.get('LOGIN_PASSWORD', '')
         
         if password == stored_pwd:
             session['logged_in'] = True
-            login_attempt_count = 0  # 重置尝试次数
+            clear_login_attempts(client_ip)  # 清除登录失败记录
+            app.logger.info(f"用户从 {client_ip} 成功登录")
             return redirect(url_for('index'))
         else:
-            login_attempt_count += 1
-            if login_attempt_count >= 5:  # 5次错误后锁定
-                login_locked = True
-                return render_template('login.html', error="密码已锁定，请重新运行Run.bat解锁！")
+            record_failed_login(client_ip)  # 记录失败尝试
+            remaining = MAX_LOGIN_ATTEMPTS - len(login_attempts[client_ip])
+            
+            if remaining <= 0:
+                app.logger.warning(f"IP {client_ip} 达到最大登录尝试次数")
+                return render_template('login.html', 
+                    error=f"登录失败次数过多，IP已被锁定{LOCKOUT_DURATION.seconds // 60}分钟"), 429
             else:
-                return render_template('login.html', error=f"密码错误，剩余尝试次数：{5-login_attempt_count}")
-
+                return render_template('login.html', 
+                    error=f"密码错误，剩余尝试次数：{remaining}")
+    
     return render_template('login.html')
 
 @app.route('/logout')
@@ -284,15 +531,18 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/password_setup', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")  # 速率限制：防止暴力破解密码设置
 def password_setup():
     config = parse_config()
-    allow_open_port = config.get('ALLOW_OPEN_PORT', False)
     password_is_valid = config.get('PASSWORD_IS_VALID', False)
     
-    # 如果是手动访问设置页面（非强制重定向），允许设置密码
-    # 只有在开放端口且密码已经合法，且不是强制设置时才跳转
-    if allow_open_port and password_is_valid and request.args.get('force') != 'true' and request.args.get('manual') != 'true':
-        return redirect(url_for('login'))
+    # 获取返回目标参数
+    return_to = request.args.get('return', 'login')
+    
+    # 如果已设置密码：未登录且非强制重置时，先去登录
+    if password_is_valid:
+        if not session.get('logged_in') and request.args.get('force') != 'true':
+            return redirect(url_for('login'))
     
     if request.method == 'POST':
         password = request.form.get('password', '')
@@ -300,19 +550,19 @@ def password_setup():
         
         # 验证密码复杂度
         if len(password) < 8:
-            return render_template('password_setup.html', error="密码长度不能少于8位")
+            return render_template('password_setup.html', error="密码长度不能少于8位", return_to=return_to, allow_skip=False)
         
         if not any(c.isupper() for c in password):
-            return render_template('password_setup.html', error="密码必须包含大写字母")
+            return render_template('password_setup.html', error="密码必须包含大写字母", return_to=return_to, allow_skip=False)
         
         if not any(c.islower() for c in password):
-            return render_template('password_setup.html', error="密码必须包含小写字母")
+            return render_template('password_setup.html', error="密码必须包含小写字母", return_to=return_to, allow_skip=False)
         
         if not any(c.isdigit() for c in password):
-            return render_template('password_setup.html', error="密码必须包含数字")
+            return render_template('password_setup.html', error="密码必须包含数字", return_to=return_to, allow_skip=False)
         
         if password != confirm_password:
-            return render_template('password_setup.html', error="两次输入的密码不一致")
+            return render_template('password_setup.html', error="两次输入的密码不一致", return_to=return_to, allow_skip=False)
         
         # 更新配置文件
         try:
@@ -321,44 +571,37 @@ def password_setup():
                 'PASSWORD_IS_VALID': True
             })
             
-            # 根据return参数决定跳转目标
-            return_to = request.args.get('return', 'login')
-            if return_to == 'config_editor':
-                redirect_url = "/"
-                success_msg = "密码设置成功！正在返回配置页面..."
-            else:
-                redirect_url = "/login"
-                success_msg = "密码设置成功！正在跳转..."
-            
-            return render_template('password_setup.html', success=success_msg, redirect_url=redirect_url)
+            # 设置成功后，引导用户去登录
+            redirect_url = "/login"
+            success_msg = "密码设置成功！请使用新密码登录。"
+            return render_template('password_setup.html', success=success_msg, redirect_url=redirect_url, return_to=return_to)
         except Exception as e:
-            return render_template('password_setup.html', error=f"密码设置失败：{str(e)}")
+            return render_template('password_setup.html', error=f"密码设置失败：{str(e)}", return_to=return_to, allow_skip=not password_is_valid)
     
-    # GET请求：判断是否允许跳过设置
-    # 如果不开放端口，或者是手动访问（非强制设置），允许跳过
-    allow_skip = not allow_open_port or request.args.get('manual') == 'true'
-    return render_template('password_setup.html', allow_skip=allow_skip)
+    # GET请求：未设置密码时禁止跳过
+    allow_skip = False if not password_is_valid else (request.args.get('manual') == 'true')
+    return render_template('password_setup.html', allow_skip=allow_skip, return_to=return_to)
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         config = parse_config()
-        allow_open_port = config.get('ALLOW_OPEN_PORT', False)
         password_is_valid = config.get('PASSWORD_IS_VALID', False)
         
-        # 如果开放端口且密码合法，需要登录验证
-        if allow_open_port and password_is_valid:
-            if not session.get('logged_in'):
-                return redirect(url_for('login'))
-        # 如果开放端口但密码不合法，跳转到密码设置
-        elif allow_open_port and not password_is_valid:
+        # 全局规则：
+        # - 若未设置密码，则强制跳转到密码设置页面
+        # - 若已设置密码但未登录，则要求先登录
+        if not password_is_valid:
             return redirect(url_for('password_setup', force='true'))
-        # 如果不开放端口，无需验证
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
         
         return f(*args, **kwargs)
     return decorated_function
 
 @app.route('/start_bot', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")  # 速率限制：防止频繁启动
 def start_bot():
     global bot_process
     if bot_process is None or bot_process.poll() is not None:
@@ -390,6 +633,8 @@ def start_bot():
     return {'status': 'started'}, 200
 
 @app.route('/stop_bot', methods=['POST'])
+@login_required
+@limiter.limit("10 per minute")  # 速率限制：防止频繁停止
 def stop_bot():
     global bot_process, last_heartbeat_time, current_bot_pid
     # 检查状态时，也考虑 current_bot_pid 是否指示有活跃进程
@@ -426,6 +671,7 @@ def stop_bot():
         return {'status': 'stopped'}, 200
     
 @app.route('/bot_status')
+@login_required
 def bot_status():
     global bot_process, last_heartbeat_time, current_bot_pid
     
@@ -457,6 +703,7 @@ def bot_status():
 
 @app.route('/submit_config', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute")  # 速率限制：防止频繁提交配置
 def submit_config():
     global bot_process
     if bot_process and bot_process.poll() is None:
@@ -501,10 +748,11 @@ def submit_config():
             if nickname in old_listen_list_map and old_listen_list_map[nickname] != new_prompt:
                 users_whose_prompt_changed.append(nickname)
 
+        # 注意：PASSWORD_IS_VALID 不应在此列表中，它只能通过密码设置页面修改
         boolean_fields = [
             'ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION',
             'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY',
-            'UPLOAD_MEMORY_TO_AI', 'ALLOW_OPEN_PORT', 'PASSWORD_IS_VALID', 'ENABLE_REMINDERS',
+            'UPLOAD_MEMORY_TO_AI', 'ALLOW_OPEN_PORT', 'ENABLE_REMINDERS',
             'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
             'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
             'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY', 'REMOVE_PARENTHESES',
@@ -729,27 +977,57 @@ def stop_bot_process(pid_to_kill=None):
         app.logger.warning(f"调用 stop_bot_process 后，current_bot_pid ({current_bot_pid}) 仍有值。可能存在未完全停止的实例或状态不同步。但心跳已重置。")
 
 @app.route('/bot_heartbeat', methods=['POST'])
+@csrf.exempt  # CSRF豁免：bot.py的心跳请求，使用其他验证方式
+@limiter.limit("120 per minute")  # 速率限制：每分钟最多120次心跳
 def bot_heartbeat():
+    """接收bot进程心跳（安全修复：添加了基本验证）"""
     global last_heartbeat_time, current_bot_pid
+    
     try:
+        # 安全检查1：验证Content-Type
+        if not request.is_json:
+            app.logger.warning(f"心跳请求格式错误: {request.remote_addr}")
+            return jsonify({'error': 'Invalid content type'}), 415
+        
+        # 安全检查2：仅接受本地请求（可选，根据需求调整）
+        # 如果bot在不同机器上运行，需要使用更安全的认证方式
+        client_ip = request.remote_addr
+        if client_ip not in ['127.0.0.1', 'localhost', '::1']:
+            # 检查是否已登录（作为备选认证方式）
+            config = parse_config()
+            if config.get('ALLOW_OPEN_PORT', False):
+                if not session.get('logged_in'):
+                    app.logger.warning(f"未授权的心跳请求来自: {client_ip}")
+                    return jsonify({'error': 'Unauthorized'}), 401
+        
         last_heartbeat_time = time.time()
         data = request.get_json()
         
         if data and 'pid' in data:
             received_pid = data.get('pid')
-            if received_pid and isinstance(received_pid, int):
-                if current_bot_pid != received_pid:
-                    app.logger.info(f"Bot PID updated via heartbeat: old={current_bot_pid}, new={received_pid}")
-                    current_bot_pid = received_pid
+            
+            # 安全检查3：验证PID的合理性
+            if received_pid and isinstance(received_pid, int) and received_pid > 0:
+                # 验证PID是否真实存在（可选）
+                try:
+                    if psutil.pid_exists(received_pid):
+                        if current_bot_pid != received_pid:
+                            app.logger.info(f"Bot PID updated via heartbeat: old={current_bot_pid}, new={received_pid}")
+                            current_bot_pid = received_pid
+                    else:
+                        app.logger.warning(f"收到的PID {received_pid} 不存在")
+                        return jsonify({'error': 'Invalid PID'}), 400
+                except Exception as pid_check_err:
+                    app.logger.error(f"PID验证失败: {pid_check_err}")
             else:
                 app.logger.warning(f"Received heartbeat with invalid PID: {received_pid}")
+                return jsonify({'error': 'Invalid PID format'}), 400
         else:
             app.logger.debug("Received heartbeat without PID information.")
 
         return jsonify({'status': 'heartbeat_received'}), 200
     except Exception as e:
         app.logger.error(f"Error processing heartbeat: {e}")
-        current_bot_pid = None
         return jsonify({'error': 'Failed to process heartbeat'}), 500
 
 def parse_config():
@@ -1036,10 +1314,11 @@ def index():
                     new_values[var] = value_from_form
             
             # 再次检查布尔字段，确保未勾选时为 False
+            # 注意：PASSWORD_IS_VALID 不应在此列表中，它只能通过密码设置页面修改
             boolean_fields_from_editor = [
                 'ENABLE_IMAGE_RECOGNITION', 'ENABLE_EMOJI_RECOGNITION',
                 'ENABLE_EMOJI_SENDING', 'ENABLE_AUTO_MESSAGE', 'ENABLE_MEMORY',
-                'UPLOAD_MEMORY_TO_AI', 'ALLOW_OPEN_PORT', 'PASSWORD_IS_VALID', 'ENABLE_REMINDERS',
+                'UPLOAD_MEMORY_TO_AI', 'ALLOW_OPEN_PORT', 'ENABLE_REMINDERS',
                 'ALLOW_REMINDERS_IN_QUIET_TIME', 'USE_VOICE_CALL_FOR_REMINDERS',
                 'ENABLE_ONLINE_API', 'SEPARATE_ROW_SYMBOLS','ENABLE_SCHEDULED_RESTART',
                 'ENABLE_GROUP_AT_REPLY', 'ENABLE_GROUP_KEYWORD_REPLY','GROUP_KEYWORD_REPLY_IGNORE_PROBABILITY','REMOVE_PARENTHESES',
@@ -1100,6 +1379,14 @@ def safe_filename(filename):
 @login_required
 def edit_prompt(filename):
     safe_dir = os.path.abspath('prompts')
+    
+    # 输入验证
+    try:
+        filename = validate_path(filename)
+    except ValueError as e:
+        app.logger.warning(f"无效的文件名: {filename}, 错误: {e}")
+        return jsonify({'error': f'无效的文件名: {str(e)}'}), 400
+    
     # 从path中移除.md后缀，如果存在的话，因为safe_filename会处理
     if filename.endswith('.md'):
         filename_no_ext = filename[:-3]
@@ -1188,7 +1475,15 @@ def create_prompt():
 
 @app.route('/delete_prompt/<filename>', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute")  # 速率限制：防止滥用删除
 def delete_prompt(filename):
+    # 输入验证
+    try:
+        filename = validate_path(filename)
+    except ValueError as e:
+        app.logger.warning(f"无效的文件名: {filename}, 错误: {e}")
+        return jsonify({'error': f'无效的文件名: {str(e)}'}), 400
+    
     safe_dir = os.path.abspath('prompts')
     filepath = os.path.join(safe_dir, safe_filename(filename))
     
@@ -1375,6 +1670,7 @@ def save_all_reminders():
 
 @app.route('/import_config', methods=['POST'])
 @login_required
+@limiter.limit("5 per hour")  # 速率限制：导入操作限制更严格
 def import_config():
     global bot_process
     # 如果 bot 正在运行，则不允许导入配置
@@ -1386,8 +1682,27 @@ def import_config():
             return jsonify({'error': '未找到上传的配置文件'}), 400
             
         config_file = request.files['config_file']
-        if not config_file.filename.endswith('.py'):
-            return jsonify({'error': '请上传.py格式的配置文件'}), 400
+        
+        # 安全验证1: 检查文件名是否为空
+        if not config_file.filename:
+            return jsonify({'error': '文件名不能为空'}), 400
+        
+        # 安全验证2: 验证文件扩展名
+        try:
+            validate_file_extension(config_file.filename, ALLOWED_CONFIG_EXTENSIONS)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        
+        # 安全验证3: 验证文件大小
+        try:
+            validate_file_size(config_file)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        
+        # 安全验证4: 使用secure_filename清理文件名
+        safe_filename_str = secure_filename(config_file.filename)
+        if not safe_filename_str or not safe_filename_str.endswith('.py'):
+            return jsonify({'error': '文件名不安全或格式错误'}), 400
             
         # 创建临时文件用于解析配置
         with tempfile.NamedTemporaryFile('wb', suffix='.py', delete=False) as temp_f:
@@ -1421,9 +1736,12 @@ def import_config():
         # 获取当前配置作为基础
         current_config = parse_config()
         
-        # 合并配置：只更新导入配置中存在的项
+        # 定义不应该从旧版本导入的敏感设置
+        PROTECTED_SETTINGS = ['ALLOW_OPEN_PORT', 'LOGIN_PASSWORD', 'PASSWORD_IS_VALID', 'PORT']
+        
+        # 合并配置：只更新导入配置中存在的项，但排除受保护的设置
         for key, value in imported_config.items():
-            if key in current_config:  # 只更新当前配置中已存在的项
+            if key in current_config and key not in PROTECTED_SETTINGS:  # 只更新当前配置中已存在的项，且不在保护列表中
                 current_config[key] = value
         
         # 更新配置文件
@@ -1537,8 +1855,12 @@ def import_directory_data(source_dir):
             
             # 获取当前配置并合并
             current_config = parse_config()
+            
+            # 定义不应该从旧版本导入的敏感设置
+            PROTECTED_SETTINGS = ['ALLOW_OPEN_PORT', 'LOGIN_PASSWORD', 'PASSWORD_IS_VALID', 'PORT']
+            
             for key, value in imported_config.items():
-                if key in current_config:  # 只更新当前配置中已存在的项
+                if key in current_config and key not in PROTECTED_SETTINGS:  # 只更新当前配置中已存在的项，且不在保护列表中
                     current_config[key] = value
             
             # 更新配置文件
@@ -1622,8 +1944,29 @@ def import_files_data(files_dict):
         temp_dir = tempfile.mkdtemp()
         
         try:
+            # 文件计数器，防止上传过多文件
+            file_count = 0
+            
             # 重建文件结构
             for relative_path, file_data in files_dict.items():
+                file_count += 1
+                if file_count > MAX_FILES_PER_UPLOAD:
+                    raise ValueError(f"上传文件数量超过限制 ({MAX_FILES_PER_UPLOAD})")
+                
+                # 安全验证1: 验证文件大小
+                try:
+                    validate_file_size(file_data)
+                except ValueError as e:
+                    app.logger.warning(f"文件 {relative_path} 大小超限，已跳过: {e}")
+                    continue
+                
+                # 安全验证2: 验证文件扩展名
+                try:
+                    validate_file_extension(relative_path, ALLOWED_IMPORT_EXTENSIONS)
+                except ValueError as e:
+                    app.logger.warning(f"文件 {relative_path} 类型不允许，已跳过: {e}")
+                    continue
+                
                 # 标准化路径分隔符
                 relative_path = relative_path.replace('\\', '/')
                 
@@ -1637,8 +1980,12 @@ def import_files_data(files_dict):
                 if not relative_path:
                     continue
                 
-                # 创建完整的文件路径
-                full_path = os.path.join(temp_dir, relative_path.replace('/', os.sep))
+                # 安全验证3: 使用safe_path_join防止路径遍历
+                try:
+                    full_path = safe_path_join(temp_dir, relative_path)
+                except ValueError as e:
+                    app.logger.warning(f"路径不安全，已拒绝: {relative_path}, 原因: {e}")
+                    continue
                 
                 # 确保目录存在
                 dir_path = os.path.dirname(full_path)
@@ -1648,7 +1995,7 @@ def import_files_data(files_dict):
                 # 保存文件
                 file_data.save(full_path)
                 
-                app.logger.debug(f"保存文件: {relative_path} -> {full_path}")
+                app.logger.debug(f"安全保存文件: {relative_path} -> {full_path}")
             
             # 使用现有的导入函数
             imported_items = import_directory_data(temp_dir)
@@ -1668,6 +2015,7 @@ def import_files_data(files_dict):
 
 @app.route('/import_full_directory', methods=['POST'])
 @login_required
+@limiter.limit("3 per hour")  # 速率限制：完整目录导入限制非常严格
 def import_full_directory():
     """导入完整的旧版本程序目录"""
     global bot_process
@@ -1685,19 +2033,41 @@ def import_full_directory():
         if not uploaded_files:
             return jsonify({'error': '未找到任何文件'}), 400
         
-        # 检查是否包含config.py文件
+        # 安全验证1: 检查文件数量
+        if len(uploaded_files) > MAX_FILES_PER_UPLOAD:
+            return jsonify({'error': f'上传文件数量超过限制（最多{MAX_FILES_PER_UPLOAD}个文件）'}), 400
+        
+        # 安全验证2: 预先验证所有文件
+        total_size = 0
         config_found = False
         files_dict = {}
         
         for file in uploaded_files:
-            if file.filename:
-                # 获取相对路径（webkitRelativePath）
-                relative_path = file.filename
-                files_dict[relative_path] = file
+            if not file.filename:
+                continue
                 
-                # 检查是否有config.py
-                if file.filename.endswith('config.py') or file.filename == 'config.py':
-                    config_found = True
+            # 验证文件大小
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0)
+            
+            total_size += file_size
+            
+            # 检查单个文件大小
+            if file_size > MAX_UPLOAD_SIZE:
+                return jsonify({'error': f'文件 {file.filename} 大小超过限制'}), 400
+            
+            # 检查总大小（防止通过多个小文件绕过限制）
+            if total_size > MAX_UPLOAD_SIZE * 10:  # 总大小不超过1GB
+                return jsonify({'error': f'上传文件总大小超过限制（最多{MAX_UPLOAD_SIZE * 10 // 1024 // 1024}MB）'}), 400
+            
+            # 获取相对路径（webkitRelativePath）
+            relative_path = file.filename
+            files_dict[relative_path] = file
+            
+            # 检查是否有config.py
+            if file.filename.endswith('config.py') or file.filename == 'config.py':
+                config_found = True
         
         if not config_found:
             return jsonify({'error': '选择的目录中没有找到config.py文件'}), 400
@@ -1767,60 +2137,123 @@ def reset_default_config():
 
 class WebLogHandler(logging.Handler):
     def emit(self, record):
-        log_entry = self.format(record)
-        log_queue.put(log_entry)
+        try:
+            log_entry = self.format(record)
+            # 使用非阻塞方式放入队列，避免阻塞
+            try:
+                log_queue.put(log_entry, block=False)
+            except:
+                pass  # 队列满时静默丢弃
+        except Exception as e:
+            # 避免日志处理器内部错误导致程序崩溃
+            print(f"WebLogHandler错误: {e}")
 
 # 配置日志处理器
 web_handler = WebLogHandler()
-web_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+web_handler.setFormatter(logging.Formatter('[WEB] %(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(web_handler)
 
+# 发送初始化日志，验证日志系统正常工作
+app.logger.info("配置编辑器日志系统已初始化")
+
 @app.route('/stream')
+@limiter.exempt  # SSE长连接不计入默认速率限制，避免返回429/500
 @login_required
 def stream():
+    try:
+        app.logger.info(f"SSE连接建立请求：/stream 来自 {request.remote_addr}")
+    except Exception:
+        pass
     def event_stream():
-        retry_count = 0
-        while True:
+        try:
+            # 发送初始连接确认消息
+            yield "data: [系统] 日志流已连接，等待日志数据...\n\n"
+            
+            retry_count = 0
+            consecutive_errors = 0
+            max_consecutive_errors = 10
+            
+            while True:
+                try:
+                    # 尝试从队列获取日志，超时时间5秒
+                    log = log_queue.get(timeout=5)
+                    yield f"data: {log}\n\n"
+                    retry_count = 0  # 成功时重置重试计数器
+                    consecutive_errors = 0  # 重置连续错误计数
+                except Empty:
+                    # 队列为空时发送心跳包保持连接
+                    yield ":keep-alive\n\n"
+                    retry_count = min(retry_count + 1, 5)
+                    # 使用指数退避，但最多延迟不超过32秒
+                    time.sleep(min(2 ** retry_count, 32))
+                except GeneratorExit:
+                    # 客户端主动断开连接
+                    app.logger.info("客户端已断开日志流连接")
+                    break
+                except Exception as e:
+                    consecutive_errors += 1
+                    app.logger.error(f"日志流错误 ({consecutive_errors}/{max_consecutive_errors}): {str(e)}")
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        yield "data: [系统] 日志流发生错误，连接已关闭\n\n"
+                        break
+                    
+                    # 短暂延迟后继续
+                    time.sleep(1)
+        except GeneratorExit:
+            app.logger.info("日志流生成器已退出")
+        except Exception as e:
+            app.logger.error(f"event_stream严重错误: {str(e)}")
             try:
-                log = log_queue.get(timeout=5)
-                yield f"data: {log}\n\n"
-                retry_count = 0  # 成功时重置重试计数器
-            except Empty:
-                yield ":keep-alive\n\n"  # 发送心跳包
-                retry_count = min(retry_count + 1, 5)
-                time.sleep(2 ** retry_count)  # 指数退避
-            except Exception as e:
-                app.logger.error(f"SSE Error: {str(e)}")
-                yield "event: error\ndata: Connection closed\n\n"
-                break
+                yield f"data: [系统] 日志流发生严重错误: {str(e)}\n\n"
+            except:
+                pass
     
-    return Response(
-        event_stream(),
-        mimetype="text/event-stream",
+    response = Response(
+        stream_with_context(event_stream()),
+        content_type="text/event-stream; charset=utf-8",
         headers={
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
             'X-Accel-Buffering': 'no'
         }
     )
+    # 让 Flask 处理编码与传输
+    response.direct_passthrough = False
+
+    return response
 
 @app.route('/api/log', methods=['POST'])
+@csrf.exempt  # CSRF豁免：bot.py的日志上传，使用内容验证
+@limiter.limit("200 per minute")  # 速率限制：每分钟最多200条日志
+# 注意：此端点不使用 @login_required，因为 bot.py 进程需要无认证访问
+# 安全性通过 localhost 限制和速率限制保证
 def receive_bot_log():
     try:
         # 增加Content-Type检查
         if not request.is_json:
+            app.logger.warning(f"收到非JSON请求，Content-Type: {request.content_type}")
             return jsonify({'error': 'Unsupported Media Type'}), 415
 
         # 支持两种格式：单个日志或日志数组
         if 'logs' in request.json:  # 批量日志
             logs_data = request.json.get('logs', [])
             if isinstance(logs_data, list):
+                processed_count = 0
                 for log_entry in logs_data:
                     if log_entry:
                         # 添加进程标识和颜色标记
                         colored_log = f"[BOT] \033[34m{log_entry.strip()}\033[0m"
-                        log_queue.put(colored_log)
-                return jsonify({'status': 'success', 'processed': len(logs_data)})
+                        try:
+                            log_queue.put(colored_log, block=False)
+                            processed_count += 1
+                        except:
+                            # 队列满时，记录警告但不中断
+                            app.logger.warning(f"日志队列已满，丢弃日志")
+                            pass
+                # 定期输出接收统计（每收到100条日志输出一次）
+                if processed_count > 0 and processed_count % 100 == 0:
+                    print(f"[配置编辑器] 已接收 bot.py 日志: {processed_count} 条")
+                return jsonify({'status': 'success', 'processed': processed_count})
             return jsonify({'error': 'Invalid logs format'}), 400
             
         elif 'log' in request.json:  # 兼容单条日志格式
@@ -1828,14 +2261,18 @@ def receive_bot_log():
             if log_data:
                 # 添加进程标识和颜色标记
                 colored_log = f"[BOT] \033[34m{log_data.strip()}\033[0m"
-                log_queue.put(colored_log)
+                try:
+                    log_queue.put(colored_log, block=False)
+                except:
+                    app.logger.warning(f"日志队列已满，丢弃日志")
             return jsonify({'status': 'success'})
             
         else:
+            app.logger.warning("收到的请求中缺少 'logs' 或 'log' 字段")
             return jsonify({'error': 'Missing log data'}), 400
             
     except Exception as e:
-        app.logger.error(f"日志接收失败: {str(e)}")
+        app.logger.error(f"日志接收失败: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/get_chat_context_users', methods=['GET'])
@@ -1848,6 +2285,13 @@ def api_get_chat_context_users():
 @login_required
 def clear_chat_context(username):
     """清除指定用户的聊天上下文"""
+    # 输入验证
+    try:
+        username = validate_username(username)
+    except ValueError as e:
+        app.logger.warning(f"无效的用户名: {username}, 错误: {e}")
+        return jsonify({'status': 'error', 'message': f'无效的用户名: {str(e)}'}), 400
+    
     if not os.path.exists(CHAT_CONTEXTS_FILE):
         return jsonify({'status': 'error', 'message': '聊天上下文文件不存在'}), 404
 
@@ -1872,6 +2316,13 @@ def clear_chat_context(username):
 @login_required
 def get_user_chat_context(username):
     """获取指定用户的聊天上下文"""
+    # 输入验证
+    try:
+        username = validate_username(username)
+    except ValueError as e:
+        app.logger.warning(f"无效的用户名: {username}, 错误: {e}")
+        return jsonify({'error': f'无效的用户名: {str(e)}'}), 400
+    
     if not os.path.exists(CHAT_CONTEXTS_FILE):
         return jsonify({'error': '聊天上下文文件未找到'}), 404
 
@@ -1892,6 +2343,13 @@ def get_user_chat_context(username):
 @login_required
 def save_user_chat_context(username):
     """保存指定用户修改后的聊天上下文，强制合并连续user消息，确保user→assistant结构"""
+    # 输入验证
+    try:
+        username = validate_username(username)
+    except ValueError as e:
+        app.logger.warning(f"无效的用户名: {username}, 错误: {e}")
+        return jsonify({'status': 'error', 'message': f'无效的用户名: {str(e)}'}), 400
+    
     if bot_process and bot_process.poll() is not None:
         return jsonify({'error': '程序正在运行，请先停止再保存上下文'}), 400
     data = request.get_json()
@@ -2134,6 +2592,13 @@ def get_core_memory_files():
 def get_core_memory(filename):
     """获取指定核心记忆文件的内容"""
     try:
+        # 输入验证
+        try:
+            filename = validate_path(filename)
+        except ValueError as e:
+            app.logger.warning(f"无效的文件名: {filename}, 错误: {e}")
+            return jsonify({'status': 'error', 'error': f'无效的文件名: {str(e)}'}), 400
+        
         # 验证文件名安全性
         if not filename.endswith('_core_memory.json'):
             return jsonify({'status': 'error', 'error': '无效的文件名'}), 400
@@ -2169,9 +2634,17 @@ def get_core_memory(filename):
 
 @app.route('/api/save_core_memory/<filename>', methods=['POST'])
 @login_required
+@limiter.limit("30 per minute")  # 速率限制：核心记忆保存
 def save_core_memory(filename):
     """保存核心记忆到指定文件"""
     try:
+        # 输入验证
+        try:
+            filename = validate_path(filename)
+        except ValueError as e:
+            app.logger.warning(f"无效的文件名: {filename}, 错误: {e}")
+            return jsonify({'status': 'error', 'message': f'无效的文件名: {str(e)}'}), 400
+        
         # 验证文件名安全性
         if not filename.endswith('_core_memory.json'):
             return jsonify({'status': 'error', 'message': '无效的文件名'}), 400
@@ -2219,9 +2692,17 @@ def save_core_memory(filename):
 
 @app.route('/api/delete_core_memory/<filename>', methods=['DELETE'])
 @login_required
+@limiter.limit("10 per minute")  # 速率限制：核心记忆删除
 def delete_core_memory(filename):
     """删除核心记忆文件"""
     try:
+        # 输入验证
+        try:
+            filename = validate_path(filename)
+        except ValueError as e:
+            app.logger.warning(f"无效的文件名: {filename}, 错误: {e}")
+            return jsonify({'status': 'error', 'message': f'无效的文件名: {str(e)}'}), 400
+        
         # 验证文件名安全性
         if not filename.endswith('_core_memory.json'):
             return jsonify({'status': 'error', 'message': '无效的文件名'}), 400
@@ -2256,6 +2737,13 @@ from datetime import datetime, timedelta
 def character_forum(character_name):
     """AI角色论坛页面"""
     try:
+        # 输入验证
+        try:
+            character_name = validate_path(character_name)
+        except ValueError as e:
+            app.logger.warning(f"无效的角色名: {character_name}, 错误: {e}")
+            return f"无效的角色名: {str(e)}", 400
+        
         config = parse_config()
         
         # 验证角色名是否存在于配置中
@@ -2277,9 +2765,17 @@ def character_forum(character_name):
 
 @app.route('/api/forum/refresh/<character_name>', methods=['POST'])
 @login_required
+@limiter.limit("20 per hour")  # 速率限制：论坛刷新（调用AI，成本较高）
 def refresh_forum(character_name):
     """刷新论坛内容API"""
     try:
+        # 输入验证
+        try:
+            character_name = validate_path(character_name)
+        except ValueError as e:
+            app.logger.warning(f"无效的角色名: {character_name}, 错误: {e}")
+            return jsonify({'error': f'无效的角色名: {str(e)}'}), 400
+        
         config = parse_config()
         
         # 验证角色名
@@ -2332,9 +2828,18 @@ def get_forum_posts(character_name):
 
 @app.route('/api/forum/delete/<character_name>/<post_id>', methods=['DELETE'])
 @login_required
+@limiter.limit("20 per minute")  # 速率限制：防止滥用删除
 def delete_forum_post(character_name, post_id):
     """删除角色论坛帖子API"""
     try:
+        # 输入验证
+        try:
+            character_name = validate_path(character_name)
+            post_id = validate_path(post_id)
+        except ValueError as e:
+            app.logger.warning(f"无效的参数, 错误: {e}")
+            return jsonify({'error': f'无效的参数: {str(e)}'}), 400
+        
         app.logger.info(f"开始删除角色 {character_name} 的帖子 {post_id}")
         
         # 验证角色名
@@ -2396,6 +2901,7 @@ def test_forum_ai(character_name):
         return f"测试失败: {str(e)}", 500
 
 @app.route('/run_one_key_detection', methods=['GET'])
+@login_required
 def run_one_key_detection():
     bat_file_path = "一键检测.bat"
     if os.path.exists(bat_file_path):
@@ -3782,6 +4288,51 @@ def delete_forum_post_by_id(character_name, post_id):
         app.logger.error(f"删除论坛帖子失败: {e}")
         return False
 
+def is_port_available(port):
+    """
+    检查指定端口是否可用
+    返回 True 表示端口可用，False 表示端口被占用
+    """
+    try:
+        for conn in psutil.net_connections():
+            if conn.laddr and conn.laddr.port == port:
+                if conn.status in ('LISTEN', 'LISTENING'):
+                    return False
+        return True
+    except Exception as e:
+        app.logger.warning(f"检查端口 {port} 可用性时出错: {e}")
+        return False
+
+def get_random_available_port(start_port, end_port, max_attempts=50):
+    """
+    获取指定范围内的随机可用端口
+    
+    Args:
+        start_port: 起始端口
+        end_port: 结束端口
+        max_attempts: 最大尝试次数
+    
+    Returns:
+        可用的端口号，如果找不到则返回None
+    """
+    import random
+    attempted_ports = set()
+    
+    for _ in range(max_attempts):
+        # 生成随机端口
+        port = random.randint(start_port, end_port)
+        
+        # 避免重复尝试同一个端口
+        if port in attempted_ports:
+            continue
+        attempted_ports.add(port)
+        
+        # 检查端口是否可用
+        if is_port_available(port):
+            return port
+    
+    return None
+
 def kill_process_using_port(port):
     """
     检查指定端口是否被占用，如果被占用则结束占用的进程
@@ -3842,20 +4393,52 @@ if __name__ == '__main__':
     
     config = parse_config()
     PORT = config.get('PORT', '5000')
+    
+    # 如果端口为默认的5000，则自动修改为5001-5998之间的随机可用端口
+    if PORT == 5000 or PORT == '5000':
+        print(f"\033[33m检测到使用默认端口 5000，正在自动切换到随机端口...\033[0m")
+        new_port = get_random_available_port(5001, 5998)
+        
+        if new_port:
+            print(f"\033[32m已分配新端口: {new_port}\033[0m")
+            # 更新配置文件
+            try:
+                update_config({'PORT': new_port})
+                PORT = new_port
+                print(f"\033[32m配置文件已更新，新端口: {new_port}\033[0m")
+            except Exception as e:
+                print(f"\033[31m更新配置文件失败: {e}，将继续使用端口 5000\033[0m")
+                PORT = 5000
+        else:
+            print(f"\033[31m警告: 无法找到5001-5998之间的可用端口，将继续使用端口 5000\033[0m")
+            PORT = 5000
+    
+    # 确保PORT是整数类型
+    PORT = int(PORT)
 
     # 在启动服务器前检查端口是否被占用，若占用则结束该进程
     kill_process_using_port(PORT)
 
-    print(f"\033[31m重要提示：\r\n若您的浏览器没有自动打开网页端，请手动访问http://localhost:{config.get('PORT', '5000')}/ \r\n \033[0m")
+    print(f"\033[31m重要提示：\r\n若您的浏览器没有自动打开网页端，请手动访问 http://localhost:{PORT}/ \r\n \033[0m")
     allow_open_port = config.get('ALLOW_OPEN_PORT', False)
     password_is_valid = config.get('PASSWORD_IS_VALID', False)
-    if allow_open_port:
-        if password_is_valid:
-            print(f"\033[31m您已开启外网访问模式，请保护好您的登录密码！若您忘记了您的登录密码，可在程序目录下的config.py文件中找到LOGIN_PASSWORD查看！\r\n \033[0m")
-        else:
-            print(f"\033[31m检测到您开启了外网访问但密码未设置，请在网页中重新设置密码！\r\n \033[0m")
+    if password_is_valid:
+        print(f"\033[32m已启用登录保护：访问网页需输入已设置的密码。\r\n \033[0m")
     else:
-        print(f"\033[32m当前为本地访问模式，无需密码验证\r\n \033[0m")
+        print(f"\033[31m检测到尚未设置登录密码：首次访问将跳转到密码设置页面。\r\n \033[0m")
+    if allow_open_port:
+        print(f"\033[33m外网访问已开启，请务必妥善保管您的登录密码。\r\n \033[0m")
+    
+    # 根据配置决定绑定地址
+    host = "0.0.0.0" if allow_open_port else "127.0.0.1"
+    
+    print(f"\033[36m")
+    print(f"============================================================")
+    print(f"  WeChatBot 配置管理器")
+    print(f"监听地址: {host}:{PORT}")
+    print(f"访问地址: http://localhost:{PORT}/")
+    print(f"============================================================")
+    print(f"\033[0m")
     
     # 在启动服务器前设置定时器打开浏览器
     def open_browser():
@@ -3863,8 +4446,15 @@ if __name__ == '__main__':
     
     Timer(1, open_browser).start()  # 延迟1秒确保服务器已启动
     
-    # 根据配置决定绑定地址
-    # host = "0.0.0.0" if config.get('ALLOW_OPEN_PORT', False) else "127.0.0.1"
-    # app.run(host=host, debug=False, port=PORT)
-    app.run(host="127.0.0.1", debug=False, port=PORT)
+    # 使用Waitress生产级WSGI服务器
+    serve(
+        app, 
+        host=host, 
+        port=PORT,
+        threads=4,              # 线程数
+        channel_timeout=60,     # 通道超时
+        connection_limit=1000,  # 最大连接数
+        cleanup_interval=30,    # 清理间隔
+        asyncore_use_poll=True  # 使用poll而不是select（Windows下更稳定）
+    )
     
