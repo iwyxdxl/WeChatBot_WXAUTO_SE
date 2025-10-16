@@ -952,35 +952,32 @@
         let cacheTimestamp = 0;
         const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
         
-        // 从endpoint获取最新的WeAPIs节点列表
+        // 从endpoint获取最新的WeAPIs节点列表（通过后端代理）
         async function fetchWeApisNodesFromEndpoint() {
-            for (const endpoint of WEAPIS_ENDPOINTS) {
-                try {
-                    const controller = new AbortController();
-                    setTimeout(() => controller.abort(), 5000); // 5秒超时
-                    
-                    const response = await fetch(endpoint, {
-                        method: 'GET',
-                        signal: controller.signal,
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data && Array.isArray(data.data) && data.data.length > 0) {
-                            console.log(`成功从 ${endpoint} 获取WeAPIs节点列表:`, data.data);
-                            return data.data;
-                        }
+            try {
+                const controller = new AbortController();
+                setTimeout(() => controller.abort(), 10000); // 10秒超时（后端会尝试多个endpoint）
+                
+                const response = await fetch('/proxy/weapis/endpoint', {
+                    method: 'GET',
+                    signal: controller.signal,
+                    headers: {
+                        'Content-Type': 'application/json'
                     }
-                } catch (error) {
-                    console.warn(`从 ${endpoint} 获取节点列表失败:`, error);
-                    continue;
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && Array.isArray(data.data) && data.data.length > 0) {
+                        console.log('成功通过后端代理获取WeAPIs节点列表:', data.data);
+                        return data.data;
+                    }
                 }
+            } catch (error) {
+                console.warn('通过后端代理获取节点列表失败:', error);
             }
             
-            console.warn('所有endpoint都无法获取节点列表，使用备用节点');
+            console.warn('无法获取节点列表，使用备用节点');
             return FALLBACK_WEAPIS_NODES;
         }
         
@@ -1003,42 +1000,16 @@
             return nodes;
         }
         
-        // 检测WeAPIs节点可用性
-        async function checkWeAPIsNode(baseUrl) {
-            try {
-                const controller = new AbortController();
-                setTimeout(() => controller.abort(), 3000); // 3秒超时
-                
-                const response = await fetch(baseUrl + '/v1/models', {
-                    method: 'GET',
-                    signal: controller.signal,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                return response.ok;
-            } catch (error) {
-                return false;
-            }
-        }
-        
         // 自动选择可用的WeAPIs节点
         async function selectAvailableWeAPIsNode() {
             const nodes = await getWeApisNodes();
             
-            for (const node of nodes) {
-                // 确保节点URL格式正确
-                const baseUrl = node.replace(/\/+$/, ''); // 移除末尾的斜杠
-                if (await checkWeAPIsNode(baseUrl)) {
-                    console.log(`选择可用节点: ${baseUrl}`);
-                    return baseUrl + '/v1';
-                }
-            }
-            
-            // 如果所有节点都不可用，返回第一个节点作为默认值
+            // 直接使用第一个节点，因为这些节点都是从endpoint验证过的
+            // 不再进行额外的可用性检测，避免401错误（需要API Key）
             const firstNode = nodes[0] || 'https://vg.v1api.cc';
-            console.log(`所有节点检测失败，使用默认节点: ${firstNode}`);
-            return firstNode.replace(/\/+$/, '') + '/v1';
+            const baseUrl = firstNode.replace(/\/+$/, ''); // 移除末尾的斜杠
+            console.log(`选择WeAPIs节点: ${baseUrl}`);
+            return baseUrl + '/v1';
         }
         
         // 判断URL是否为WeAPIs的URL（异步版本）
@@ -1104,12 +1075,15 @@
             { value: "other", text: "其它" }
         ];
 
-        // 动态获取weapi模型列表
+        // 动态获取weapi模型列表（通过后端代理）
         async function fetchWeapiModels() {
             try {
-                const response = await fetch('https://vg.v1api.cc/weapi_models', {
+                const controller = new AbortController();
+                setTimeout(() => controller.abort(), 10000); // 10秒超时
+                
+                const response = await fetch('/proxy/weapis/models', {
                     method: 'GET',
-                    timeout: 5000
+                    signal: controller.signal
                 });
                 
                 if (!response.ok) {
@@ -1332,8 +1306,8 @@
                     finalOnlineApiUrl.value = customOnlineApiUrl.value;
                 } else {
                     customOnlineApiUrl.style.display = 'none';
-                    if (this.value === 'https://vg.v1api.cc/v1' || WEAPIS_NODES.some(node => this.value.startsWith(node))) {
-                        // 选择WeAPIs时检测可用节点
+                    if (isWeAPIsUrlSync(this.value)) {
+                        // 选择WeAPIs时使用优选节点
                         const availableUrl = await selectAvailableWeAPIsNode();
                         this.value = availableUrl;
                         finalOnlineApiUrl.value = availableUrl;
@@ -3245,7 +3219,6 @@
                     if (addBtn) addBtn.onclick = function() { addChatRound(); };
                 });
         }
-        document.getElementById('addChatRoundBtn').onclick = function() { addChatRound(); };
         function saveUserChatContext() {
             const username = document.getElementById('editChatContextUser').textContent;
             document.getElementById('editChatContextError').style.display = 'none';
@@ -3686,7 +3659,7 @@
     <button id="mobileMenuToggle">☰</button> 
 
     <div class="header-bar">
-        <div class="header-title"><h1>WeChatBot配置编辑器 v3.25</h1></div>
+        <div class="header-title"><h1>WeChatBot配置编辑器 v3.25.1</h1></div>
         <div class="buttons">
             <button id="botButton" class="nav-button">Start Bot</button>
             <button type="submit" form="configForm" id="saveConfigButton" class="nav-button" style="background-color: #4CAF50;">保存配置</button>

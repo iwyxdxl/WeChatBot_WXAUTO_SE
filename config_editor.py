@@ -47,6 +47,7 @@ import base64
 import mimetypes
 from datetime import datetime
 import zipfile
+import requests
 
 app = Flask(__name__)
 
@@ -671,6 +672,7 @@ def stop_bot():
         return {'status': 'stopped'}, 200
     
 @app.route('/bot_status')
+@limiter.exempt  # 豁免速率限制：前端频繁轮询，只读操作
 @login_required
 def bot_status():
     global bot_process, last_heartbeat_time, current_bot_pid
@@ -700,6 +702,69 @@ def bot_status():
         current_status = "running" # 保持原逻辑：心跳最近则认为运行
 
     return {"status": current_status}
+
+@app.route('/proxy/weapis/endpoint', methods=['GET'])
+@limiter.limit("20 per minute")  # 速率限制：防止频繁请求
+def proxy_weapis_endpoint():
+    """代理WeAPIs endpoint请求，避免前端CORS问题"""
+    # WeAPIs endpoint地址列表
+    endpoints = [
+        'https://vg.v1api.cc/endpoint',
+        'https://vg.v1chat.cc/endpoint', 
+        'https://vg.a3e.top/endpoint',
+        'https://vg.littlewheat.com/endpoint'
+    ]
+    
+    # 尝试从每个endpoint获取节点列表
+    for endpoint in endpoints:
+        try:
+            response = requests.get(endpoint, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data and isinstance(data.get('data'), list) and len(data['data']) > 0:
+                    app.logger.info(f"成功从 {endpoint} 获取节点列表")
+                    return jsonify(data), 200
+        except requests.exceptions.Timeout:
+            app.logger.warning(f"从 {endpoint} 获取节点列表超时")
+            continue
+        except requests.exceptions.RequestException as e:
+            app.logger.warning(f"从 {endpoint} 获取节点列表失败: {str(e)}")
+            continue
+        except Exception as e:
+            app.logger.warning(f"解析 {endpoint} 响应失败: {str(e)}")
+            continue
+    
+    # 如果所有endpoint都失败，返回备用节点列表
+    fallback_nodes = [
+        'https://vg.v1api.cc',
+        'https://vg.v1chat.cc',
+        'https://vg.a3e.top'
+    ]
+    app.logger.warning('所有endpoint都无法获取节点列表，返回备用节点')
+    return jsonify({'data': fallback_nodes}), 200
+
+@app.route('/proxy/weapis/models', methods=['GET'])
+@limiter.limit("20 per minute")  # 速率限制：防止频繁请求
+def proxy_weapis_models():
+    """代理WeAPIs模型列表请求，避免前端CORS问题"""
+    try:
+        response = requests.get('https://vg.v1api.cc/weapi_models', timeout=5)
+        if response.status_code == 200:
+            models = response.json()
+            app.logger.info(f"成功获取WeAPIs模型列表，共 {len(models)} 个模型")
+            return jsonify(models), 200
+        else:
+            app.logger.warning(f"获取WeAPIs模型列表失败，状态码: {response.status_code}")
+            return jsonify({'error': '获取模型列表失败'}), response.status_code
+    except requests.exceptions.Timeout:
+        app.logger.warning("获取WeAPIs模型列表超时")
+        return jsonify({'error': '请求超时'}), 504
+    except requests.exceptions.RequestException as e:
+        app.logger.warning(f"获取WeAPIs模型列表失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        app.logger.error(f"处理WeAPIs模型列表请求时出错: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/submit_config', methods=['POST'])
 @login_required
@@ -1554,6 +1619,7 @@ def generate_prompt():
 
 # 获取所有提醒 
 @app.route('/get_all_reminders')
+@limiter.exempt  # 豁免速率限制：前端频繁轮询，只读操作
 @login_required
 def get_all_reminders():
     """
@@ -2276,6 +2342,7 @@ def receive_bot_log():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/get_chat_context_users', methods=['GET'])
+@limiter.exempt  # 豁免速率限制：前端频繁轮询，只读操作
 @login_required
 def api_get_chat_context_users():
     users = get_chat_context_users()
